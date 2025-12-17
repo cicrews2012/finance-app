@@ -1,5 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { PlusCircle, Plus, TrendingUp, TrendingDown, DollarSign, Calendar, Trash2, Edit2, Save, X, ChevronDown, ChevronUp, Download, Upload } from 'lucide-react';
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Finance Tracker</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body style="margin:0;padding:0;background:#0f172a;color:white;">
+  <div id="root"></div>
+  <script type="text/babel">
 
 // Helper function to format currency with commas
 const formatCurrency = (amount) => {
@@ -2264,4 +2276,9 @@ const FinanceTracker = () => {
   );
 };
 
-export default FinanceTracker;
+    // Render the app
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<FinanceTracker />);
+  </script>
+</body>
+</html>
