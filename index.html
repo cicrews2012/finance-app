@@ -147,7 +147,7 @@
       const [isDebtTrackerExpanded, setIsDebtTrackerExpanded] = useState(false);
       const [isYearlyAnalysisExpanded, setIsYearlyAnalysisExpanded] = useState(false);
       const [isCustomCategoriesExpanded, setIsCustomCategoriesExpanded] = useState(false);
-      const [isAddTransactionExpanded, setIsAddTransactionExpanded] = useState(true);
+      const [isAddTransactionExpanded, setIsAddTransactionExpanded] = useState(false); // Changed to collapsed
       const [expandedMonths, setExpandedMonths] = useState({});
       const [expandedCategories, setExpandedCategories] = useState({}); // For yearly analysis
       
@@ -296,6 +296,18 @@
         const updated = transactions.filter(t => t.id !== id);
         setTransactions(updated);
         saveData(updated);
+      };
+      
+      const editTransaction = (transaction) => {
+        setDescription(transaction.description);
+        setAmount(transaction.amount.toString());
+        setCategory(transaction.category);
+        setType(transaction.type);
+        setDate(transaction.date);
+        setEditingId(transaction.id);
+        setIsAddTransactionExpanded(true);
+        // Scroll to top
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       };
       
       // Recurring Payments
@@ -1065,7 +1077,7 @@
                     const monthIncome = monthTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
                     const monthExpenses = monthTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
                     const monthNet = monthIncome - monthExpenses;
-                    const isExpanded = expandedMonths[monthKey] !== false; // Default to expanded
+                    const isExpanded = expandedMonths[monthKey] === true; // Default to collapsed
                     
                     return (
                       <div key={monthKey} className="mb-6">
@@ -1109,6 +1121,9 @@
                                     <span className={`text-lg font-bold ${t.type === 'income' ? 'text-green-400' : 'text-red-400'}`}>
                                       {t.type === 'income' ? '+' : '-'}${formatCurrency(t.amount)}
                                     </span>
+                                    <button onClick={(e) => { e.stopPropagation(); editTransaction(t); }} className="p-2 hover:bg-slate-600 rounded transition-colors" title="Edit">
+                                      <Edit2 size={16} className="text-blue-400" />
+                                    </button>
                                     <button onClick={(e) => { e.stopPropagation(); deleteTransaction(t.id); }} className="p-2 hover:bg-slate-600 rounded transition-colors" title="Delete">
                                       <Trash2 size={16} />
                                     </button>
@@ -1128,7 +1143,7 @@
           
           {/* Version Number */}
           <div className="fixed bottom-4 left-4 text-slate-500 text-xs">
-            v1.0.0
+            v1.1.0
           </div>
         </div>
       );
