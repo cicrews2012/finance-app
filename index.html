@@ -15,101 +15,68 @@
   <script type="text/babel">
     const { useState, useEffect } = React;
     
-    // Storage API polyfill
-    if (!window.storage) {
-      window.storage = {
-        get: async (key) => {
-          const value = localStorage.getItem(key);
-          return value ? { key, value, shared: false } : null;
-        },
-        set: async (key, value) => {
-          localStorage.setItem(key, value);
-          return { key, value, shared: false };
-        },
-        delete: async (key) => {
-          localStorage.removeItem(key);
-          return { key, deleted: true, shared: false };
-        },
-        list: async (prefix) => {
-          const keys = Object.keys(localStorage).filter(k => !prefix || k.startsWith(prefix));
-          return { keys, prefix, shared: false };
-        }
-      };
-    }
+    // Storage API using localStorage
+    const storage = {
+      get: async (key) => {
+        const value = localStorage.getItem(key);
+        return value ? { key, value, shared: false } : null;
+      },
+      set: async (key, value) => {
+        localStorage.setItem(key, value);
+        return { key, value, shared: false };
+      },
+      delete: async (key) => {
+        localStorage.removeItem(key);
+        return { key, deleted: true, shared: false };
+      }
+    };
     
-    // Icon components
+    // Icon Components
     const PlusCircle = ({ size = 24 }) => (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="10"/>
-        <line x1="12" y1="8" x2="12" y2="16"/>
-        <line x1="8" y1="12" x2="16" y2="12"/>
+        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>
       </svg>
     );
     
     const Plus = ({ size = 24 }) => (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <line x1="12" y1="5" x2="12" y2="19"/>
-        <line x1="5" y1="12" x2="19" y2="12"/>
+        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
       </svg>
     );
     
     const TrendingUp = ({ size = 24 }) => (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
-        <polyline points="17 6 23 6 23 12"/>
+        <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>
       </svg>
     );
     
     const TrendingDown = ({ size = 24 }) => (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/>
-        <polyline points="17 18 23 18 23 12"/>
+        <polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/>
       </svg>
     );
     
     const DollarSign = ({ size = 24 }) => (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <line x1="12" y1="1" x2="12" y2="23"/>
-        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+        <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
       </svg>
     );
     
     const Calendar = ({ size = 24 }) => (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-        <line x1="16" y1="2" x2="16" y2="6"/>
-        <line x1="8" y1="2" x2="8" y2="6"/>
-        <line x1="3" y1="10" x2="21" y2="10"/>
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
       </svg>
     );
     
     const Trash2 = ({ size = 24 }) => (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <polyline points="3 6 5 6 21 6"/>
-        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-        <line x1="10" y1="11" x2="10" y2="17"/>
-        <line x1="14" y1="11" x2="14" y2="17"/>
+        <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
       </svg>
     );
     
     const Edit2 = ({ size = 24 }) => (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
-      </svg>
-    );
-    
-    const Save = ({ size = 24 }) => (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-        <polyline points="17 21 17 13 7 13 7 21"/>
-        <polyline points="7 3 7 8 15 8"/>
-      </svg>
-    );
-    
-    const X = ({ size = 24 }) => (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <line x1="18" y1="6" x2="6" y2="18"/>
-        <line x1="6" y1="6" x2="18" y2="18"/>
       </svg>
     );
     
@@ -127,2287 +94,886 @@
     
     const Download = ({ size = 24 }) => (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-        <polyline points="7 10 12 15 17 10"/>
-        <line x1="12" y1="15" x2="12" y2="3"/>
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
       </svg>
     );
     
     const Upload = ({ size = 24 }) => (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-        <polyline points="17 8 12 3 7 8"/>
-        <line x1="12" y1="3" x2="12" y2="15"/>
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
       </svg>
     );
-
-
-// Helper function to format currency with commas
-const formatCurrency = (amount) => {
-  return amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-};
-
-const RecurringPaymentCard = ({ payment, isPaid, isEditing, onEdit, onSave, onCancel, onMarkPaid, onDelete, expenseCategories }) => {
-  const [showCustomAmount, setShowCustomAmount] = useState(false);
-  const [customAmount, setCustomAmount] = useState(payment.amount.toString());
-  const [editAmount, setEditAmount] = useState(payment.amount.toString());
-  const [editCategory, setEditCategory] = useState(payment.category);
-
-  return (
-    <div
-      className={`p-4 rounded-lg border ${
-        isPaid 
-          ? 'bg-slate-900 border-green-500/30' 
-          : 'bg-slate-900 border-slate-700'
-      }`}
-    >
-      {isEditing ? (
-        // Edit mode
-        <div className="space-y-3">
-          <h4 className="font-semibold text-white">{payment.name}</h4>
-          
-          <div>
-            <label className="text-xs text-slate-400 block mb-1">Category</label>
-            <select
-              value={editCategory}
-              onChange={(e) => setEditCategory(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-700 rounded text-sm border border-slate-600"
-            >
-              {expenseCategories.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="text-xs text-slate-400 block mb-1">Amount</label>
-            <input
-              type="number"
-              step="0.01"
-              value={editAmount}
-              onChange={(e) => setEditAmount(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-700 rounded text-sm border border-slate-600"
-            />
-          </div>
-
-          <div className="flex gap-2">
-            <button
-              onClick={() => onSave(parseFloat(editAmount), editCategory)}
-              className="flex-1 px-3 py-2 bg-green-600 hover:bg-green-700 rounded font-semibold text-sm"
-            >
-              Save
-            </button>
-            <button
-              onClick={onCancel}
-              className="flex-1 px-3 py-2 bg-slate-600 hover:bg-slate-700 rounded font-semibold text-sm"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      ) : (
-        // View mode
-        <>
-          <div className="flex justify-between items-start mb-2">
-            <div className="flex-1">
-              <h4 className="font-semibold text-white">{payment.name}</h4>
-              <p className="text-xs text-slate-400">{payment.category}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onEdit();
-                }}
-                className="p-1 hover:bg-slate-700 rounded"
-                title="Edit"
-              >
-                <Edit2 size={14} className="text-slate-400" />
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete();
-                }}
-                className="p-1 hover:bg-slate-700 rounded"
-                title="Delete"
-              >
-                <Trash2 size={14} className="text-red-400" />
-              </button>
-              <span className={`text-xs px-2 py-1 rounded ${
-                payment.auto 
-                  ? 'bg-blue-500/20 text-blue-400' 
-                  : 'bg-yellow-500/20 text-yellow-400'
-              }`}>
-                {payment.auto ? 'Auto' : 'Manual'}
-              </span>
-              {isPaid && (
-                <span className="text-xs px-2 py-1 rounded bg-green-500/20 text-green-400">
-                  ✓ Paid
-                </span>
-              )}
-            </div>
-          </div>
-
-          <div className="flex justify-between items-center mb-3">
-            <span className="text-2xl font-bold text-red-400">
-              ${formatCurrency(payment.amount)}
-            </span>
-            <span className="text-sm text-slate-400">
-              Due: {payment.day}{payment.day === 1 ? 'st' : payment.day === 2 ? 'nd' : payment.day === 3 ? 'rd' : 'th'}
-            </span>
-          </div>
-
-          {payment.varies && (
-            <p className="text-xs text-yellow-400 mb-2">Amount varies</p>
-          )}
-
-          {!isPaid && !payment.auto && (
-            <div>
-              {payment.varies && !showCustomAmount && (
-                <button
-                  onClick={() => setShowCustomAmount(true)}
-                  className="w-full px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm mb-2"
-                >
-                  Enter Amount
-                </button>
-              )}
-              
-              {payment.varies && showCustomAmount && (
-                <div className="mb-2">
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={customAmount}
-                    onChange={(e) => setCustomAmount(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-700 rounded text-sm border border-slate-600"
-                    placeholder="Enter amount"
-                  />
-                </div>
-              )}
-
-              <button
-                onClick={() => {
-                  if (payment.varies && showCustomAmount) {
-                    onMarkPaid(parseFloat(customAmount));
-                    setShowCustomAmount(false);
-                  } else if (payment.varies) {
-                    setShowCustomAmount(true);
-                  } else {
-                    onMarkPaid(null);
-                  }
-                }}
-                className="w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded font-semibold text-sm"
-              >
-                Mark as Paid
-              </button>
-            </div>
-          )}
-
-          {!isPaid && payment.auto && (
-            <p className="text-xs text-slate-500 text-center">
-              Will auto-add on {payment.day}{payment.day === 1 ? 'st' : payment.day === 2 ? 'nd' : payment.day === 3 ? 'rd' : 'th'}
-            </p>
-          )}
-        </>
-      )}
-    </div>
-  );
-};
-
-const FinanceTracker = () => {
-  const [transactions, setTransactions] = useState([]);
-  const [description, setDescription] = useState('');
-  const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState('');
-  const [type, setType] = useState('expense');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [editingId, setEditingId] = useState(null);
-  const [customCategory, setCustomCategory] = useState('');
-  const [showCustomCategory, setShowCustomCategory] = useState(false);
-  const [expandedMonths, setExpandedMonths] = useState({});
-  const [expandedCategories, setExpandedCategories] = useState({}); // Track expanded categories
-  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('');
-  const [lastExportDate, setLastExportDate] = useState(null);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [analysisType, setAnalysisType] = useState('expense'); // 'expense' or 'income'
-  const [isYearlyAnalysisExpanded, setIsYearlyAnalysisExpanded] = useState(false); // Collapsed by default
-  const [isCustomCategoriesExpanded, setIsCustomCategoriesExpanded] = useState(false);
-  const [isAddTransactionExpanded, setIsAddTransactionExpanded] = useState(false); // Collapsed by default
-  const [isRecurringExpanded, setIsRecurringExpanded] = useState(false); // Collapsed by default
-  const [editingRecurringId, setEditingRecurringId] = useState(null); // Track which recurring payment is being edited
-  const [showAddRecurring, setShowAddRecurring] = useState(false); // Show add recurring payment form
-  const [newRecurring, setNewRecurring] = useState({
-    name: '',
-    amount: '',
-    category: 'Subscriptions',
-    day: 1,
-    auto: true,
-    varies: false
-  });
-  
-  // Add debt state
-  const [showAddDebt, setShowAddDebt] = useState(false);
-  const [newDebt, setNewDebt] = useState({
-    name: '',
-    balance: '',
-    apr: '',
-    payment: '',
-    dueDay: 1
-  });
-  const [isDebtTrackerExpanded, setIsDebtTrackerExpanded] = useState(false); // Debt tracker collapsed by default
-  
-  // Clear data modal state
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
-  const [clearConfirmText, setClearConfirmText] = useState('');
-  
-  // Debt state - will be saved to localStorage
-  const [debts, setDebts] = useState([]);
-  const [recurringPayments, setRecurringPayments] = useState([]);
-  const [paidRecurring, setPaidRecurring] = useState({}); // Track which recurring payments have been paid this month
-
-  const defaultExpenseCategories = [
-    'Food', 'Subscriptions', 'Groceries', 'Home', 'Car Payments', 
-    'Personal', 'Pets', 'Utilities', 'Gas (cars)', 'Debt', 
-    'Other', 'Insurance', 'Kids', 'Savings', 'House cleaning'
-  ];
-
-  const defaultIncomeCategories = [
-    'Salary', 'Freelance', 'Investment', 'Gift', 'Bonus', 'Other'
-  ];
-
-  const [customExpenseCategories, setCustomExpenseCategories] = useState([]);
-  const [customIncomeCategories, setCustomIncomeCategories] = useState([]);
-
-  // Combine default and custom categories
-  const expenseCategories = [...defaultExpenseCategories, ...customExpenseCategories].sort();
-  const incomeCategories = [...defaultIncomeCategories, ...customIncomeCategories].sort();
-
-  useEffect(() => {
-    loadData();
-    loadLastExportDate();
-    loadPaidRecurring();
-    loadRecurringPayments();
-    loadDebts();
-    loadCustomCategories();
-  }, []);
-
-  useEffect(() => {
-    // Check recurring payments and detect already-paid ones
-    if (transactions.length > 0 && recurringPayments.length > 0) {
-      detectPaidRecurring();
-      checkRecurringPayments();
-    }
-  }, [transactions, recurringPayments]);
-
-  const detectPaidRecurring = () => {
-    const today = new Date();
-    const { month: financialMonth, year: financialYear } = getFinancialMonth(today.toISOString().split('T')[0]);
-    const monthKey = `${financialYear}-${financialMonth}`;
-
-    // Helper function to normalize descriptions for matching
-    const normalizeDescription = (desc) => {
-      let normalized = desc.toLowerCase().replace(/[^a-z0-9]/g, '');
-      
-      // Special handling for car payments
-      if (normalized === 'szc' || normalized === 'szccar') {
-        normalized = 'szccar';
-      }
-      if (normalized === 'cic' || normalized === 'ciccar') {
-        normalized = 'ciccar';
-      }
-      
-      return normalized;
-    };
-
-    // Get transactions for current financial month
-    const currentMonthTransactions = transactions.filter(t => 
-      t.month === financialMonth && t.year === financialYear
-    );
-
-    // Check each recurring payment
-    const updatedPaidRecurring = { ...paidRecurring };
-    let hasUpdates = false;
-
-    recurringPayments.forEach(payment => {
-      const paymentKey = `${monthKey}-${payment.id}`;
-      
-      // Skip if already marked as paid
-      if (updatedPaidRecurring[paymentKey]) return;
-
-      // Look for matching transaction
-      const normalizedPaymentName = normalizeDescription(payment.name);
-      const matchingTransaction = currentMonthTransactions.find(t => {
-        const normalizedDesc = normalizeDescription(t.description);
-        return normalizedDesc === normalizedPaymentName;
-      });
-
-      if (matchingTransaction) {
-        updatedPaidRecurring[paymentKey] = true;
-        hasUpdates = true;
-      }
-    });
-
-    if (hasUpdates) {
-      setPaidRecurring(updatedPaidRecurring);
-      savePaidRecurring(updatedPaidRecurring);
-    }
-  };
-
-  const loadRecurringPayments = async () => {
-    try {
-      const result = await window.storage.get('recurring-payments');
-      if (result && result.value) {
-        setRecurringPayments(JSON.parse(result.value));
-      }
-      // Start with empty recurring payments - user can add their own
-    } catch (error) {
-      console.log('No saved recurring payments found');
-    }
-  };
-
-  const saveRecurringPayments = async (payments) => {
-    try {
-      await window.storage.set('recurring-payments', JSON.stringify(payments));
-    } catch (error) {
-      console.error('Error saving recurring payments:', error);
-    }
-  };
-
-  const loadDebts = async () => {
-    try {
-      const result = await window.storage.get('debts');
-      if (result && result.value) {
-        setDebts(JSON.parse(result.value));
-      }
-      // Start with empty debts - user can add their own
-    } catch (error) {
-      console.log('No saved debts found');
-    }
-  };
-
-  const saveDebts = async (debtData) => {
-    try {
-      await window.storage.set('debts', JSON.stringify(debtData));
-    } catch (error) {
-      console.error('Error saving debts:', error);
-    }
-  };
-
-  // Apply payment to debt when recurring payment is made
-  const applyPaymentToDebt = (paymentName, paymentAmount, paymentDate, paymentCategory) => {
-    // Normalize names for matching
-    const normalizeForMatch = (name) => {
-      let normalized = name.toLowerCase().replace(/[^a-z0-9]/g, '');
-      // Handle car payment variations
-      if (normalized === 'szc' || normalized === 'szccar') normalized = 'szccar';
-      if (normalized === 'cic' || normalized === 'ciccar') normalized = 'ciccar';
-      return normalized;
-    };
-
-    // Find matching debt by name AND category
-    const normalizedPayment = normalizeForMatch(paymentName);
-    const matchingDebt = debts.find(d => {
-      const nameMatches = normalizeForMatch(d.name) === normalizedPayment;
-      
-      // Category must be Debt, Car Payments, Home, or Personal (debt-related categories)
-      const categoryIsDebtRelated = ['debt', 'car payments', 'home', 'personal'].includes(paymentCategory.toLowerCase());
-      
-      return nameMatches && categoryIsDebtRelated;
-    });
     
-    if (matchingDebt) {
-      // Update debt balance
-      const updatedDebts = debts.map(d => {
-        if (d.id === matchingDebt.id) {
-          return {
-            ...d,
-            balance: d.balance - paymentAmount,
-            lastUpdated: paymentDate
-          };
+    // Helper Functions
+    const formatCurrency = (amount) => {
+      return amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    };
+    
+    const getESTDateString = () => {
+      const date = new Date();
+      const estDate = new Date(date.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+      return estDate.toISOString().split('T')[0];
+    };
+    
+    const getFinancialMonth = (dateStr) => {
+      const date = new Date(dateStr);
+      const day = date.getDate();
+      let month = date.getMonth();
+      let year = date.getFullYear();
+      
+      if (day < 28) {
+        month = month - 1;
+        if (month < 0) {
+          month = 11;
+          year = year - 1;
         }
-        return d;
+      }
+      
+      return { financialMonth: month, financialYear: year };
+    };
+    
+    // Main App Component
+    const FinanceTracker = () => {
+      // State - All start EMPTY
+      const [transactions, setTransactions] = useState([]);
+      const [recurringPayments, setRecurringPayments] = useState([]);
+      const [debts, setDebts] = useState([]);
+      const [paidRecurring, setPaidRecurring] = useState({});
+      const [customExpenseCategories, setCustomExpenseCategories] = useState([]);
+      const [customIncomeCategories, setCustomIncomeCategories] = useState([]);
+      
+      // UI State
+      const [isRecurringExpanded, setIsRecurringExpanded] = useState(false);
+      const [isDebtTrackerExpanded, setIsDebtTrackerExpanded] = useState(false);
+      const [isYearlyAnalysisExpanded, setIsYearlyAnalysisExpanded] = useState(false);
+      const [isCustomCategoriesExpanded, setIsCustomCategoriesExpanded] = useState(false);
+      const [isAddTransactionExpanded, setIsAddTransactionExpanded] = useState(true);
+      
+      // Form State
+      const [description, setDescription] = useState('');
+      const [amount, setAmount] = useState('');
+      const [category, setCategory] = useState('');
+      const [customCategory, setCustomCategory] = useState('');
+      const [showCustomCategory, setShowCustomCategory] = useState(false);
+      const [type, setType] = useState('expense');
+      const [date, setDate] = useState(getESTDateString());
+      const [editingId, setEditingId] = useState(null);
+      
+      // Add forms state
+      const [showAddRecurring, setShowAddRecurring] = useState(false);
+      const [showAddDebt, setShowAddDebt] = useState(false);
+      const [newRecurring, setNewRecurring] = useState({
+        name: '', amount: '', category: 'Subscriptions', day: 1, auto: true, varies: false
+      });
+      const [newDebt, setNewDebt] = useState({
+        name: '', balance: '', apr: '', payment: '', dueDay: 1
       });
       
-      setDebts(updatedDebts);
-      saveDebts(updatedDebts);
+      // Default Categories (NOT hardcoded payments/debts)
+      const defaultExpenseCategories = [
+        'Food', 'Subscriptions', 'Groceries', 'Home', 'Car Payments', 
+        'Personal', 'Pets', 'Utilities', 'Gas (cars)', 'Debt', 
+        'Other', 'Insurance', 'Kids', 'Savings', 'House cleaning'
+      ];
+      const defaultIncomeCategories = ['Salary', 'Freelance', 'Investment', 'Gift', 'Bonus', 'Other'];
       
-      console.log(`Applied $${paymentAmount} payment to ${matchingDebt.name}, new balance: $${(matchingDebt.balance - paymentAmount).toFixed(2)}`);
-    }
-  };
-
-  const updateRecurringPayment = (id, updates) => {
-    const updated = recurringPayments.map(p => 
-      p.id === id ? { ...p, ...updates } : p
-    );
-    setRecurringPayments(updated);
-    saveRecurringPayments(updated);
-    setEditingRecurringId(null);
-  };
-
-  const addRecurringPayment = () => {
-    if (!newRecurring.name || !newRecurring.amount) {
-      alert('Please fill in name and amount');
-      return;
-    }
-
-    const newPayment = {
-      id: Date.now(),
-      name: newRecurring.name,
-      amount: parseFloat(newRecurring.amount),
-      category: newRecurring.category,
-      day: parseInt(newRecurring.day),
-      auto: newRecurring.auto,
-      varies: newRecurring.varies
-    };
-
-    const updated = [...recurringPayments, newPayment];
-    setRecurringPayments(updated);
-    saveRecurringPayments(updated);
-    
-    // Reset form
-    setNewRecurring({
-      name: '',
-      amount: '',
-      category: 'Subscriptions',
-      day: 1,
-      auto: true,
-      varies: false
-    });
-    setShowAddRecurring(false);
-  };
-
-  const deleteRecurringPayment = (id) => {
-    if (confirm('Are you sure you want to delete this recurring payment?')) {
-      const updated = recurringPayments.filter(p => p.id !== id);
-      setRecurringPayments(updated);
-      saveRecurringPayments(updated);
-    }
-  };
-
-  const addDebt = () => {
-    if (!newDebt.name || !newDebt.balance || !newDebt.apr || !newDebt.payment) {
-      alert('Please fill in all fields');
-      return;
-    }
-
-    const today = getESTDateString();
-    const debtToAdd = {
-      id: Date.now(),
-      name: newDebt.name,
-      balance: parseFloat(newDebt.balance),
-      originalBalance: parseFloat(newDebt.balance),
-      apr: parseFloat(newDebt.apr),
-      payment: parseFloat(newDebt.payment),
-      dueDay: parseInt(newDebt.dueDay),
-      lastUpdated: today,
-      recurringPaymentId: null // Can be linked later if needed
-    };
-
-    const updated = [...debts, debtToAdd];
-    setDebts(updated);
-    saveDebts(updated);
-    
-    // Reset form
-    setNewDebt({
-      name: '',
-      balance: '',
-      apr: '',
-      payment: '',
-      dueDay: 1
-    });
-    setShowAddDebt(false);
-  };
-
-  const deleteDebt = (id) => {
-    if (confirm('Are you sure you want to delete this debt?')) {
-      const updated = debts.filter(d => d.id !== id);
-      setDebts(updated);
-      saveDebts(updated);
-    }
-  };
-
-  const loadData = async () => {
-    try {
-      const result = await window.storage.get('finance-transactions');
-      if (result && result.value) {
-        setTransactions(JSON.parse(result.value));
-      }
-    } catch (error) {
-      console.log('No saved data found');
-    }
-  };
-
-  const loadCustomCategories = async () => {
-    try {
-      const expenseResult = await window.storage.get('custom-expense-categories');
-      if (expenseResult && expenseResult.value) {
-        setCustomExpenseCategories(JSON.parse(expenseResult.value));
-      }
-      const incomeResult = await window.storage.get('custom-income-categories');
-      if (incomeResult && incomeResult.value) {
-        setCustomIncomeCategories(JSON.parse(incomeResult.value));
-      }
-    } catch (error) {
-      console.log('No custom categories found');
-    }
-  };
-
-  const saveCustomCategories = async (expenseCategories, incomeCategories) => {
-    try {
-      await window.storage.set('custom-expense-categories', JSON.stringify(expenseCategories));
-      await window.storage.set('custom-income-categories', JSON.stringify(incomeCategories));
-    } catch (error) {
-      console.error('Error saving custom categories:', error);
-    }
-  };
-
-  const addCustomCategory = (categoryName, isExpense) => {
-    if (isExpense) {
-      if (!customExpenseCategories.includes(categoryName)) {
-        const updated = [...customExpenseCategories, categoryName];
-        setCustomExpenseCategories(updated);
-        saveCustomCategories(updated, customIncomeCategories);
-      }
-    } else {
-      if (!customIncomeCategories.includes(categoryName)) {
-        const updated = [...customIncomeCategories, categoryName];
-        setCustomIncomeCategories(updated);
-        saveCustomCategories(customExpenseCategories, updated);
-      }
-    }
-  };
-
-  const deleteCustomCategory = (categoryName, isExpense) => {
-    if (confirm(`Delete custom category "${categoryName}"? This won't affect existing transactions.`)) {
-      if (isExpense) {
-        const updated = customExpenseCategories.filter(c => c !== categoryName);
-        setCustomExpenseCategories(updated);
-        saveCustomCategories(updated, customIncomeCategories);
-      } else {
-        const updated = customIncomeCategories.filter(c => c !== categoryName);
-        setCustomIncomeCategories(updated);
-        saveCustomCategories(customExpenseCategories, updated);
-      }
-    }
-  };
-
-  const loadLastExportDate = async () => {
-    try {
-      const result = await window.storage.get('last-export-date');
-      if (result && result.value) {
-        setLastExportDate(result.value);
-      }
-    } catch (error) {
-      console.log('No last export date found');
-    }
-  };
-
-  const loadPaidRecurring = async () => {
-    try {
-      const result = await window.storage.get('paid-recurring');
-      if (result && result.value) {
-        setPaidRecurring(JSON.parse(result.value));
-      }
-    } catch (error) {
-      console.log('No paid recurring data found');
-    }
-  };
-
-  const savePaidRecurring = async (data) => {
-    try {
-      await window.storage.set('paid-recurring', JSON.stringify(data));
-    } catch (error) {
-      console.error('Error saving paid recurring data:', error);
-    }
-  };
-
-  const checkRecurringPayments = () => {
-    const today = new Date();
-    const currentDay = today.getDate();
-    const currentMonth = today.getMonth();
-    const currentYear = today.getFullYear();
-    const { month: financialMonth, year: financialYear } = getFinancialMonth(today.toISOString().split('T')[0]);
-    const monthKey = `${financialYear}-${financialMonth}`;
-
-    // Helper function to normalize descriptions for matching
-    const normalizeDescription = (desc) => {
-      let normalized = desc.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const expenseCategories = [...defaultExpenseCategories, ...customExpenseCategories].sort();
+      const incomeCategories = [...defaultIncomeCategories, ...customIncomeCategories].sort();
       
-      // Special handling for car payments
-      if (normalized === 'szc' || normalized === 'szccar') {
-        normalized = 'szccar';
-      }
-      if (normalized === 'cic' || normalized === 'ciccar') {
-        normalized = 'ciccar';
-      }
+      // Load data on mount
+      useEffect(() => {
+        loadData();
+      }, []);
       
-      return normalized;
-    };
-
-    recurringPayments.forEach(payment => {
-      if (!payment.auto) return; // Skip manual payments
-
-      const paymentKey = `${monthKey}-${payment.id}`;
+      const loadData = async () => {
+        try {
+          const txResult = await storage.get('finance-transactions');
+          if (txResult?.value) setTransactions(JSON.parse(txResult.value));
+          
+          const recurringResult = await storage.get('recurring-payments');
+          if (recurringResult?.value) setRecurringPayments(JSON.parse(recurringResult.value));
+          
+          const debtsResult = await storage.get('debts');
+          if (debtsResult?.value) setDebts(JSON.parse(debtsResult.value));
+          
+          const paidResult = await storage.get('paid-recurring');
+          if (paidResult?.value) setPaidRecurring(JSON.parse(paidResult.value));
+          
+          const customExpResult = await storage.get('custom-expense-categories');
+          if (customExpResult?.value) setCustomExpenseCategories(JSON.parse(customExpResult.value));
+          
+          const customIncResult = await storage.get('custom-income-categories');
+          if (customIncResult?.value) setCustomIncomeCategories(JSON.parse(customIncResult.value));
+        } catch (error) {
+          console.log('Starting fresh - no saved data found');
+        }
+      };
       
-      // Skip if already paid this financial month
-      if (paidRecurring[paymentKey]) return;
-
-      // Check if transaction already exists for this payment in current financial month
-      const normalizedPaymentName = normalizeDescription(payment.name);
-      const existingTransaction = transactions.find(t => 
-        t.month === financialMonth && 
-        t.year === financialYear && 
-        normalizeDescription(t.description) === normalizedPaymentName
-      );
-
-      // If transaction already exists, mark as paid but don't add again
-      if (existingTransaction) {
-        setPaidRecurring(prev => {
-          const updated = { ...prev, [paymentKey]: true };
-          savePaidRecurring(updated);
-          return updated;
-        });
-        return;
-      }
-
-      // Check if payment day has already passed in current financial month
-      let shouldAutoAdd = false;
+      const saveData = async (data) => {
+        await storage.set('finance-transactions', JSON.stringify(data));
+      };
       
-      // Determine the actual calendar date for this payment in the current financial month
-      // Financial months run from 28th to 27th
-      const financialMonthStart = new Date(financialYear, financialMonth, 28);
-      if (financialMonth === 0) {
-        // If financial month is January, start date is actually in previous calendar year
-        financialMonthStart.setFullYear(financialYear - 1);
-        financialMonthStart.setMonth(11); // December
-      } else {
-        financialMonthStart.setMonth(financialMonth - 1);
-      }
-
-      // Calculate when this payment is due
-      let paymentDate;
-      if (payment.day >= 28) {
-        // Payment day is 28-31, so it's in the first part of financial month
-        paymentDate = new Date(financialMonthStart);
-        paymentDate.setDate(payment.day);
-      } else {
-        // Payment day is 1-27, so it's in the second part of financial month
-        paymentDate = new Date(financialMonthStart);
-        paymentDate.setMonth(paymentDate.getMonth() + 1);
-        paymentDate.setDate(payment.day);
-      }
-
-      // Auto-add if payment date has passed and we're still in the same financial month
-      if (today >= paymentDate) {
-        shouldAutoAdd = true;
-      }
-
-      if (shouldAutoAdd) {
-        // Auto-add the payment
-        const dateStr = `${paymentDate.getFullYear()}-${String(paymentDate.getMonth() + 1).padStart(2, '0')}-${String(paymentDate.getDate()).padStart(2, '0')}`;
+      const saveRecurringPayments = async (data) => {
+        await storage.set('recurring-payments', JSON.stringify(data));
+      };
+      
+      const saveDebts = async (data) => {
+        await storage.set('debts', JSON.stringify(data));
+      };
+      
+      const savePaidRecurring = async (data) => {
+        await storage.set('paid-recurring', JSON.stringify(data));
+      };
+      
+      const saveCustomCategories = async (exp, inc) => {
+        await storage.set('custom-expense-categories', JSON.stringify(exp));
+        await storage.set('custom-income-categories', JSON.stringify(inc));
+      };
+      
+      // Add Transaction
+      const addTransaction = () => {
+        const finalCategory = showCustomCategory ? customCategory : category;
+        
+        if (!description || !amount || !finalCategory) {
+          alert('Please fill in all fields');
+          return;
+        }
+        
+        // Save custom category if used
+        if (showCustomCategory && customCategory) {
+          const isExpense = type === 'expense';
+          const updated = isExpense ? [...customExpenseCategories, customCategory] : [...customIncomeCategories, customCategory];
+          if (isExpense) {
+            setCustomExpenseCategories(updated);
+            saveCustomCategories(updated, customIncomeCategories);
+          } else {
+            setCustomIncomeCategories(updated);
+            saveCustomCategories(customExpenseCategories, updated);
+          }
+        }
         
         const newTransaction = {
-          id: Date.now() + payment.id + Math.random(),
+          id: editingId || Date.now(),
+          description,
+          amount: parseFloat(amount),
+          category: finalCategory,
+          type,
+          date,
+          ...getFinancialMonth(date)
+        };
+        
+        let updatedTransactions;
+        if (editingId) {
+          updatedTransactions = transactions.map(t => t.id === editingId ? newTransaction : t);
+          setEditingId(null);
+        } else {
+          updatedTransactions = [...transactions, newTransaction];
+          
+          // Apply to debt if expense and matches debt name
+          if (type === 'expense') {
+            applyPaymentToDebt(description, parseFloat(amount), date, finalCategory);
+          }
+        }
+        
+        setTransactions(updatedTransactions);
+        saveData(updatedTransactions);
+        resetForm();
+      };
+      
+      const resetForm = () => {
+        setDescription('');
+        setAmount('');
+        setCategory('');
+        setCustomCategory('');
+        setShowCustomCategory(false);
+        setType('expense');
+        setDate(getESTDateString());
+      };
+      
+      const deleteTransaction = (id) => {
+        const updated = transactions.filter(t => t.id !== id);
+        setTransactions(updated);
+        saveData(updated);
+      };
+      
+      // Recurring Payments
+      const addRecurringPayment = () => {
+        if (!newRecurring.name || !newRecurring.amount) {
+          alert('Please fill in name and amount');
+          return;
+        }
+        
+        const payment = {
+          id: Date.now(),
+          name: newRecurring.name,
+          amount: parseFloat(newRecurring.amount),
+          category: newRecurring.category,
+          day: parseInt(newRecurring.day),
+          auto: newRecurring.auto,
+          varies: newRecurring.varies
+        };
+        
+        const updated = [...recurringPayments, payment];
+        setRecurringPayments(updated);
+        saveRecurringPayments(updated);
+        setNewRecurring({ name: '', amount: '', category: 'Subscriptions', day: 1, auto: true, varies: false });
+        setShowAddRecurring(false);
+      };
+      
+      const deleteRecurringPayment = (id) => {
+        if (confirm('Delete this recurring payment?')) {
+          const updated = recurringPayments.filter(p => p.id !== id);
+          setRecurringPayments(updated);
+          saveRecurringPayments(updated);
+        }
+      };
+      
+      const markRecurringAsPaid = (payment, customAmount = null) => {
+        const today = new Date();
+        const monthKey = `${today.getFullYear()}-${today.getMonth()}`;
+        const paymentKey = `${monthKey}-${payment.id}`;
+        const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(payment.day).padStart(2, '0')}`;
+        const paymentAmount = customAmount || payment.amount;
+        
+        const newTransaction = {
+          id: Date.now(),
           description: payment.name,
-          amount: payment.amount,
+          amount: paymentAmount,
           category: payment.category,
           type: 'expense',
           date: dateStr,
           ...getFinancialMonth(dateStr)
         };
-
-        setTransactions(prev => {
-          const updated = [...prev, newTransaction];
-          saveData(updated);
-          return updated;
-        });
-
-        // Mark as paid
-        setPaidRecurring(prev => {
-          const updated = { ...prev, [paymentKey]: true };
-          savePaidRecurring(updated);
-          return updated;
-        });
         
-        // Apply payment to debt
-        applyPaymentToDebt(payment.name, payment.amount, dateStr, payment.category);
-      }
-    });
-  };
-
-  const markRecurringAsPaid = (payment, customAmount = null) => {
-    const today = new Date();
-    const currentMonth = today.getMonth();
-    const currentYear = today.getFullYear();
-    const monthKey = `${currentYear}-${currentMonth}`;
-    const paymentKey = `${monthKey}-${payment.id}`;
-
-    // Create transaction
-    const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(payment.day).padStart(2, '0')}`;
-    const paymentAmount = customAmount || payment.amount;
-    
-    const newTransaction = {
-      id: Date.now(),
-      description: payment.name,
-      amount: paymentAmount,
-      category: payment.category,
-      type: 'expense',
-      date: dateStr,
-      ...getFinancialMonth(dateStr)
-    };
-
-    const updatedTransactions = [...transactions, newTransaction];
-    setTransactions(updatedTransactions);
-    saveData(updatedTransactions);
-
-    // Mark as paid
-    const updatedPaid = { ...paidRecurring, [paymentKey]: true };
-    setPaidRecurring(updatedPaid);
-    savePaidRecurring(updatedPaid);
-    
-    // Apply payment to debt
-    applyPaymentToDebt(payment.name, paymentAmount, dateStr, payment.category);
-  };
-
-  const isRecurringPaidThisMonth = (paymentId) => {
-    const today = new Date();
-    const currentMonth = today.getMonth();
-    const currentYear = today.getFullYear();
-    const monthKey = `${currentYear}-${currentMonth}`;
-    const paymentKey = `${monthKey}-${paymentId}`;
-    return paidRecurring[paymentKey] || false;
-  };
-
-  const saveData = async (data) => {
-    try {
-      await window.storage.set('finance-transactions', JSON.stringify(data));
-    } catch (error) {
-      console.error('Error saving data:', error);
-    }
-  };
-
-  const getFinancialMonth = (dateStr) => {
-    const date = new Date(dateStr);
-    const day = date.getDate();
-    let month = date.getMonth();
-    let year = date.getFullYear();
-
-    if (day >= 28) {
-      month += 1;
-      if (month > 11) {
-        month = 0;
-        year += 1;
-      }
-    }
-
-    return { month, year };
-  };
-
-  const getMonthName = (monthIndex) => {
-    const months = ['January', 'February', 'March', 'April', 'May', 'June',
-                    'July', 'August', 'September', 'October', 'November', 'December'];
-    return months[monthIndex];
-  };
-
-  const addTransaction = () => {
-    const finalCategory = showCustomCategory ? customCategory : category;
-    
-    if (!description || !amount || !finalCategory) {
-      alert('Please fill in all fields');
-      return;
-    }
-
-    // Save custom category if used
-    if (showCustomCategory && customCategory) {
-      addCustomCategory(customCategory, type === 'expense');
-    }
-
-    const newTransaction = {
-      id: editingId || Date.now(),
-      description,
-      amount: parseFloat(amount),
-      category: finalCategory,
-      type,
-      date,
-      ...getFinancialMonth(date)
-    };
-
-    let updatedTransactions;
-    if (editingId) {
-      updatedTransactions = transactions.map(t => 
-        t.id === editingId ? newTransaction : t
-      );
-      setEditingId(null);
-    } else {
-      updatedTransactions = [...transactions, newTransaction];
+        const updatedTransactions = [...transactions, newTransaction];
+        setTransactions(updatedTransactions);
+        saveData(updatedTransactions);
+        
+        const updatedPaid = { ...paidRecurring, [paymentKey]: true };
+        setPaidRecurring(updatedPaid);
+        savePaidRecurring(updatedPaid);
+        
+        applyPaymentToDebt(payment.name, paymentAmount, dateStr, payment.category);
+      };
       
-      // If adding a new expense, check if it should apply to a debt
-      if (type === 'expense') {
-        const transactionCategory = showCustomCategory ? customCategory : category;
-        applyPaymentToDebt(description, parseFloat(amount), date, transactionCategory);
-      }
-    }
-
-    setTransactions(updatedTransactions);
-    saveData(updatedTransactions);
-    resetForm();
-  };
-
-  const deleteTransaction = (id) => {
-    const updatedTransactions = transactions.filter(t => t.id !== id);
-    setTransactions(updatedTransactions);
-    saveData(updatedTransactions);
-  };
-
-  const editTransaction = (transaction) => {
-    setDescription(transaction.description);
-    setAmount(transaction.amount.toString());
-    setCategory(transaction.category);
-    setType(transaction.type);
-    setDate(transaction.date);
-    setEditingId(transaction.id);
-    setIsAddTransactionExpanded(true); // Auto-expand form when editing
-    window.scrollTo({ top: 0, behavior: 'smooth' }); // Scroll to form
-  };
-
-  const resetForm = () => {
-    setDescription('');
-    setAmount('');
-    setCategory('');
-    setCustomCategory('');
-    setShowCustomCategory(false);
-    setDate(new Date().toISOString().split('T')[0]);
-    setEditingId(null);
-  };
-
-  const exportData = () => {
-    const today = new Date();
-    const dateStr = today.toISOString().split('T')[0];
-    
-    const exportObject = {
-      version: '2.0',
-      exportDate: today.toISOString(),
-      transactions,
-      debts,
-      debtPaymentHistory: [],
-      recurringPayments,
-      paidRecurring
-    };
-    
-    const dataStr = JSON.stringify(exportObject, null, 2);
-    const blob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `finance-data-${dateStr}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    
-    const exportTimestamp = today.toISOString();
-    setLastExportDate(exportTimestamp);
-    window.storage.set('last-export-date', exportTimestamp);
-  };
-
-  const importData = (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const importedData = JSON.parse(e.target.result);
-        
-        // Check if it's v2.0 format or old array format
-        if (importedData.version === '2.0') {
-          // New format with debts
-          if (importedData.transactions) {
-            setTransactions(importedData.transactions);
-            saveData(importedData.transactions);
-          }
-          if (importedData.debts) {
-            setDebts(importedData.debts);
-            saveDebts(importedData.debts);
-          }
-          if (importedData.recurringPayments) {
-            setRecurringPayments(importedData.recurringPayments);
-            saveRecurringPayments(importedData.recurringPayments);
-          }
-          if (importedData.paidRecurring) {
-            setPaidRecurring(importedData.paidRecurring);
-            savePaidRecurring(importedData.paidRecurring);
-          }
-          alert('All data imported successfully!');
-        } else if (Array.isArray(importedData)) {
-          // Old format (just transactions)
-          setTransactions(importedData);
-          saveData(importedData);
-          alert('Transactions imported successfully!');
-        } else {
-          alert('Invalid file format');
+      const isRecurringPaidThisMonth = (paymentId) => {
+        const today = new Date();
+        const monthKey = `${today.getFullYear()}-${today.getMonth()}`;
+        const paymentKey = `${monthKey}-${paymentId}`;
+        return paidRecurring[paymentKey] || false;
+      };
+      
+      // Debts
+      const addDebt = () => {
+        if (!newDebt.name || !newDebt.balance || !newDebt.apr || !newDebt.payment) {
+          alert('Please fill in all fields');
+          return;
         }
-      } catch (error) {
-        console.error('Import error:', error);
-        alert('Error reading file');
-      }
-    };
-    reader.readAsText(file);
-    event.target.value = '';
-  };
-
-  const getMonthlyData = () => {
-    const monthlyData = {};
-    
-    transactions.forEach(t => {
-      const key = `${t.year}-${t.month}`;
-      if (!monthlyData[key]) {
-        monthlyData[key] = {
-          income: 0,
-          expenses: 0,
-          month: t.month,
-          year: t.year,
-          transactions: []
+        
+        const debt = {
+          id: Date.now(),
+          name: newDebt.name,
+          balance: parseFloat(newDebt.balance),
+          originalBalance: parseFloat(newDebt.balance),
+          apr: parseFloat(newDebt.apr),
+          payment: parseFloat(newDebt.payment),
+          dueDay: parseInt(newDebt.dueDay),
+          lastUpdated: getESTDateString(),
+          recurringPaymentId: null
         };
-      }
+        
+        const updated = [...debts, debt];
+        setDebts(updated);
+        saveDebts(updated);
+        setNewDebt({ name: '', balance: '', apr: '', payment: '', dueDay: 1 });
+        setShowAddDebt(false);
+      };
       
-      if (t.type === 'income') {
-        monthlyData[key].income += t.amount;
-      } else {
-        monthlyData[key].expenses += t.amount;
-      }
-      monthlyData[key].transactions.push(t);
-    });
-
-    return Object.values(monthlyData).sort((a, b) => {
-      if (a.year !== b.year) return a.year - b.year;
-      return a.month - b.month;
-    });
-  };
-
-  const getYearlyTotal = (year) => {
-    const yearTransactions = transactions.filter(t => t.year === year);
-    const income = yearTransactions.filter(t => t.type === 'income')
-      .reduce((sum, t) => sum + t.amount, 0);
-    const expenses = yearTransactions.filter(t => t.type === 'expense')
-      .reduce((sum, t) => sum + t.amount, 0);
-    return { income, expenses, net: income - expenses };
-  };
-
-  const getYearlyCategoryBreakdown = (year) => {
-    const yearTransactions = transactions.filter(t => t.year === year && t.type === 'expense');
-    const breakdown = {};
-    yearTransactions.forEach(t => {
-      if (!breakdown[t.category]) {
-        breakdown[t.category] = {
-          total: 0,
-          transactions: []
+      const deleteDebt = (id) => {
+        if (confirm('Delete this debt?')) {
+          const updated = debts.filter(d => d.id !== id);
+          setDebts(updated);
+          saveDebts(updated);
+        }
+      };
+      
+      const applyPaymentToDebt = (paymentName, paymentAmount, paymentDate, paymentCategory) => {
+        const normalizeForMatch = (name) => {
+          let normalized = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (normalized === 'szc' || normalized === 'szccar') normalized = 'szccar';
+          if (normalized === 'cic' || normalized === 'ciccar') normalized = 'ciccar';
+          return normalized;
         };
-      }
-      breakdown[t.category].total += t.amount;
-      breakdown[t.category].transactions.push(t);
-    });
-    return breakdown;
-  };
-
-  const getYearlyIncomeCategoryBreakdown = (year) => {
-    const yearTransactions = transactions.filter(t => t.year === year && t.type === 'income');
-    const breakdown = {};
-    yearTransactions.forEach(t => {
-      if (!breakdown[t.category]) {
-        breakdown[t.category] = {
-          total: 0,
-          transactions: []
+        
+        const normalizedPayment = normalizeForMatch(paymentName);
+        const matchingDebt = debts.find(d => {
+          const nameMatches = normalizeForMatch(d.name) === normalizedPayment;
+          const categoryIsDebtRelated = ['debt', 'car payments', 'home', 'personal'].includes(paymentCategory.toLowerCase());
+          return nameMatches && categoryIsDebtRelated;
+        });
+        
+        if (matchingDebt) {
+          const updatedDebts = debts.map(d => {
+            if (d.id === matchingDebt.id) {
+              return {
+                ...d,
+                balance: d.balance - paymentAmount,
+                lastUpdated: paymentDate
+              };
+            }
+            return d;
+          });
+          setDebts(updatedDebts);
+          saveDebts(updatedDebts);
+        }
+      };
+      
+      // Export/Import
+      const exportData = () => {
+        const today = new Date();
+        const dateStr = today.toISOString().split('T')[0];
+        
+        const exportObject = {
+          version: '2.0',
+          exportDate: today.toISOString(),
+          transactions,
+          debts,
+          recurringPayments,
+          paidRecurring,
+          customExpenseCategories,
+          customIncomeCategories
         };
-      }
-      breakdown[t.category].total += t.amount;
-      breakdown[t.category].transactions.push(t);
-    });
-    return breakdown;
-  };
-
-  const toggleMonth = (key) => {
-    setExpandedMonths(prev => ({
-      ...prev,
-      [key]: !prev[key]
-    }));
-  };
-
-  const toggleCategoryInMonth = (monthKey, category) => {
-    const key = `${monthKey}-${category}`;
-    setExpandedCategories(prev => ({
-      ...prev,
-      [key]: !prev[key]
-    }));
-  };
-
-  const getDaysSinceExport = () => {
-    if (!lastExportDate) return null;
-    const lastExport = new Date(lastExportDate);
-    const now = new Date();
-    const diffTime = Math.abs(now - lastExport);
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
-  };
-
-  const getExportReminderColor = () => {
-    const days = getDaysSinceExport();
-    if (days === null) return 'bg-yellow-600';
-    if (days === 0) return 'bg-green-600';
-    if (days <= 7) return 'bg-blue-600';
-    if (days <= 30) return 'bg-yellow-600';
-    return 'bg-red-600';
-  };
-
-  const getExportReminderText = () => {
-    const days = getDaysSinceExport();
-    if (days === null) return 'Never exported';
-    if (days === 0) return 'Exported today';
-    if (days === 1) return 'Exported yesterday';
-    return `Exported ${days} days ago`;
-  };
-
-  const monthlyData = getMonthlyData();
-  const currentYear = new Date().getFullYear();
-  const yearlyTotal = getYearlyTotal(selectedYear);
-  const yearlyCategoryBreakdown = getYearlyCategoryBreakdown(selectedYear);
-  const yearlyIncomeCategoryBreakdown = getYearlyIncomeCategoryBreakdown(selectedYear);
-
-  // Get all unique years from transactions
-  const getAvailableYears = () => {
-    const years = new Set(transactions.map(t => t.year));
-    return Array.from(years).sort((a, b) => b - a);
-  };
-
-  const availableYears = getAvailableYears();
-
-  // Get year comparison data
-  const getYearComparison = () => {
-    if (availableYears.length < 2) return null;
-    
-    const previousYear = selectedYear - 1;
-    const currentYearData = getYearlyTotal(selectedYear);
-    const previousYearData = getYearlyTotal(previousYear);
-    
-    if (previousYearData.income === 0 && previousYearData.expenses === 0) return null;
-    
-    return {
-      income: {
-        current: currentYearData.income,
-        previous: previousYearData.income,
-        change: currentYearData.income - previousYearData.income,
-        percentChange: previousYearData.income !== 0 
-          ? ((currentYearData.income - previousYearData.income) / previousYearData.income) * 100 
-          : 0
-      },
-      expenses: {
-        current: currentYearData.expenses,
-        previous: previousYearData.expenses,
-        change: currentYearData.expenses - previousYearData.expenses,
-        percentChange: previousYearData.expenses !== 0 
-          ? ((currentYearData.expenses - previousYearData.expenses) / previousYearData.expenses) * 100 
-          : 0
-      },
-      net: {
-        current: currentYearData.net,
-        previous: previousYearData.net,
-        change: currentYearData.net - previousYearData.net
-      }
-    };
-  };
-
-  const yearComparison = getYearComparison();
-
-  // Filter monthly data by selected year
-  const filteredMonthlyData = monthlyData.filter(m => m.year === selectedYear);
-
-  const getCategoryBreakdown = (monthData) => {
-    const breakdown = {};
-    monthData.transactions
-      .filter(t => t.type === 'expense')
-      .forEach(t => {
-        breakdown[t.category] = (breakdown[t.category] || 0) + t.amount;
-      });
-    return breakdown;
-  };
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 text-white p-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
-          <div className="flex items-center gap-4">
-            <h1 className="text-4xl font-bold flex items-center gap-3">
-              <DollarSign className="text-green-400" />
-              Personal Finance Tracker
+        
+        const dataStr = JSON.stringify(exportObject, null, 2);
+        const blob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `finance-data-${dateStr}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      };
+      
+      const importData = (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          try {
+            const data = JSON.parse(e.target.result);
+            
+            if (data.version === '2.0') {
+              if (data.transactions) {
+                setTransactions(data.transactions);
+                saveData(data.transactions);
+              }
+              if (data.debts) {
+                setDebts(data.debts);
+                saveDebts(data.debts);
+              }
+              if (data.recurringPayments) {
+                setRecurringPayments(data.recurringPayments);
+                saveRecurringPayments(data.recurringPayments);
+              }
+              if (data.paidRecurring) {
+                setPaidRecurring(data.paidRecurring);
+                savePaidRecurring(data.paidRecurring);
+              }
+              if (data.customExpenseCategories) {
+                setCustomExpenseCategories(data.customExpenseCategories);
+              }
+              if (data.customIncomeCategories) {
+                setCustomIncomeCategories(data.customIncomeCategories);
+              }
+              if (data.customExpenseCategories || data.customIncomeCategories) {
+                saveCustomCategories(data.customExpenseCategories || [], data.customIncomeCategories || []);
+              }
+              alert('Data imported successfully!');
+            } else if (Array.isArray(data)) {
+              // Old format - just transactions
+              setTransactions(data);
+              saveData(data);
+              alert('Transactions imported successfully!');
+            } else {
+              alert('Unrecognized file format');
+            }
+          } catch (error) {
+            alert('Error importing file: ' + error.message);
+          }
+        };
+        reader.readAsText(file);
+      };
+      
+      const clearAllData = () => {
+        const confirmation = prompt('Type "yes" to clear all data:');
+        if (confirmation?.toLowerCase() === 'yes') {
+          setTransactions([]);
+          setRecurringPayments([]);
+          setDebts([]);
+          setPaidRecurring({});
+          setCustomExpenseCategories([]);
+          setCustomIncomeCategories([]);
+          
+          storage.delete('finance-transactions');
+          storage.delete('recurring-payments');
+          storage.delete('debts');
+          storage.delete('paid-recurring');
+          storage.delete('custom-expense-categories');
+          storage.delete('custom-income-categories');
+          
+          setTimeout(() => alert('All data cleared!'), 100);
+        }
+      };
+      
+      // Calculate totals
+      const currentMonth = new Date().getMonth();
+      const currentYear = new Date().getFullYear();
+      const { financialMonth: currentFinancialMonth, financialYear: currentFinancialYear } = getFinancialMonth(getESTDateString());
+      
+      const thisMonthTransactions = transactions.filter(t => 
+        t.financialMonth === currentFinancialMonth && t.financialYear === currentFinancialYear
+      );
+      
+      const totalIncome = thisMonthTransactions
+        .filter(t => t.type === 'income')
+        .reduce((sum, t) => sum + t.amount, 0);
+      
+      const totalExpenses = thisMonthTransactions
+        .filter(t => t.type === 'expense')
+        .reduce((sum, t) => sum + t.amount, 0);
+      
+      const netAmount = totalIncome - totalExpenses;
+      const totalDebt = debts.reduce((sum, d) => sum + d.balance, 0);
+      const totalRecurringMonthly = recurringPayments.reduce((sum, p) => sum + p.amount, 0);
+      
+      // Render
+      return (
+        <div className="min-h-screen bg-slate-950 p-4 md:p-8">
+          <div className="max-w-7xl mx-auto">
+            <h1 className="text-4xl font-bold mb-8 text-center bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+              Finance Tracker
             </h1>
             
-            {availableYears.length > 0 && (
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(Number(e.target.value))}
-                className="px-4 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-blue-500 focus:outline-none text-xl font-semibold"
-              >
-                {availableYears.map(year => (
-                  <option key={year} value={year}>{year}</option>
-                ))}
-              </select>
-            )}
-          </div>
-          
-          <div className="flex flex-col items-end gap-2">
-            <div className="flex gap-3">
-              <button
-                onClick={exportData}
-                className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-semibold transition-colors flex items-center gap-2"
-              >
-                <Download size={18} /> Export Backup
-              </button>
+            {/* Summary Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+              <div className="bg-gradient-to-br from-green-500 to-green-700 rounded-lg p-6 shadow-lg">
+                <div className="flex items-center gap-3 mb-2">
+                  <TrendingUp size={24} />
+                  <h2 className="text-sm font-semibold">This Month Income</h2>
+                </div>
+                <p className="text-3xl font-bold">${formatCurrency(totalIncome)}</p>
+              </div>
               
-              <label className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition-colors flex items-center gap-2 cursor-pointer">
-                <Upload size={18} /> Import Backup
-                <input
-                  type="file"
-                  accept=".json"
-                  onChange={importData}
-                  className="hidden"
-                />
+              <div className="bg-gradient-to-br from-red-500 to-red-700 rounded-lg p-6 shadow-lg">
+                <div className="flex items-center gap-3 mb-2">
+                  <TrendingDown size={24} />
+                  <h2 className="text-sm font-semibold">This Month Expenses</h2>
+                </div>
+                <p className="text-3xl font-bold">${formatCurrency(totalExpenses)}</p>
+              </div>
+              
+              <div className={`bg-gradient-to-br ${netAmount >= 0 ? 'from-blue-500 to-blue-700' : 'from-orange-500 to-orange-700'} rounded-lg p-6 shadow-lg`}>
+                <div className="flex items-center gap-3 mb-2">
+                  <DollarSign size={24} />
+                  <h2 className="text-sm font-semibold">Net This Month</h2>
+                </div>
+                <p className="text-3xl font-bold">${formatCurrency(Math.abs(netAmount))}</p>
+                <p className="text-xs mt-1">{netAmount >= 0 ? 'Surplus' : 'Deficit'}</p>
+              </div>
+              
+              <div className="bg-gradient-to-br from-purple-500 to-purple-700 rounded-lg p-6 shadow-lg">
+                <div className="flex items-center gap-3 mb-2">
+                  <Calendar size={24} />
+                  <h2 className="text-sm font-semibold">Total Debt</h2>
+                </div>
+                <p className="text-3xl font-bold">${formatCurrency(totalDebt)}</p>
+              </div>
+            </div>
+            
+            {/* Header Actions */}
+            <div className="flex justify-end gap-3 mb-8">
+              <button onClick={exportData} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold flex items-center gap-2">
+                <Download size={18} /> Export Data
+              </button>
+              <label className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-semibold flex items-center gap-2 cursor-pointer">
+                <Upload size={18} /> Import Data
+                <input type="file" accept=".json" onChange={importData} className="hidden" />
               </label>
-
-              <button
-                onClick={() => setShowClearConfirm(true)}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition-colors flex items-center gap-2"
-              >
-                <Trash2 size={18} /> Clear All Data
+              <button onClick={clearAllData} className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-semibold">
+                Clear All Data
               </button>
             </div>
             
-            <div className={`text-xs px-3 py-1 rounded-full ${getExportReminderColor()} text-white font-medium`}>
-              {getExportReminderText()}
-            </div>
-          </div>
-        </div>
-
-        {/* Clear Data Confirmation Modal */}
-        {showClearConfirm && (
-          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-            <div className="bg-slate-800 p-6 rounded-lg border border-slate-700 max-w-md">
-              <h3 className="text-xl font-bold text-red-400 mb-4">⚠️ Clear All Data</h3>
-              <p className="text-slate-300 mb-4">
-                This will permanently delete all transactions, recurring payments, and settings. 
-                This action cannot be undone.
-              </p>
-              <p className="text-slate-400 mb-4 text-sm">
-                Type <span className="font-bold text-white">yes</span> to confirm:
-              </p>
-              <input
-                type="text"
-                value={clearConfirmText}
-                onChange={(e) => setClearConfirmText(e.target.value)}
-                className="w-full px-4 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-red-500 focus:outline-none mb-4"
-                placeholder="Type yes"
-              />
-              <div className="flex gap-3">
-                <button
-                  onClick={async () => {
-                    if (clearConfirmText !== 'yes') {
-                      alert('Please type yes to confirm');
-                      return;
-                    }
-                    try {
-                      setTransactions([]);
-                      setPaidRecurring({});
-                      setLastExportDate(null);
-                      
-                      await window.storage.set('finance-transactions', JSON.stringify([]));
-                      await window.storage.set('paid-recurring', JSON.stringify({}));
-                      await window.storage.set('last-export-date', '');
-                      
-                      setShowClearConfirm(false);
-                      setClearConfirmText('');
-                      
-                      setTimeout(() => {
-                        alert('All data cleared successfully!');
-                      }, 100);
-                    } catch (error) {
-                      console.error('Error clearing data:', error);
-                      setShowClearConfirm(false);
-                      setClearConfirmText('');
-                      alert('Error clearing data');
-                    }
-                  }}
-                  className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-semibold"
-                >
-                  Clear All Data
-                </button>
-                <button
-                  onClick={() => {
-                    setShowClearConfirm(false);
-                    setClearConfirmText('');
-                  }}
-                  className="flex-1 px-4 py-2 bg-slate-600 hover:bg-slate-700 rounded-lg font-semibold"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Yearly Summary */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-slate-800 rounded-lg p-6 border border-green-500/20">
-            <div className="flex items-center gap-3 mb-2">
-              <TrendingUp className="text-green-400" />
-              <h3 className="text-lg font-semibold">Total Income {selectedYear}</h3>
-            </div>
-            <p className="text-3xl font-bold text-green-400">
-              ${formatCurrency(yearlyTotal.income)}
-            </p>
-            {yearComparison && (
-              <p className={`text-sm mt-2 ${yearComparison.income.change >= 0 ? 'text-green-300' : 'text-red-300'}`}>
-                {yearComparison.income.change >= 0 ? '+' : ''}${formatCurrency(Math.abs(yearComparison.income.change))} 
-                ({yearComparison.income.percentChange >= 0 ? '+' : ''}{yearComparison.income.percentChange.toFixed(1)}%) vs {selectedYear - 1}
-              </p>
-            )}
-          </div>
-
-          <div className="bg-slate-800 rounded-lg p-6 border border-red-500/20">
-            <div className="flex items-center gap-3 mb-2">
-              <TrendingDown className="text-red-400" />
-              <h3 className="text-lg font-semibold">Total Expenses {selectedYear}</h3>
-            </div>
-            <p className="text-3xl font-bold text-red-400">
-              ${formatCurrency(yearlyTotal.expenses)}
-            </p>
-            {yearComparison && (
-              <p className={`text-sm mt-2 ${yearComparison.expenses.change <= 0 ? 'text-green-300' : 'text-red-300'}`}>
-                {yearComparison.expenses.change >= 0 ? '+' : ''}${formatCurrency(Math.abs(yearComparison.expenses.change))} 
-                ({yearComparison.expenses.percentChange >= 0 ? '+' : ''}{yearComparison.expenses.percentChange.toFixed(1)}%) vs {selectedYear - 1}
-              </p>
-            )}
-          </div>
-
-          <div className="bg-slate-800 rounded-lg p-6 border border-blue-500/20">
-            <div className="flex items-center gap-3 mb-2">
-              <DollarSign className="text-blue-400" />
-              <h3 className="text-lg font-semibold">Net {selectedYear}</h3>
-            </div>
-            <p className={`text-3xl font-bold ${yearlyTotal.net >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
-              ${formatCurrency(Math.abs(yearlyTotal.net))}
-            </p>
-            {yearComparison && (
-              <p className={`text-sm mt-2 ${yearComparison.net.change >= 0 ? 'text-green-300' : 'text-red-300'}`}>
-                {yearComparison.net.change >= 0 ? '+' : ''}${formatCurrency(Math.abs(yearComparison.net.change))} vs {selectedYear - 1}
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* Debt Tracker - SIMPLE DISPLAY */}
-        <div className="bg-slate-800 rounded-lg border border-slate-700 mb-8">
-          <div 
-            className="p-6 cursor-pointer hover:bg-slate-750 transition-colors"
-            onClick={() => setIsDebtTrackerExpanded(!isDebtTrackerExpanded)}
-          >
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-3">
-                {isDebtTrackerExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                <h2 className="text-2xl font-bold">💳 Debt Tracker</h2>
-              </div>
-              <div className="text-right">
-                <div className="text-sm text-slate-400">Total Debt</div>
-                <div className="text-2xl font-bold text-red-400">
-                  ${formatCurrency(debts.reduce((sum, d) => sum + d.balance, 0))}
+            {/* DEBT TRACKER */}
+            <div className="bg-slate-800 rounded-lg border border-slate-700 mb-8">
+              <div className="p-6 cursor-pointer hover:bg-slate-750 transition-colors" onClick={() => setIsDebtTrackerExpanded(!isDebtTrackerExpanded)}>
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    {isDebtTrackerExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                    <h2 className="text-2xl font-bold">Debt Tracker</h2>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-bold text-red-400">${formatCurrency(totalDebt)}</div>
+                    <div className="text-xs text-slate-400">{debts.length} debts</div>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
-
-          {isDebtTrackerExpanded && (
-            <div className="px-6 pb-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {debts.map(debt => {
-                  // Calculate payoff projection
-                  const monthlyInterest = debt.balance * debt.apr / 100 / 12;
-                  const principalPayment = debt.payment - monthlyInterest;
-                  
-                  let monthsToPayoff;
-                  let totalInterest;
-                  
-                  if (principalPayment <= 0) {
-                    monthsToPayoff = 999; // Paying interest only or less
-                    totalInterest = 0;
-                  } else {
-                    // Calculate actual months considering compound interest
-                    const monthlyRate = debt.apr / 100 / 12;
-                    monthsToPayoff = Math.ceil(
-                      Math.log(debt.payment / (debt.payment - debt.balance * monthlyRate)) / 
-                      Math.log(1 + monthlyRate)
-                    );
-                    totalInterest = (debt.payment * monthsToPayoff) - debt.balance;
-                  }
-                  
-                  const yearsToPayoff = Math.floor(monthsToPayoff / 12);
-                  const remainingMonths = monthsToPayoff % 12;
-                  const payoffDate = new Date();
-                  payoffDate.setMonth(payoffDate.getMonth() + monthsToPayoff);
-                  
-                  return (
-                    <div key={debt.id} className="bg-slate-900 rounded-lg p-4 border border-slate-700">
-                      <div className="flex justify-between items-start mb-3">
-                        <div>
-                          <h3 className="text-lg font-bold text-white">{debt.name}</h3>
-                          <div className="text-xs text-slate-400">
-                            Due: {debt.dueDay}{debt.dueDay === 1 ? 'st' : debt.dueDay === 2 ? 'nd' : debt.dueDay === 3 ? 'rd' : 'th'} of month
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deleteDebt(debt.id);
-                            }}
-                            className="p-1 hover:bg-slate-700 rounded"
-                            title="Delete Debt"
-                          >
-                            <Trash2 size={16} className="text-red-400" />
-                          </button>
-                          <div className="text-right">
-                            <div className="text-2xl font-bold text-red-400">${formatCurrency(debt.balance)}</div>
-                            <div className="text-xs text-slate-400">Balance</div>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-2 text-sm mb-3">
-                        <div className="bg-slate-800 rounded p-2">
-                          <div className="text-xs text-slate-400">APR</div>
-                          <div className="font-semibold text-blue-400">
-                            {debt.apr}%
-                          </div>
-                        </div>
-                        <div className="bg-slate-800 rounded p-2">
-                          <div className="text-xs text-slate-400">Payment</div>
-                          <div className="font-semibold text-purple-400">
-                            ${formatCurrency(debt.payment)}
-                          </div>
-                        </div>
-                        <div className="bg-slate-800 rounded p-2">
-                          <div className="text-xs text-slate-400">Interest/Month</div>
-                          <div className="font-semibold text-yellow-400">
-                            ${formatCurrency(monthlyInterest)}
-                          </div>
-                        </div>
-                        <div className="bg-slate-800 rounded p-2">
-                          <div className="text-xs text-slate-400">Principal/Month</div>
-                          <div className="font-semibold text-green-400">
-                            ${formatCurrency(principalPayment)}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Payoff Projection */}
-                      <div className="bg-slate-800 rounded-lg p-3 border-t border-slate-700">
-                        <div className="flex justify-between items-center mb-2">
-                          <div className="text-xs font-semibold text-slate-300">Payoff Projection</div>
-                          {monthsToPayoff < 999 ? (
-                            <div className="text-xs text-blue-400">
-                              {yearsToPayoff > 0 && `${yearsToPayoff}y `}
-                              {remainingMonths}mo
-                            </div>
-                          ) : (
-                            <div className="text-xs text-red-400">Interest Only</div>
-                          )}
-                        </div>
+              
+              {isDebtTrackerExpanded && (
+                <div className="px-6 pb-6">
+                  {debts.length === 0 ? (
+                    <div className="text-center py-8 text-slate-400">
+                      <p>No debts tracked yet.</p>
+                      <p className="text-sm mt-2">Click "Add Debt" below to get started!</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                      {debts.map(debt => {
+                        const monthlyInterest = debt.balance * debt.apr / 100 / 12;
+                        const principalPayment = debt.payment - monthlyInterest;
+                        const monthlyRate = debt.apr / 100 / 12;
+                        const monthsToPayoff = principalPayment > 0 ? Math.ceil(
+                          Math.log(debt.payment / (debt.payment - debt.balance * monthlyRate)) / Math.log(1 + monthlyRate)
+                        ) : 999;
+                        const yearsToPayoff = Math.floor(monthsToPayoff / 12);
+                        const remainingMonths = monthsToPayoff % 12;
+                        const payoffDate = new Date();
+                        payoffDate.setMonth(payoffDate.getMonth() + monthsToPayoff);
                         
-                        {monthsToPayoff < 999 ? (
-                          <>
-                            <div className="w-full bg-slate-700 rounded-full h-2 mb-2">
-                              <div 
-                                className="bg-gradient-to-r from-red-500 via-yellow-500 to-green-500 h-2 rounded-full transition-all"
-                                style={{ 
-                                  width: `${Math.min(100, ((debt.originalBalance - debt.balance) / debt.originalBalance) * 100)}%` 
-                                }}
-                              ></div>
-                            </div>
-                            <div className="text-xs text-slate-400">
-                              <div className="flex justify-between">
-                                <span>Payoff Date:</span>
-                                <span className="text-slate-300">{payoffDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</span>
+                        return (
+                          <div key={debt.id} className="bg-slate-900 rounded-lg p-4 border border-slate-700">
+                            <div className="flex justify-between items-start mb-3">
+                              <div>
+                                <h3 className="text-lg font-bold text-white">{debt.name}</h3>
+                                <div className="text-xs text-slate-400">Due: {debt.dueDay}{debt.dueDay === 1 ? 'st' : debt.dueDay === 2 ? 'nd' : debt.dueDay === 3 ? 'rd' : 'th'} of month</div>
                               </div>
-                            </div>
-                          </>
-                        ) : (
-                          <div className="text-xs text-red-400">
-                            ⚠️ Payment doesn't cover interest. Balance will grow.
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Add Debt Button/Form */}
-              <div className="mt-6">
-                {!showAddDebt ? (
-                  <button
-                    onClick={() => setShowAddDebt(true)}
-                    className="w-full px-4 py-3 bg-green-600 hover:bg-green-700 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
-                  >
-                    <Plus size={20} /> Add Debt
-                  </button>
-                ) : (
-                  <div className="bg-slate-900 rounded-lg p-4 border border-slate-700">
-                    <h3 className="text-lg font-semibold mb-4">Add New Debt</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm text-slate-400 mb-1">Debt Name</label>
-                        <input
-                          type="text"
-                          value={newDebt.name}
-                          onChange={(e) => setNewDebt({...newDebt, name: e.target.value})}
-                          className="w-full px-3 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-green-500 focus:outline-none"
-                          placeholder="e.g., Credit Card"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm text-slate-400 mb-1">Current Balance ($)</label>
-                        <input
-                          type="number"
-                          value={newDebt.balance}
-                          onChange={(e) => setNewDebt({...newDebt, balance: e.target.value})}
-                          className="w-full px-3 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-green-500 focus:outline-none"
-                          placeholder="0.00"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm text-slate-400 mb-1">APR (%)</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={newDebt.apr}
-                          onChange={(e) => setNewDebt({...newDebt, apr: e.target.value})}
-                          className="w-full px-3 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-green-500 focus:outline-none"
-                          placeholder="0.00"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm text-slate-400 mb-1">Monthly Payment ($)</label>
-                        <input
-                          type="number"
-                          value={newDebt.payment}
-                          onChange={(e) => setNewDebt({...newDebt, payment: e.target.value})}
-                          className="w-full px-3 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-green-500 focus:outline-none"
-                          placeholder="0.00"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm text-slate-400 mb-1">Due Day</label>
-                        <input
-                          type="number"
-                          min="1"
-                          max="31"
-                          value={newDebt.dueDay}
-                          onChange={(e) => setNewDebt({...newDebt, dueDay: e.target.value})}
-                          className="w-full px-3 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-green-500 focus:outline-none"
-                        />
-                      </div>
-                    </div>
-                    <div className="flex gap-3 mt-4">
-                      <button
-                        onClick={addDebt}
-                        className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-semibold"
-                      >
-                        Add Debt
-                      </button>
-                      <button
-                        onClick={() => {
-                          setShowAddDebt(false);
-                          setNewDebt({
-                            name: '',
-                            balance: '',
-                            apr: '',
-                            payment: '',
-                            dueDay: 1
-                          });
-                        }}
-                        className="flex-1 px-4 py-2 bg-slate-600 hover:bg-slate-700 rounded-lg font-semibold"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Input Form */}
-        <div className="bg-slate-800 rounded-lg border border-slate-700 mb-8">
-          <div 
-            className="p-6 cursor-pointer hover:bg-slate-750 transition-colors"
-            onClick={() => setIsAddTransactionExpanded(!isAddTransactionExpanded)}
-          >
-            <div className="flex items-center gap-3">
-              {isAddTransactionExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-              <h2 className="text-2xl font-bold flex items-center gap-2">
-                <PlusCircle size={24} />
-                {editingId ? 'Edit Transaction' : 'Add Transaction'}
-              </h2>
-            </div>
-          </div>
-
-          {isAddTransactionExpanded && (
-            <div className="px-6 pb-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">Type</label>
-                  <select
-                    value={type}
-                    onChange={(e) => {
-                      setType(e.target.value);
-                      setCategory('');
-                      setShowCustomCategory(false);
-                    }}
-                    className="w-full px-4 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-blue-500 focus:outline-none"
-                  >
-                    <option value="expense">Expense</option>
-                    <option value="income">Income</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">Date</label>
-                  <input
-                    type="date"
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    className="w-full px-4 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-blue-500 focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">Amount ($)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    placeholder="0.00"
-                    className="w-full px-4 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-blue-500 focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">Category</label>
-                  <select
-                    value={showCustomCategory ? 'custom' : category}
-                    onChange={(e) => {
-                      if (e.target.value === 'custom') {
-                        setShowCustomCategory(true);
-                        setCategory('');
-                      } else {
-                        setShowCustomCategory(false);
-                        setCategory(e.target.value);
-                      }
-                    }}
-                    className="w-full px-4 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-blue-500 focus:outline-none"
-                  >
-                    <option value="">Select category</option>
-                    {(type === 'expense' ? expenseCategories : incomeCategories).map(cat => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                    <option value="custom">+ Custom Category</option>
-                  </select>
-                </div>
-
-                {showCustomCategory && (
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Custom Category</label>
-                    <input
-                      type="text"
-                      value={customCategory}
-                      onChange={(e) => setCustomCategory(e.target.value)}
-                      placeholder="Enter category name"
-                      className="w-full px-4 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-blue-500 focus:outline-none"
-                    />
-                  </div>
-                )}
-
-                <div className="md:col-span-2 lg:col-span-1">
-                  <label className="block text-sm font-medium mb-2">Description</label>
-                  <input
-                    type="text"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Brief description"
-                    className="w-full px-4 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-blue-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-3 mt-4">
-                <button
-                  onClick={addTransaction}
-                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition-colors flex items-center gap-2"
-                >
-                  {editingId ? <><Save size={18} /> Update</> : <><PlusCircle size={18} /> Add</>}
-                </button>
-                {editingId && (
-                  <button
-                    onClick={resetForm}
-                    className="px-6 py-2 bg-slate-600 hover:bg-slate-700 rounded-lg font-semibold transition-colors flex items-center gap-2"
-                  >
-                    <X size={18} /> Cancel
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Recurring Payments */}
-        <div className="bg-slate-800 rounded-lg border border-slate-700 mb-8">
-          <div 
-            className="p-6 cursor-pointer hover:bg-slate-750 transition-colors"
-            onClick={() => setIsRecurringExpanded(!isRecurringExpanded)}
-          >
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-3">
-                {isRecurringExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                <h2 className="text-2xl font-bold flex items-center gap-2">
-                  <Calendar size={24} />
-                  Recurring Payments
-                </h2>
-              </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold text-orange-400">
-                  ${formatCurrency(recurringPayments.reduce((sum, p) => sum + p.amount, 0))}
-                </div>
-                <div className="text-xs text-slate-400">
-                  {recurringPayments.filter(p => !isRecurringPaidThisMonth(p.id)).length} pending this month
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {isRecurringExpanded && (
-            <div className="px-6 pb-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {recurringPayments
-                  .sort((a, b) => a.day - b.day)
-                  .map(payment => {
-                    const isPaid = isRecurringPaidThisMonth(payment.id);
-                    const isEditing = editingRecurringId === payment.id;
-
-                    return (
-                      <RecurringPaymentCard
-                        key={payment.id}
-                        payment={payment}
-                        isPaid={isPaid}
-                        isEditing={isEditing}
-                        onEdit={() => {
-                          setEditingRecurringId(payment.id);
-                        }}
-                        onSave={(amount, category) => {
-                          updateRecurringPayment(payment.id, { amount, category });
-                        }}
-                        onCancel={() => {
-                          setEditingRecurringId(null);
-                        }}
-                        onMarkPaid={(customAmount) => {
-                          markRecurringAsPaid(payment, customAmount);
-                        }}
-                        onDelete={() => {
-                          deleteRecurringPayment(payment.id);
-                        }}
-                        expenseCategories={expenseCategories}
-                      />
-                    );
-                  })}
-              </div>
-
-              {/* Add Recurring Payment Button/Form */}
-              <div className="mt-6">
-                {!showAddRecurring ? (
-                  <button
-                    onClick={() => setShowAddRecurring(true)}
-                    className="w-full px-4 py-3 bg-green-600 hover:bg-green-700 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
-                  >
-                    <Plus size={20} /> Add Recurring Payment
-                  </button>
-                ) : (
-                  <div className="bg-slate-900 rounded-lg p-4 border border-slate-700">
-                    <h3 className="text-lg font-semibold mb-4">Add New Recurring Payment</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm text-slate-400 mb-1">Name</label>
-                        <input
-                          type="text"
-                          value={newRecurring.name}
-                          onChange={(e) => setNewRecurring({...newRecurring, name: e.target.value})}
-                          className="w-full px-3 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-green-500 focus:outline-none"
-                          placeholder="e.g., Netflix"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm text-slate-400 mb-1">Amount ($)</label>
-                        <input
-                          type="number"
-                          value={newRecurring.amount}
-                          onChange={(e) => setNewRecurring({...newRecurring, amount: e.target.value})}
-                          className="w-full px-3 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-green-500 focus:outline-none"
-                          placeholder="0.00"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm text-slate-400 mb-1">Category</label>
-                        <select
-                          value={newRecurring.category}
-                          onChange={(e) => setNewRecurring({...newRecurring, category: e.target.value})}
-                          className="w-full px-3 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-green-500 focus:outline-none"
-                        >
-                          {expenseCategories.map(cat => (
-                            <option key={cat} value={cat}>{cat}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm text-slate-400 mb-1">Due Day</label>
-                        <input
-                          type="number"
-                          min="1"
-                          max="31"
-                          value={newRecurring.day}
-                          onChange={(e) => setNewRecurring({...newRecurring, day: e.target.value})}
-                          className="w-full px-3 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-green-500 focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm text-slate-400 mb-1">Auto-add</label>
-                        <select
-                          value={newRecurring.auto}
-                          onChange={(e) => setNewRecurring({...newRecurring, auto: e.target.value === 'true'})}
-                          className="w-full px-3 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-green-500 focus:outline-none"
-                        >
-                          <option value="true">Yes</option>
-                          <option value="false">No (Manual)</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm text-slate-400 mb-1">Amount Varies</label>
-                        <select
-                          value={newRecurring.varies}
-                          onChange={(e) => setNewRecurring({...newRecurring, varies: e.target.value === 'true'})}
-                          className="w-full px-3 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-green-500 focus:outline-none"
-                        >
-                          <option value="false">No (Fixed)</option>
-                          <option value="true">Yes (Varies)</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div className="flex gap-3 mt-4">
-                      <button
-                        onClick={addRecurringPayment}
-                        className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-semibold"
-                      >
-                        Add Payment
-                      </button>
-                      <button
-                        onClick={() => {
-                          setShowAddRecurring(false);
-                          setNewRecurring({
-                            name: '',
-                            amount: '',
-                            category: 'Subscriptions',
-                            day: 1,
-                            auto: true,
-                            varies: false
-                          });
-                        }}
-                        className="flex-1 px-4 py-2 bg-slate-600 hover:bg-slate-700 rounded-lg font-semibold"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Yearly Category Analysis - NOW COLLAPSIBLE */}
-        <div className="bg-slate-800 rounded-lg border border-slate-700 mb-8">
-          <div 
-            className="p-6 cursor-pointer hover:bg-slate-750 transition-colors"
-            onClick={() => setIsYearlyAnalysisExpanded(!isYearlyAnalysisExpanded)}
-          >
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-3">
-                {isYearlyAnalysisExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                <h2 className="text-2xl font-bold">Yearly Analysis - {selectedYear}</h2>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setAnalysisType('expense');
-                    setSelectedCategoryFilter('');
-                  }}
-                  className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
-                    analysisType === 'expense' 
-                      ? 'bg-red-600 text-white' 
-                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                  }`}
-                >
-                  Expenses
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setAnalysisType('income');
-                    setSelectedCategoryFilter('');
-                  }}
-                  className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
-                    analysisType === 'income' 
-                      ? 'bg-green-600 text-white' 
-                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                  }`}
-                >
-                  Income
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {isYearlyAnalysisExpanded && (
-            <div className="px-6 pb-6">
-              <div className="mb-4">
-                <label className="block text-sm font-medium mb-2">Filter by Category</label>
-                <select
-                  value={selectedCategoryFilter}
-                  onChange={(e) => setSelectedCategoryFilter(e.target.value)}
-                  className="w-full md:w-64 px-4 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-blue-500 focus:outline-none"
-                >
-                  <option value="">All Categories</option>
-                  {Object.keys(analysisType === 'expense' ? yearlyCategoryBreakdown : yearlyIncomeCategoryBreakdown).sort().map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
-              </div>
-
-              {selectedCategoryFilter ? (
-                <div className="space-y-4">
-                  <div className="p-4 bg-slate-900 rounded-lg">
-                    <h3 className="text-xl font-semibold mb-2">{selectedCategoryFilter}</h3>
-                    <p className={`text-3xl font-bold ${analysisType === 'expense' ? 'text-red-400' : 'text-green-400'}`}>
-                      ${formatCurrency((analysisType === 'expense' 
-                        ? yearlyCategoryBreakdown[selectedCategoryFilter]?.total 
-                        : yearlyIncomeCategoryBreakdown[selectedCategoryFilter]?.total) || 0)}
-                    </p>
-                    <p className="text-sm text-slate-400 mt-1">
-                      {(analysisType === 'expense' 
-                        ? yearlyCategoryBreakdown[selectedCategoryFilter]?.transactions.length 
-                        : yearlyIncomeCategoryBreakdown[selectedCategoryFilter]?.transactions.length) || 0} transactions
-                    </p>
-                  </div>
-
-                  {/* Breakdown by Description */}
-                  {(() => {
-                    const descriptionTotals = {};
-                    const descriptionOriginals = {}; // Track original casing
-                    const currentBreakdown = analysisType === 'expense' ? yearlyCategoryBreakdown : yearlyIncomeCategoryBreakdown;
-                    
-                    // Helper function to normalize descriptions
-                    const normalizeDescription = (desc) => {
-                      let normalized = desc.toLowerCase().replace(/[^a-z0-9]/g, '');
-                      
-                      // Special handling for car payments
-                      if (normalized === 'szc' || normalized === 'szccar') {
-                        normalized = 'szccar';
-                      }
-                      if (normalized === 'cic' || normalized === 'ciccar') {
-                        normalized = 'ciccar';
-                      }
-                      
-                      return normalized;
-                    };
-                    
-                    currentBreakdown[selectedCategoryFilter]?.transactions.forEach(t => {
-                      const normalizedDesc = normalizeDescription(t.description);
-                      if (!descriptionTotals[normalizedDesc]) {
-                        descriptionTotals[normalizedDesc] = 0;
-                        descriptionOriginals[normalizedDesc] = t.description; // Store first occurrence
-                      }
-                      descriptionTotals[normalizedDesc] += t.amount;
-                    });
-                    
-                    return Object.keys(descriptionTotals).length > 1 && (
-                      <div className="p-4 bg-slate-900 rounded-lg">
-                        <h4 className="font-semibold text-slate-300 mb-3">Breakdown by Entry:</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                          {Object.entries(descriptionTotals)
-                            .sort((a, b) => b[1] - a[1])
-                            .map(([normalizedDesc, total]) => (
-                              <div key={normalizedDesc} className="p-3 bg-slate-800 rounded-lg">
-                                <div className="font-medium text-sm mb-1">{descriptionOriginals[normalizedDesc]}</div>
-                                <div className={`text-xl font-bold ${analysisType === 'expense' ? 'text-red-400' : 'text-green-400'}`}>
-                                  ${formatCurrency(total)}
-                                </div>
-                                <div className="text-xs text-slate-400 mt-1">
-                                  {currentBreakdown[selectedCategoryFilter].transactions.filter(t => normalizeDescription(t.description) === normalizedDesc).length} entries
+                              <div className="flex items-center gap-3">
+                                <button onClick={() => deleteDebt(debt.id)} className="p-1 hover:bg-slate-700 rounded" title="Delete Debt">
+                                  <Trash2 size={16} className="text-red-400" />
+                                </button>
+                                <div className="text-right">
+                                  <div className="text-2xl font-bold text-red-400">${formatCurrency(debt.balance)}</div>
+                                  <div className="text-xs text-slate-400">Balance</div>
                                 </div>
                               </div>
-                            ))}
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  <div className="space-y-2">
-                    <h4 className="font-semibold text-slate-300">All Transactions:</h4>
-                    {(analysisType === 'expense' 
-                      ? yearlyCategoryBreakdown[selectedCategoryFilter]?.transactions 
-                      : yearlyIncomeCategoryBreakdown[selectedCategoryFilter]?.transactions)
-                      ?.sort((a, b) => new Date(b.date) - new Date(a.date))
-                      .map(t => (
-                        <div
-                          key={t.id}
-                          className="flex justify-between items-center p-3 bg-slate-900 rounded-lg hover:bg-slate-700 transition-colors"
-                        >
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3">
-                              <span className="font-medium">{t.description}</span>
-                              <span className="text-slate-400 text-sm">
-                                {getMonthName(t.month)} {t.year}
-                              </span>
                             </div>
-                            <div className="text-sm text-slate-400 mt-1">{t.date}</div>
+                            
+                            <div className="grid grid-cols-2 gap-2 text-sm mb-3">
+                              <div className="bg-slate-800 rounded p-2">
+                                <div className="text-xs text-slate-400">APR</div>
+                                <div className="font-semibold text-blue-400">{debt.apr}%</div>
+                              </div>
+                              <div className="bg-slate-800 rounded p-2">
+                                <div className="text-xs text-slate-400">Payment</div>
+                                <div className="font-semibold text-purple-400">${formatCurrency(debt.payment)}</div>
+                              </div>
+                              <div className="bg-slate-800 rounded p-2">
+                                <div className="text-xs text-slate-400">Interest/Month</div>
+                                <div className="font-semibold text-yellow-400">${formatCurrency(monthlyInterest)}</div>
+                              </div>
+                              <div className="bg-slate-800 rounded p-2">
+                                <div className="text-xs text-slate-400">Principal/Month</div>
+                                <div className="font-semibold text-green-400">${formatCurrency(principalPayment)}</div>
+                              </div>
+                            </div>
+                            
+                            <div className="bg-slate-800 rounded-lg p-3 border-t border-slate-700">
+                              <div className="flex justify-between items-center mb-2">
+                                <div className="text-xs font-semibold text-slate-300">Payoff Projection</div>
+                                {monthsToPayoff < 999 ? (
+                                  <div className="text-xs text-blue-400">
+                                    {yearsToPayoff > 0 && `${yearsToPayoff}y `}{remainingMonths}mo
+                                  </div>
+                                ) : (
+                                  <div className="text-xs text-red-400">Interest Only</div>
+                                )}
+                              </div>
+                              
+                              {monthsToPayoff < 999 ? (
+                                <>
+                                  <div className="w-full bg-slate-700 rounded-full h-2 mb-2">
+                                    <div className="bg-gradient-to-r from-red-500 via-yellow-500 to-green-500 h-2 rounded-full" 
+                                      style={{ width: `${Math.min(100, ((debt.originalBalance - debt.balance) / debt.originalBalance) * 100)}%` }}></div>
+                                  </div>
+                                  <div className="text-xs text-slate-400">
+                                    <div className="flex justify-between">
+                                      <span>Payoff Date:</span>
+                                      <span className="text-slate-300">{payoffDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</span>
+                                    </div>
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="text-xs text-red-400">⚠️ Payment doesn't cover interest. Balance will grow.</div>
+                              )}
+                            </div>
                           </div>
-                          <div className="flex items-center gap-4">
-                            <span className={`text-lg font-bold ${analysisType === 'expense' ? 'text-red-400' : 'text-green-400'}`}>
-                              ${formatCurrency(t.amount)}
-                            </span>
-                            <button
-                              onClick={() => editTransaction(t)}
-                              className="p-2 hover:bg-slate-600 rounded-lg transition-colors"
-                            >
-                              <Edit2 size={16} />
-                            </button>
-                            <button
-                              onClick={() => deleteTransaction(t.id)}
-                              className="p-2 hover:bg-red-500/20 rounded-lg transition-colors text-red-400"
-                            >
-                              <Trash2 size={16} />
-                            </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  
+                  {/* Add Debt Button/Form */}
+                  <div className="mt-6">
+                    {!showAddDebt ? (
+                      <button onClick={() => setShowAddDebt(true)} className="w-full px-4 py-3 bg-green-600 hover:bg-green-700 rounded-lg font-semibold flex items-center justify-center gap-2">
+                        <Plus size={20} /> Add Debt
+                      </button>
+                    ) : (
+                      <div className="bg-slate-900 rounded-lg p-4 border border-slate-700">
+                        <h3 className="text-lg font-semibold mb-4">Add New Debt</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm text-slate-400 mb-1">Debt Name</label>
+                            <input type="text" value={newDebt.name} onChange={(e) => setNewDebt({...newDebt, name: e.target.value})} className="w-full px-3 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-green-500 focus:outline-none" placeholder="e.g., Credit Card" />
+                          </div>
+                          <div>
+                            <label className="block text-sm text-slate-400 mb-1">Current Balance ($)</label>
+                            <input type="number" value={newDebt.balance} onChange={(e) => setNewDebt({...newDebt, balance: e.target.value})} className="w-full px-3 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-green-500 focus:outline-none" placeholder="0.00" />
+                          </div>
+                          <div>
+                            <label className="block text-sm text-slate-400 mb-1">APR (%)</label>
+                            <input type="number" step="0.01" value={newDebt.apr} onChange={(e) => setNewDebt({...newDebt, apr: e.target.value})} className="w-full px-3 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-green-500 focus:outline-none" placeholder="0.00" />
+                          </div>
+                          <div>
+                            <label className="block text-sm text-slate-400 mb-1">Monthly Payment ($)</label>
+                            <input type="number" value={newDebt.payment} onChange={(e) => setNewDebt({...newDebt, payment: e.target.value})} className="w-full px-3 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-green-500 focus:outline-none" placeholder="0.00" />
+                          </div>
+                          <div>
+                            <label className="block text-sm text-slate-400 mb-1">Due Day</label>
+                            <input type="number" min="1" max="31" value={newDebt.dueDay} onChange={(e) => setNewDebt({...newDebt, dueDay: e.target.value})} className="w-full px-3 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-green-500 focus:outline-none" />
                           </div>
                         </div>
-                      ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {Object.entries(analysisType === 'expense' ? yearlyCategoryBreakdown : yearlyIncomeCategoryBreakdown)
-                    .sort((a, b) => b[1].total - a[1].total)
-                    .map(([category, data]) => (
-                      <div
-                        key={category}
-                        onClick={() => setSelectedCategoryFilter(category)}
-                        className="p-4 bg-slate-900 rounded-lg hover:bg-slate-700 transition-colors cursor-pointer"
-                      >
-                        <h4 className="font-semibold mb-1 text-slate-300">{category}</h4>
-                        <p className={`text-2xl font-bold ${analysisType === 'expense' ? 'text-red-400' : 'text-green-400'}`}>
-                          ${formatCurrency(data.total)}
-                        </p>
-                        <p className="text-xs text-slate-400 mt-1">{data.transactions.length} transactions</p>
+                        <div className="flex gap-3 mt-4">
+                          <button onClick={addDebt} className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-semibold">Add Debt</button>
+                          <button onClick={() => { setShowAddDebt(false); setNewDebt({ name: '', balance: '', apr: '', payment: '', dueDay: 1 }); }} className="flex-1 px-4 py-2 bg-slate-600 hover:bg-slate-700 rounded-lg font-semibold">Cancel</button>
+                        </div>
                       </div>
-                    ))}
+                    )}
+                  </div>
                 </div>
               )}
             </div>
-          )}
-        </div>
-
-        {/* Monthly Breakdown */}
-        <div className="space-y-6">
-          <h2 className="text-2xl font-bold flex items-center gap-2">
-            <Calendar size={24} />
-            Monthly Breakdown - {selectedYear}
-          </h2>
-
-          {filteredMonthlyData.length === 0 ? (
-            <div className="bg-slate-800 rounded-lg p-8 text-center border border-slate-700">
-              <p className="text-slate-400">No transactions for {selectedYear}. {selectedYear === currentYear ? 'Add your first transaction above!' : 'Select a different year or add transactions.'}</p>
-            </div>
-          ) : (
-            filteredMonthlyData.slice().reverse().map((data, idx) => {
-              const net = data.income - data.expenses;
-              const categoryBreakdown = getCategoryBreakdown(data);
-              const monthKey = `${data.year}-${data.month}`;
-              const isExpanded = expandedMonths[monthKey];
-              
-              return (
-                <div key={idx} className="bg-slate-800 rounded-lg border border-slate-700">
-                  <div 
-                    className="p-6 cursor-pointer hover:bg-slate-750 transition-colors"
-                    onClick={() => toggleMonth(monthKey)}
-                  >
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-3">
-                        {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                        <h3 className="text-xl font-bold">
-                          {getMonthName(data.month)} {data.year}
-                        </h3>
-                      </div>
-                      <div className="flex gap-6 text-sm">
-                        <span className="text-green-400">Income: ${formatCurrency(data.income)}</span>
-                        <span className="text-red-400">Expenses: ${formatCurrency(data.expenses)}</span>
-                        <span className={net >= 0 ? 'text-blue-400' : 'text-red-400'}>
-                          Net: ${formatCurrency(net)}
-                        </span>
-                      </div>
-                    </div>
+            
+            {/* RECURRING PAYMENTS */}
+            <div className="bg-slate-800 rounded-lg border border-slate-700 mb-8">
+              <div className="p-6 cursor-pointer hover:bg-slate-750 transition-colors" onClick={() => setIsRecurringExpanded(!isRecurringExpanded)}>
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    {isRecurringExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                    <h2 className="text-2xl font-bold flex items-center gap-2">
+                      <Calendar size={24} />
+                      Recurring Payments
+                    </h2>
                   </div>
-
-                  {isExpanded && (
-                    <div className="px-6 pb-6">
-                      {/* Category Breakdown */}
-                      {Object.keys(categoryBreakdown).length > 0 && (
-                        <div className="mb-4 p-4 bg-slate-900 rounded-lg">
-                          <h4 className="text-sm font-semibold mb-3 text-slate-300">Expense Breakdown:</h4>
-                          <div className="space-y-2">
-                            {Object.entries(categoryBreakdown)
-                              .sort((a, b) => b[1] - a[1])
-                              .map(([cat, amt]) => {
-                                const categoryKey = `${monthKey}-${cat}`;
-                                const isExpanded = expandedCategories[categoryKey];
-                                const categoryTransactions = data.transactions.filter(t => t.category === cat && t.type === 'expense');
-                                
-                                return (
-                                  <div key={cat}>
-                                    <div 
-                                      className="flex justify-between items-center p-2 bg-slate-800 rounded hover:bg-slate-700 cursor-pointer transition-colors"
-                                      onClick={() => toggleCategoryInMonth(monthKey, cat)}
-                                    >
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-slate-400">{isExpanded ? '▼' : '▶'}</span>
-                                        <span className="text-slate-300">{cat}</span>
-                                        <span className="text-xs text-slate-500">({categoryTransactions.length})</span>
-                                      </div>
-                                      <span className="text-white font-semibold">${formatCurrency(amt)}</span>
-                                    </div>
-                                    
-                                    {isExpanded && (
-                                      <div className="ml-6 mt-2 space-y-1">
-                                        {categoryTransactions
-                                          .sort((a, b) => new Date(b.date) - new Date(a.date))
-                                          .map(t => {
-                                            // Check if this is a recurring payment
-                                            const normalizeForMatch = (desc) => {
-                                              let normalized = desc.toLowerCase().replace(/[^a-z0-9]/g, '');
-                                              if (normalized === 'szc' || normalized === 'szccar') normalized = 'szccar';
-                                              if (normalized === 'cic' || normalized === 'ciccar') normalized = 'ciccar';
-                                              return normalized;
-                                            };
-                                            
-                                            const isRecurring = recurringPayments.some(rp => 
-                                              normalizeForMatch(rp.name) === normalizeForMatch(t.description)
-                                            );
-
-                                            return (
-                                              <div key={t.id} className="flex justify-between items-center p-2 bg-slate-800/50 rounded text-sm">
-                                                <div className="flex items-center gap-2">
-                                                  <span className="text-slate-400">{t.date}</span>
-                                                  {isRecurring && (
-                                                    <span className="px-2 py-0.5 rounded text-xs font-semibold bg-purple-500/20 text-purple-400">
-                                                      🔄
-                                                    </span>
-                                                  )}
-                                                  <span className="text-slate-300">{t.description}</span>
-                                                </div>
-                                                <div className="flex items-center gap-3">
-                                                  <span className="text-red-400 font-semibold">${formatCurrency(t.amount)}</span>
-                                                  <button
-                                                    onClick={(e) => {
-                                                      e.stopPropagation();
-                                                      editTransaction(t);
-                                                    }}
-                                                    className="p-1 hover:bg-slate-600 rounded transition-colors"
-                                                  >
-                                                    <Edit2 size={12} />
-                                                  </button>
-                                                  <button
-                                                    onClick={(e) => {
-                                                      e.stopPropagation();
-                                                      deleteTransaction(t.id);
-                                                    }}
-                                                    className="p-1 hover:bg-red-500/20 rounded transition-colors text-red-400"
-                                                  >
-                                                    <Trash2 size={12} />
-                                                  </button>
-                                                </div>
-                                              </div>
-                                            );
-                                          })}
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Transactions List */}
-                      <div className="space-y-2">
-                        {data.transactions
-                          .sort((a, b) => new Date(b.date) - new Date(a.date))
-                          .map(t => {
-                            // Check if this is a recurring payment (only for expenses)
-                            // Use exact match after normalization - no special SZC/CIC handling
-                            const normalizeForMatch = (desc) => {
-                              return desc.toLowerCase().replace(/[^a-z0-9]/g, '');
-                            };
-                            
-                            const isRecurring = t.type === 'expense' && recurringPayments.some(rp => 
-                              normalizeForMatch(rp.name) === normalizeForMatch(t.description)
-                            );
-
-                            return (
-                              <div
-                                key={t.id}
-                                className="flex justify-between items-center p-3 bg-slate-900 rounded-lg hover:bg-slate-700 transition-colors"
-                              >
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-3">
-                                    <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                                      t.type === 'income' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
-                                    }`}>
-                                      {t.type}
-                                    </span>
-                                    {isRecurring && (
-                                      <span className="px-2 py-1 rounded text-xs font-semibold bg-purple-500/20 text-purple-400">
-                                        🔄 Recurring
-                                      </span>
-                                    )}
-                                    <span className="font-medium">{t.description}</span>
-                                    <span className="text-slate-400 text-sm">({t.category})</span>
-                                  </div>
-                                  <div className="text-sm text-slate-400 mt-1">{t.date}</div>
-                                </div>
-                                <div className="flex items-center gap-4">
-                                  <span className={`text-lg font-bold ${
-                                    t.type === 'income' ? 'text-green-400' : 'text-red-400'
-                                  }`}>
-                                    {t.type === 'income' ? '+' : '-'}${formatCurrency(t.amount)}
-                                  </span>
-                                  <button
-                                    onClick={() => editTransaction(t)}
-                                    className="p-2 hover:bg-slate-600 rounded-lg transition-colors"
-                                  >
-                                    <Edit2 size={16} />
-                                  </button>
-                                  <button
-                                    onClick={() => deleteTransaction(t.id)}
-                                    className="p-2 hover:bg-red-500/20 rounded-lg transition-colors text-red-400"
-                                  >
-                                    <Trash2 size={16} />
-                                  </button>
-                                </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-bold text-orange-400">${formatCurrency(totalRecurringMonthly)}</div>
+                    <div className="text-xs text-slate-400">{recurringPayments.filter(p => !isRecurringPaidThisMonth(p.id)).length} pending this month</div>
+                  </div>
+                </div>
+              </div>
+              
+              {isRecurringExpanded && (
+                <div className="px-6 pb-6">
+                  {recurringPayments.length === 0 ? (
+                    <div className="text-center py-8 text-slate-400">
+                      <p>No recurring payments yet.</p>
+                      <p className="text-sm mt-2">Click "Add Recurring Payment" below to get started!</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
+                      {recurringPayments.sort((a, b) => a.day - b.day).map(payment => {
+                        const isPaid = isRecurringPaidThisMonth(payment.id);
+                        return (
+                          <div key={payment.id} className={`p-4 rounded-lg border ${isPaid ? 'bg-slate-900 border-green-500/30' : 'bg-slate-900 border-slate-700'}`}>
+                            <div className="flex justify-between items-start mb-2">
+                              <div className="flex-1">
+                                <h4 className="font-semibold text-white">{payment.name}</h4>
+                                <p className="text-xs text-slate-400">{payment.category}</p>
                               </div>
-                            );
-                          })}
-                      </div>
+                              <div className="flex items-center gap-2">
+                                <button onClick={() => deleteRecurringPayment(payment.id)} className="p-1 hover:bg-slate-700 rounded" title="Delete">
+                                  <Trash2 size={14} className="text-red-400" />
+                                </button>
+                                <span className={`text-xs px-2 py-1 rounded ${payment.auto ? 'bg-blue-500/20 text-blue-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
+                                  {payment.auto ? 'Auto' : 'Manual'}
+                                </span>
+                              </div>
+                            </div>
+                            {isPaid && <div className="text-xs text-green-400 mb-2">✓ Paid</div>}
+                            <div className="text-xl font-bold text-white mb-1">${formatCurrency(payment.amount)}</div>
+                            <div className="text-xs text-slate-400 mb-2">Due: {payment.day}{payment.day === 1 ? 'st' : payment.day === 2 ? 'nd' : payment.day === 3 ? 'rd' : 'th'}</div>
+                            {payment.varies && <div className="text-xs text-yellow-400 mb-2">Amount varies</div>}
+                            {!isPaid && (
+                              <button onClick={() => markRecurringAsPaid(payment)} className="w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded font-semibold text-sm">
+                                Mark as Paid
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
+                  
+                  {/* Add Recurring Payment Button/Form */}
+                  <div className="mt-6">
+                    {!showAddRecurring ? (
+                      <button onClick={() => setShowAddRecurring(true)} className="w-full px-4 py-3 bg-green-600 hover:bg-green-700 rounded-lg font-semibold flex items-center justify-center gap-2">
+                        <Plus size={20} /> Add Recurring Payment
+                      </button>
+                    ) : (
+                      <div className="bg-slate-900 rounded-lg p-4 border border-slate-700">
+                        <h3 className="text-lg font-semibold mb-4">Add New Recurring Payment</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm text-slate-400 mb-1">Name</label>
+                            <input type="text" value={newRecurring.name} onChange={(e) => setNewRecurring({...newRecurring, name: e.target.value})} className="w-full px-3 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-green-500 focus:outline-none" placeholder="e.g., Netflix" />
+                          </div>
+                          <div>
+                            <label className="block text-sm text-slate-400 mb-1">Amount ($)</label>
+                            <input type="number" value={newRecurring.amount} onChange={(e) => setNewRecurring({...newRecurring, amount: e.target.value})} className="w-full px-3 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-green-500 focus:outline-none" placeholder="0.00" />
+                          </div>
+                          <div>
+                            <label className="block text-sm text-slate-400 mb-1">Category</label>
+                            <select value={newRecurring.category} onChange={(e) => setNewRecurring({...newRecurring, category: e.target.value})} className="w-full px-3 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-green-500 focus:outline-none">
+                              {expenseCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm text-slate-400 mb-1">Due Day</label>
+                            <input type="number" min="1" max="31" value={newRecurring.day} onChange={(e) => setNewRecurring({...newRecurring, day: e.target.value})} className="w-full px-3 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-green-500 focus:outline-none" />
+                          </div>
+                          <div>
+                            <label className="block text-sm text-slate-400 mb-1">Auto-add</label>
+                            <select value={newRecurring.auto} onChange={(e) => setNewRecurring({...newRecurring, auto: e.target.value === 'true'})} className="w-full px-3 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-green-500 focus:outline-none">
+                              <option value="true">Yes</option>
+                              <option value="false">No (Manual)</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm text-slate-400 mb-1">Amount Varies</label>
+                            <select value={newRecurring.varies} onChange={(e) => setNewRecurring({...newRecurring, varies: e.target.value === 'true'})} className="w-full px-3 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-green-500 focus:outline-none">
+                              <option value="false">No (Fixed)</option>
+                              <option value="true">Yes (Varies)</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div className="flex gap-3 mt-4">
+                          <button onClick={addRecurringPayment} className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-semibold">Add Payment</button>
+                          <button onClick={() => { setShowAddRecurring(false); setNewRecurring({ name: '', amount: '', category: 'Subscriptions', day: 1, auto: true, varies: false }); }} className="flex-1 px-4 py-2 bg-slate-600 hover:bg-slate-700 rounded-lg font-semibold">Cancel</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              );
-            })
-          )}
-        </div>
-
-        {/* Custom Categories Management - AT BOTTOM */}
-        <div className="bg-slate-800 rounded-lg border border-slate-700 mb-8">
-          <div 
-            className="p-6 cursor-pointer hover:bg-slate-750 transition-colors"
-            onClick={() => setIsCustomCategoriesExpanded(!isCustomCategoriesExpanded)}
-          >
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-3">
-                {isCustomCategoriesExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                <h2 className="text-2xl font-bold flex items-center gap-2">
-                  <Edit2 size={24} />
-                  Custom Categories
-                </h2>
-              </div>
-              <div className="text-sm text-slate-400">
-                {customExpenseCategories.length + customIncomeCategories.length} custom
-              </div>
+              )}
             </div>
+            
+            {/* ADD TRANSACTION */}
+            <div className="bg-slate-800 rounded-lg border border-slate-700 mb-8">
+              <div className="p-6 cursor-pointer hover:bg-slate-750 transition-colors" onClick={() => setIsAddTransactionExpanded(!isAddTransactionExpanded)}>
+                <div className="flex items-center gap-3">
+                  {isAddTransactionExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                  <h2 className="text-2xl font-bold flex items-center gap-2">
+                    <PlusCircle size={24} />
+                    {editingId ? 'Edit Transaction' : 'Add Transaction'}
+                  </h2>
+                </div>
+              </div>
+              
+              {isAddTransactionExpanded && (
+                <div className="px-6 pb-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Type</label>
+                      <select value={type} onChange={(e) => setType(e.target.value)} className="w-full px-4 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-blue-500 focus:outline-none">
+                        <option value="expense">Expense</option>
+                        <option value="income">Income</option>
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Date</label>
+                      <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full px-4 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-blue-500 focus:outline-none" />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Description</label>
+                      <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What was this for?" className="w-full px-4 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-blue-500 focus:outline-none" />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Amount</label>
+                      <input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className="w-full px-4 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-blue-500 focus:outline-none" />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Category</label>
+                      <select value={showCustomCategory ? 'custom' : category} onChange={(e) => { if (e.target.value === 'custom') { setShowCustomCategory(true); setCategory(''); } else { setShowCustomCategory(false); setCategory(e.target.value); } }} className="w-full px-4 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-blue-500 focus:outline-none">
+                        <option value="">Select category</option>
+                        {(type === 'expense' ? expenseCategories : incomeCategories).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                        <option value="custom">+ Custom Category</option>
+                      </select>
+                    </div>
+                    
+                    {showCustomCategory && (
+                      <div>
+                        <label className="block text-sm font-medium mb-2">Custom Category</label>
+                        <input type="text" value={customCategory} onChange={(e) => setCustomCategory(e.target.value)} placeholder="Enter category name" className="w-full px-4 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-blue-500 focus:outline-none" />
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="flex gap-3 mt-4">
+                    <button onClick={addTransaction} className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold text-lg">
+                      {editingId ? 'Update' : 'Add'} Transaction
+                    </button>
+                    {editingId && (
+                      <button onClick={() => { resetForm(); setEditingId(null); }} className="px-6 py-3 bg-slate-600 hover:bg-slate-700 rounded-lg font-semibold">Cancel</button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            {/* TRANSACTIONS LIST */}
+            {transactions.length > 0 && (
+              <div className="bg-slate-800 rounded-lg border border-slate-700">
+                <div className="p-6">
+                  <h2 className="text-2xl font-bold mb-4">Recent Transactions</h2>
+                  <div className="space-y-2">
+                    {transactions.sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 50).map(t => (
+                      <div key={t.id} className="flex justify-between items-center p-3 bg-slate-900 rounded-lg hover:bg-slate-700 transition-colors">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3">
+                            <span className={`px-2 py-1 rounded text-xs font-semibold ${t.type === 'income' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>{t.type}</span>
+                            <span className="font-medium">{t.description}</span>
+                            <span className="text-slate-400 text-sm">({t.category})</span>
+                          </div>
+                          <div className="text-sm text-slate-400 mt-1">{t.date}</div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <span className={`text-lg font-bold ${t.type === 'income' ? 'text-green-400' : 'text-red-400'}`}>
+                            {t.type === 'income' ? '+' : '-'}${formatCurrency(t.amount)}
+                          </span>
+                          <button onClick={() => deleteTransaction(t.id)} className="p-2 hover:bg-slate-600 rounded transition-colors" title="Delete">
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
-
-          {isCustomCategoriesExpanded && (
-            <div className="px-6 pb-6 space-y-6">
-              {/* Expense Categories */}
-              <div>
-                <h3 className="text-lg font-semibold mb-3 text-orange-400">Custom Expense Categories</h3>
-                {customExpenseCategories.length === 0 ? (
-                  <p className="text-slate-400 text-sm">No custom expense categories yet. Add one when creating a transaction!</p>
-                ) : (
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                    {customExpenseCategories.map(cat => (
-                      <div key={cat} className="bg-slate-900 rounded-lg p-3 flex justify-between items-center border border-slate-700">
-                        <span className="text-sm">{cat}</span>
-                        <button
-                          onClick={() => deleteCustomCategory(cat, true)}
-                          className="p-1 hover:bg-slate-700 rounded"
-                          title="Delete category"
-                        >
-                          <Trash2 size={14} className="text-red-400" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Income Categories */}
-              <div>
-                <h3 className="text-lg font-semibold mb-3 text-green-400">Custom Income Categories</h3>
-                {customIncomeCategories.length === 0 ? (
-                  <p className="text-slate-400 text-sm">No custom income categories yet. Add one when creating a transaction!</p>
-                ) : (
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                    {customIncomeCategories.map(cat => (
-                      <div key={cat} className="bg-slate-900 rounded-lg p-3 flex justify-between items-center border border-slate-700">
-                        <span className="text-sm">{cat}</span>
-                        <button
-                          onClick={() => deleteCustomCategory(cat, false)}
-                          className="p-1 hover:bg-slate-700 rounded"
-                          title="Delete category"
-                        >
-                          <Trash2 size={14} className="text-red-400" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
         </div>
-      </div>
-    </div>
-  );
-};
-
-export default FinanceTracker;
-
-    // Render the app
+      );
+    };
+    
+    // Render app
     const root = ReactDOM.createRoot(document.getElementById('root'));
     root.render(<FinanceTracker />);
   </script>
