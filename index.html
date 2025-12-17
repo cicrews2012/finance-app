@@ -148,6 +148,7 @@
       const [isYearlyAnalysisExpanded, setIsYearlyAnalysisExpanded] = useState(false);
       const [isCustomCategoriesExpanded, setIsCustomCategoriesExpanded] = useState(false);
       const [isAddTransactionExpanded, setIsAddTransactionExpanded] = useState(true);
+      const [expandedMonths, setExpandedMonths] = useState({});
       
       // Form State
       const [description, setDescription] = useState('');
@@ -1026,11 +1027,18 @@
                     const monthIncome = monthTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
                     const monthExpenses = monthTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
                     const monthNet = monthIncome - monthExpenses;
+                    const isExpanded = expandedMonths[monthKey] !== false; // Default to expanded
                     
                     return (
                       <div key={monthKey} className="mb-6">
-                        <div className="flex justify-between items-center mb-3 pb-2 border-b border-slate-700">
-                          <h3 className="text-xl font-semibold text-white">{monthName} {year}</h3>
+                        <div 
+                          className="flex justify-between items-center mb-3 pb-2 border-b border-slate-700 cursor-pointer hover:bg-slate-700/30 p-2 rounded transition-colors"
+                          onClick={() => setExpandedMonths(prev => ({ ...prev, [monthKey]: !isExpanded }))}
+                        >
+                          <div className="flex items-center gap-3">
+                            {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                            <h3 className="text-xl font-semibold text-white">{monthName} {year}</h3>
+                          </div>
                           <div className="flex gap-4 text-sm">
                             <span className="text-green-400">Income: ${formatCurrency(monthIncome)}</span>
                             <span className="text-red-400">Expenses: ${formatCurrency(monthExpenses)}</span>
@@ -1040,34 +1048,49 @@
                           </div>
                         </div>
                         
-                        <div className="space-y-2">
-                          {monthTransactions.sort((a, b) => new Date(b.date) - new Date(a.date)).map(t => (
-                            <div key={t.id} className="flex justify-between items-center p-3 bg-slate-900 rounded-lg hover:bg-slate-700 transition-colors">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-3">
-                                  <span className={`px-2 py-1 rounded text-xs font-semibold ${t.type === 'income' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>{t.type}</span>
-                                  <span className="font-medium">{t.description}</span>
-                                  <span className="text-slate-400 text-sm">({t.category})</span>
+                        {isExpanded && (
+                          <div className="space-y-2">
+                            {monthTransactions.sort((a, b) => new Date(b.date) - new Date(a.date)).map(t => {
+                              // Check if this transaction matches a recurring payment
+                              const normalizeForMatch = (name) => name.toLowerCase().replace(/[^a-z0-9]/g, '');
+                              const isRecurring = recurringPayments.some(p => 
+                                normalizeForMatch(p.name) === normalizeForMatch(t.description)
+                              );
+                              
+                              return (
+                                <div key={t.id} className="flex justify-between items-center p-3 bg-slate-900 rounded-lg hover:bg-slate-700 transition-colors">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-3">
+                                      <span className={`px-2 py-1 rounded text-xs font-semibold ${t.type === 'income' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>{t.type}</span>
+                                      <span className="font-medium">{isRecurring && '🔄 '}{t.description}</span>
+                                      <span className="text-slate-400 text-sm">({t.category})</span>
+                                    </div>
+                                    <div className="text-sm text-slate-400 mt-1">{t.date}</div>
+                                  </div>
+                                  <div className="flex items-center gap-4">
+                                    <span className={`text-lg font-bold ${t.type === 'income' ? 'text-green-400' : 'text-red-400'}`}>
+                                      {t.type === 'income' ? '+' : '-'}${formatCurrency(t.amount)}
+                                    </span>
+                                    <button onClick={(e) => { e.stopPropagation(); deleteTransaction(t.id); }} className="p-2 hover:bg-slate-600 rounded transition-colors" title="Delete">
+                                      <Trash2 size={16} />
+                                    </button>
+                                  </div>
                                 </div>
-                                <div className="text-sm text-slate-400 mt-1">{t.date}</div>
-                              </div>
-                              <div className="flex items-center gap-4">
-                                <span className={`text-lg font-bold ${t.type === 'income' ? 'text-green-400' : 'text-red-400'}`}>
-                                  {t.type === 'income' ? '+' : '-'}${formatCurrency(t.amount)}
-                                </span>
-                                <button onClick={() => deleteTransaction(t.id)} className="p-2 hover:bg-slate-600 rounded transition-colors" title="Delete">
-                                  <Trash2 size={16} />
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
                 </div>
               </div>
             )}
+          </div>
+          
+          {/* Version Number */}
+          <div className="fixed bottom-4 left-4 text-slate-500 text-xs">
+            v1.0.0
           </div>
         </div>
       );
