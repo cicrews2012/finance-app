@@ -938,6 +938,58 @@
               )}
             </div>
             
+            {/* YEARLY CATEGORY ANALYSIS */}
+            {transactions.length > 0 && (
+              <div className="bg-slate-800 rounded-lg border border-slate-700 mb-8">
+                <div className="p-6 cursor-pointer hover:bg-slate-750 transition-colors" onClick={() => setIsYearlyAnalysisExpanded(!isYearlyAnalysisExpanded)}>
+                  <div className="flex items-center gap-3">
+                    {isYearlyAnalysisExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                    <h2 className="text-2xl font-bold">Yearly Category Analysis</h2>
+                  </div>
+                </div>
+                
+                {isYearlyAnalysisExpanded && (
+                  <div className="px-6 pb-6">
+                    {['expense', 'income'].map(txType => {
+                      const yearlyData = {};
+                      
+                      transactions.filter(t => t.type === txType).forEach(t => {
+                        const yearKey = t.financialYear;
+                        if (!yearlyData[yearKey]) yearlyData[yearKey] = {};
+                        if (!yearlyData[yearKey][t.category]) yearlyData[yearKey][t.category] = 0;
+                        yearlyData[yearKey][t.category] += t.amount;
+                      });
+                      
+                      return Object.keys(yearlyData).length > 0 && (
+                        <div key={txType} className="mb-6">
+                          <h3 className="text-xl font-semibold mb-4 capitalize text-white">{txType}s by Category</h3>
+                          {Object.keys(yearlyData).sort((a, b) => b - a).map(year => (
+                            <div key={year} className="mb-4">
+                              <h4 className="text-lg font-semibold mb-2 text-slate-300">{year}</h4>
+                              <div className="space-y-2">
+                                {Object.entries(yearlyData[year])
+                                  .sort((a, b) => b[1] - a[1])
+                                  .map(([category, amount]) => (
+                                    <div key={category} className="bg-slate-900 rounded-lg p-3">
+                                      <div className="flex justify-between items-center">
+                                        <span className="font-medium">{category}</span>
+                                        <span className={`font-bold ${txType === 'income' ? 'text-green-400' : 'text-red-400'}`}>
+                                          ${formatCurrency(amount)}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+            
             {/* TRANSACTIONS LIST */}
             {transactions.length > 0 && (
               <div className="bg-slate-800 rounded-lg border border-slate-700">
