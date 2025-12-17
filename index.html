@@ -467,8 +467,19 @@
             
             if (data.version === '2.0') {
               if (data.transactions) {
-                setTransactions(data.transactions);
-                saveData(data.transactions);
+                // Convert old format (month/year) to new format (financialMonth/financialYear)
+                const convertedTransactions = data.transactions.map(t => {
+                  if (t.month !== undefined && t.financialMonth === undefined) {
+                    return {
+                      ...t,
+                      financialMonth: t.month,
+                      financialYear: t.year
+                    };
+                  }
+                  return t;
+                });
+                setTransactions(convertedTransactions);
+                saveData(convertedTransactions);
               }
               if (data.debts) {
                 setDebts(data.debts);
@@ -493,9 +504,19 @@
               }
               alert('Data imported successfully!');
             } else if (Array.isArray(data)) {
-              // Old format - just transactions
-              setTransactions(data);
-              saveData(data);
+              // Old format - just transactions array
+              const convertedTransactions = data.map(t => {
+                if (t.month !== undefined && t.financialMonth === undefined) {
+                  return {
+                    ...t,
+                    financialMonth: t.month,
+                    financialYear: t.year
+                  };
+                }
+                return t;
+              });
+              setTransactions(convertedTransactions);
+              saveData(convertedTransactions);
               alert('Transactions imported successfully!');
             } else {
               alert('Unrecognized file format');
