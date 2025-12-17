@@ -149,6 +149,7 @@
       const [isCustomCategoriesExpanded, setIsCustomCategoriesExpanded] = useState(false);
       const [isAddTransactionExpanded, setIsAddTransactionExpanded] = useState(true);
       const [expandedMonths, setExpandedMonths] = useState({});
+      const [expandedCategories, setExpandedCategories] = useState({}); // For yearly analysis
       
       // Form State
       const [description, setDescription] = useState('');
@@ -967,12 +968,18 @@
                   <div className="px-6 pb-6">
                     {['expense', 'income'].map(txType => {
                       const yearlyData = {};
+                      const yearlyTransactions = {};
                       
                       transactions.filter(t => t.type === txType).forEach(t => {
                         const yearKey = t.financialYear;
                         if (!yearlyData[yearKey]) yearlyData[yearKey] = {};
-                        if (!yearlyData[yearKey][t.category]) yearlyData[yearKey][t.category] = 0;
+                        if (!yearlyTransactions[yearKey]) yearlyTransactions[yearKey] = {};
+                        if (!yearlyData[yearKey][t.category]) {
+                          yearlyData[yearKey][t.category] = 0;
+                          yearlyTransactions[yearKey][t.category] = [];
+                        }
                         yearlyData[yearKey][t.category] += t.amount;
+                        yearlyTransactions[yearKey][t.category].push(t);
                       });
                       
                       return Object.keys(yearlyData).length > 0 && (
@@ -984,16 +991,47 @@
                               <div className="space-y-2">
                                 {Object.entries(yearlyData[year])
                                   .sort((a, b) => b[1] - a[1])
-                                  .map(([category, amount]) => (
-                                    <div key={category} className="bg-slate-900 rounded-lg p-3">
-                                      <div className="flex justify-between items-center">
-                                        <span className="font-medium">{category}</span>
-                                        <span className={`font-bold ${txType === 'income' ? 'text-green-400' : 'text-red-400'}`}>
-                                          ${formatCurrency(amount)}
-                                        </span>
+                                  .map(([category, amount]) => {
+                                    const categoryKey = `${txType}-${year}-${category}`;
+                                    const isExpanded = expandedCategories[categoryKey];
+                                    const categoryTransactions = yearlyTransactions[year][category];
+                                    
+                                    return (
+                                      <div key={category} className="bg-slate-900 rounded-lg overflow-hidden">
+                                        <div 
+                                          className="p-3 cursor-pointer hover:bg-slate-800 transition-colors"
+                                          onClick={() => setExpandedCategories(prev => ({ ...prev, [categoryKey]: !isExpanded }))}
+                                        >
+                                          <div className="flex justify-between items-center">
+                                            <div className="flex items-center gap-2">
+                                              {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                              <span className="font-medium">{category}</span>
+                                              <span className="text-xs text-slate-400">({categoryTransactions.length} transactions)</span>
+                                            </div>
+                                            <span className={`font-bold ${txType === 'income' ? 'text-green-400' : 'text-red-400'}`}>
+                                              ${formatCurrency(amount)}
+                                            </span>
+                                          </div>
+                                        </div>
+                                        
+                                        {isExpanded && (
+                                          <div className="px-3 pb-3 space-y-1">
+                                            {categoryTransactions.sort((a, b) => new Date(b.date) - new Date(a.date)).map(t => (
+                                              <div key={t.id} className="flex justify-between items-center p-2 bg-slate-800 rounded text-sm">
+                                                <div className="flex items-center gap-2">
+                                                  <span className="text-slate-300">{t.description}</span>
+                                                  <span className="text-slate-500 text-xs">{t.date}</span>
+                                                </div>
+                                                <span className={`font-semibold ${txType === 'income' ? 'text-green-400' : 'text-red-400'}`}>
+                                                  ${formatCurrency(t.amount)}
+                                                </span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
                                       </div>
-                                    </div>
-                                  ))}
+                                    );
+                                  })}
                               </div>
                             </div>
                           ))}
