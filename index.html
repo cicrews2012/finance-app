@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finance Tracker v1.8.4</title>
+    <title>Finance Tracker v1.8.5</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -435,7 +435,7 @@
                 <div className="app-container">
                     <div className="header">
                         <h1>💰 Finance Tracker</h1>
-                        <div className="version">v1.8.4 | Custom Category Option in Add Transaction</div>
+                        <div className="version">v1.8.5 | How-To Guide in Settings</div>
                     </div>
                     <div className="tab-navigation">
                         <button className={`tab-button ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>📊 Dashboard</button>
@@ -1092,38 +1092,47 @@
                         <p style={{marginTop: '20px', color: '#a0aec0', fontSize: '0.9em'}}>Export your data to save a backup, import previously exported data, or clear all data to start fresh.</p>
                     </div>
                     <div className="section">
-                        <h2>About</h2>
-                        <p style={{marginBottom: '15px', lineHeight: '1.6', color: '#e2e8f0'}}><strong>Finance Tracker v1.7.7</strong></p>
-                        <p style={{marginBottom: '10px', lineHeight: '1.6', color: '#a0aec0'}}>A comprehensive personal finance management tool with full backward/forward compatibility between production and beta versions.</p>
+                        <h2>How to Use Finance Tracker</h2>
+                        <p style={{marginBottom: '20px', lineHeight: '1.6', color: '#a0aec0'}}>Quick guide to get the most out of your finance tracker.</p>
                         
-                        <h3 style={{marginTop: '20px', marginBottom: '10px', color: '#667eea'}}>v1.7.7 - Full Compatibility:</h3>
-                        <ul style={{lineHeight: '1.8', color: '#a0aec0', marginLeft: '20px'}}>
-                            <li>✅ <strong>Bidirectional field names</strong> - Exports include both old (day, balance, apr, payment) and new (dueDay, currentBalance, interestRate, minimumPayment) formats</li>
-                            <li>✅ <strong>Zero data loss</strong> - Preserves ALL fields from both prod and beta (varies, financialMonth, dueDay, lastUpdated, recurringPaymentId, etc.)</li>
-                            <li>✅ <strong>Round-trip safe</strong> - Prod → Beta → Prod or Beta → Prod → Beta maintains all data</li>
-                            <li>✅ <strong>Version field</strong> - Exports include version: "2.0" matching prod format</li>
-                            <li>✅ <strong>Import handles both formats</strong> - Accepts day OR dueDay, balance OR currentBalance, etc.</li>
-                        </ul>
+                        <h3 style={{marginTop: '20px', marginBottom: '10px', color: '#667eea'}}>🔄 Auto-Pay Recurring Payments</h3>
+                        <p style={{marginBottom: '10px', lineHeight: '1.6', color: '#a0aec0'}}>
+                            <strong>What it does:</strong> Automatically creates transactions when the due date passes.<br/>
+                            <strong>How to enable:</strong> When adding/editing a recurring payment, check the "Auto-pay" checkbox.<br/>
+                            <strong>How it works:</strong> On the due date, a transaction is created automatically and the payment is marked as paid.
+                        </p>
                         
-                        <h3 style={{marginTop: '20px', marginBottom: '10px', color: '#667eea'}}>Compatibility Guarantee:</h3>
-                        <ul style={{lineHeight: '1.8', color: '#a0aec0', marginLeft: '20px'}}>
-                            <li>📦 Export from v1.1.0 prod → Import to v1.7.7 beta = ✓ Works perfectly</li>
-                            <li>📦 Export from v1.7.7 beta → Import to v1.1.0 prod = ✓ Works perfectly</li>
-                            <li>📦 Export from v1.7.7 → Import to v1.7.7 = ✓ Perfect preservation</li>
-                            <li>💾 All extra fields preserved across versions</li>
-                            <li>🔄 Test in beta, sync to prod anytime without data loss</li>
-                        </ul>
+                        <h3 style={{marginTop: '20px', marginBottom: '10px', color: '#667eea'}}>💳 Linking Payments to Debts</h3>
+                        <p style={{marginBottom: '10px', lineHeight: '1.6', color: '#a0aec0'}}>
+                            <strong>What it does:</strong> Updates debt balance and tracks interest/principal breakdown.<br/>
+                            <strong>How to link:</strong> When adding/editing a recurring payment, select a debt from the "Link to Debt" dropdown.<br/>
+                            <strong>What you get:</strong> Automatic balance updates + transaction history showing exactly how each payment reduces your debt.
+                        </p>
                         
-                        <h3 style={{marginTop: '20px', marginBottom: '10px', color: '#667eea'}}>Previous Features:</h3>
-                        <ul style={{lineHeight: '1.8', color: '#a0aec0', marginLeft: '20px'}}>
-                            <li>Auto-transaction creation for auto-pay items</li>
-                            <li>Edit transactions and recurring payments</li>
-                            <li>Smart duplicate detection (requires ALL words + category + amount)</li>
-                            <li>Payment tracking (paid/unpaid status per month)</li>
-                            <li>Financial month grouping (28th-27th cycle)</li>
-                            <li>Debt payoff strategies (Snowball & Avalanche)</li>
-                            <li>Dark mode interface</li>
-                        </ul>
+                        <h3 style={{marginTop: '20px', marginBottom: '10px', color: '#667eea'}}>📊 Debt Transaction Logs</h3>
+                        <p style={{marginBottom: '10px', lineHeight: '1.6', color: '#a0aec0'}}>
+                            <strong>Where to find:</strong> Go to Debts tab → Click on a debt to expand → Scroll to "Transaction History".<br/>
+                            <strong>What it shows:</strong> Date, payment amount, interest charged, principal paid, and balance before/after.<br/>
+                            <strong>Note:</strong> Only shows for debts with linked recurring payments that have been processed.
+                        </p>
+                        
+                        <h3 style={{marginTop: '20px', marginBottom: '10px', color: '#667eea'}}>📅 Financial Month (28th-27th Cycle)</h3>
+                        <p style={{marginBottom: '10px', lineHeight: '1.6', color: '#a0aec0'}}>
+                            <strong>How it works:</strong> Financial months run from the 28th of one month through the 27th of the next.<br/>
+                            <strong>Example:</strong> December 2025 = Nov 28 through Dec 27.<br/>
+                            <strong>Why:</strong> Aligns with common payday cycles where bills are due early in the calendar month.
+                        </p>
+                        
+                        <h3 style={{marginTop: '20px', marginBottom: '10px', color: '#667eea'}}>💾 Export & Import</h3>
+                        <p style={{marginBottom: '10px', lineHeight: '1.6', color: '#a0aec0'}}>
+                            <strong>Export:</strong> Creates a backup JSON file with all your data (transactions, debts, recurring payments).<br/>
+                            <strong>Import:</strong> Restores data from a backup file.<br/>
+                            <strong>Use case:</strong> Backup your data regularly, or move data between devices/browsers.
+                        </p>
+                        
+                        <p style={{marginTop: '30px', padding: '15px', background: '#1a1f2e', borderRadius: '8px', color: '#667eea', fontSize: '0.9em'}}>
+                            <strong>💡 Tip:</strong> All data is stored locally in your browser. No one else can see your financial information, even if they access the same URL.
+                        </p>
                     </div>
                 </div>
             );
