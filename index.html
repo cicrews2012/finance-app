@@ -1,550 +1,1157 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finance Tracker v1.5.0</title>
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); min-height: 100vh; padding: 20px; }
-        #root { max-width: 1400px; margin: 0 auto; }
-        .app-container { background: #0f1419; border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); overflow: hidden; }
-        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; }
-        .header h1 { font-size: 2.5em; margin-bottom: 10px; font-weight: 700; }
-        .header .version { font-size: 0.9em; opacity: 0.9; }
-        .tab-navigation { display: flex; background: #1a1f2e; border-bottom: 2px solid #2d3748; overflow-x: auto; }
-        .tab-button { flex: 1; min-width: 150px; padding: 18px 24px; background: transparent; border: none; cursor: pointer; font-size: 1em; font-weight: 600; color: #a0aec0; transition: all 0.3s ease; border-bottom: 3px solid transparent; }
-        .tab-button:hover { background: #2d3748; color: #e2e8f0; }
-        .tab-button.active { color: #667eea; border-bottom-color: #667eea; background: #0f1419; }
-        .tab-content { padding: 30px; background: #0f1419; }
-        .yearly-overview { background: #1a1f2e; padding: 40px; border-radius: 15px; margin-bottom: 30px; text-align: center; }
-        .yearly-overview h2 { color: #a0aec0; font-size: 1.2em; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 2px; }
-        .yearly-overview .amount { font-size: 3.5em; font-weight: 700; margin-bottom: 10px; }
-        .yearly-overview.income .amount { color: #28a745; }
-        .yearly-overview.expense .amount { color: #dc3545; }
-        .yearly-overview.net .amount.positive { color: #28a745; }
-        .yearly-overview.net .amount.negative { color: #dc3545; }
-        .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px; }
-        .summary-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
-        .summary-card h3 { font-size: 0.9em; opacity: 0.9; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
-        .summary-card .amount { font-size: 2em; font-weight: 700; }
-        .summary-card .subtitle { font-size: 0.85em; opacity: 0.85; margin-top: 8px; }
-        .section { background: #1a1f2e; padding: 25px; border-radius: 15px; margin-bottom: 20px; }
-        .section h2 { color: #667eea; margin-bottom: 20px; font-size: 1.5em; }
-        .category-filters { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
-        .category-filter-btn { background: #2d3748; color: #a0aec0; border: 2px solid transparent; padding: 10px 20px; border-radius: 25px; font-size: 0.9em; font-weight: 600; cursor: pointer; transition: all 0.3s ease; }
-        .category-filter-btn:hover { background: #4a5568; color: #e2e8f0; }
-        .category-filter-btn.active { background: #667eea; color: white; border-color: #667eea; }
-        .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
-        @media (max-width: 968px) { .dashboard-grid { grid-template-columns: 1fr; } }
-        .debt-overview-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px; }
-        .debt-mini-card { background: #1a1f2e; padding: 18px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); border-left: 4px solid #ffc107; }
-        .debt-mini-card h4 { color: #e2e8f0; margin-bottom: 8px; font-size: 1em; }
-        .debt-mini-card .debt-amount { font-size: 1.4em; font-weight: 700; color: #667eea; margin-bottom: 8px; }
-        .debt-mini-card .debt-info { font-size: 0.85em; color: #a0aec0; margin-bottom: 4px; }
-        .form-group { margin-bottom: 20px; }
-        .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 15px; }
-        label { display: block; margin-bottom: 8px; color: #a0aec0; font-weight: 600; font-size: 0.9em; }
-        input, select { width: 100%; padding: 12px; border: 2px solid #2d3748; border-radius: 8px; font-size: 1em; transition: border-color 0.3s; background: #0f1419; color: #e2e8f0; }
-        input:focus, select:focus { outline: none; border-color: #667eea; }
-        button { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 12px 30px; border-radius: 8px; font-size: 1em; font-weight: 600; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
-        button:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4); }
-        button:active { transform: translateY(0); }
-        button.secondary { background: #6c757d; margin-left: 10px; }
-        button.danger { background: #dc3545; }
-        .transaction-list, .payment-list, .debt-list { margin-top: 20px; }
-        .transaction-item, .payment-item, .debt-item { background: #1a1f2e; padding: 20px; border-radius: 10px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: flex; justify-content: space-between; align-items: center; }
-        .transaction-item.income { border-left: 4px solid #28a745; }
-        .transaction-item.expense { border-left: 4px solid #dc3545; }
-        .item-details h4 { color: #e2e8f0; margin-bottom: 5px; }
-        .item-details p { color: #a0aec0; font-size: 0.9em; }
-        .item-amount { font-size: 1.3em; font-weight: 700; }
-        .item-amount.positive { color: #28a745; }
-        .item-amount.negative { color: #dc3545; }
-        .controls { display: flex; gap: 10px; margin-top: 20px; }
-        .collapsible-section { margin-bottom: 15px; }
-        .collapsible-header { background: #667eea; color: white; padding: 15px 20px; border-radius: 10px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: background 0.3s; }
-        .collapsible-header:hover { background: #5568d3; }
-        .collapsible-header h3 { margin: 0; font-size: 1.2em; }
-        .collapsible-content { padding: 20px; background: #0f1419; border-radius: 0 0 10px 10px; margin-top: 2px; }
-        .debt-item { border-left: 4px solid #ffc107; }
-        .progress-bar { width: 100%; height: 8px; background: #2d3748; border-radius: 4px; overflow: hidden; margin-top: 10px; }
-        .progress-fill { height: 100%; background: linear-gradient(90deg, #28a745, #20c997); transition: width 0.3s ease; }
-        .debt-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 15px; font-size: 0.9em; }
-        .debt-detail-item { padding: 10px; background: #1a1f2e; border-radius: 5px; }
-        .debt-detail-item label { font-size: 0.8em; color: #a0aec0; margin-bottom: 5px; }
-        .debt-detail-item .value { font-weight: 700; color: #e2e8f0; }
-        @media (max-width: 768px) { .tab-navigation { flex-wrap: wrap; } .tab-button { flex: 1 1 50%; } .summary-grid { grid-template-columns: 1fr; } }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Finance Tracker</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-    <div id="root"></div>
-    <script type="text/babel">
-        const { useState, useEffect } = React;
-        const formatCurrency = (amount) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
-        const getCurrentFinancialMonth = () => { const today = new Date(); const day = today.getDate(); const month = today.getMonth(); const year = today.getFullYear(); if (day >= 28) { return new Date(year, month + 1, 1); } else { return new Date(year, month, 1); } };
-        const getFinancialMonthRange = (date) => { const month = date.getMonth(); const year = date.getFullYear(); const start = new Date(year, month - 1, 28); const end = new Date(year, month, 27, 23, 59, 59); return { start, end }; };
-
-        function FinanceTracker() {
-            const [activeTab, setActiveTab] = useState('dashboard');
-            const [transactions, setTransactions] = useState([]);
-            const [recurringPayments, setRecurringPayments] = useState([]);
-            const [debts, setDebts] = useState([]);
-            const [currentMonth, setCurrentMonth] = useState(getCurrentFinancialMonth());
-
-            useEffect(() => {
-                const savedTransactions = localStorage.getItem('transactions');
-                const savedPayments = localStorage.getItem('recurringPayments');
-                const savedDebts = localStorage.getItem('debts');
-                if (savedTransactions) setTransactions(JSON.parse(savedTransactions));
-                if (savedPayments) setRecurringPayments(JSON.parse(savedPayments));
-                if (savedDebts) setDebts(JSON.parse(savedDebts));
-            }, []);
-
-            useEffect(() => { localStorage.setItem('transactions', JSON.stringify(transactions)); }, [transactions]);
-            useEffect(() => { localStorage.setItem('recurringPayments', JSON.stringify(recurringPayments)); }, [recurringPayments]);
-            useEffect(() => { localStorage.setItem('debts', JSON.stringify(debts)); }, [debts]);
-
-            const getMonthlyTotals = () => {
-                const { start, end } = getFinancialMonthRange(currentMonth);
-                const monthlyTransactions = transactions.filter(t => { const tDate = new Date(t.date); return tDate >= start && tDate <= end; });
-                const income = monthlyTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + parseFloat(t.amount), 0);
-                const expenses = monthlyTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + parseFloat(t.amount), 0);
-                const recurringTotal = recurringPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
-                return { income, expenses: expenses + recurringTotal, net: income - (expenses + recurringTotal) };
-            };
-
-            const getTotalDebt = () => debts.reduce((sum, d) => sum + parseFloat(d.currentBalance), 0);
-
-            const exportData = () => {
-                const data = { transactions, recurringPayments, debts, exportDate: new Date().toISOString() };
-                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `finance-tracker-${new Date().toISOString().split('T')[0]}.json`;
-                a.click();
-            };
-
-            const importData = (event) => {
-                const file = event.target.files[0];
-                if (file) {
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        try {
-                            const data = JSON.parse(e.target.result);
-                            if (data.transactions) { const validTransactions = data.transactions.map(t => ({ ...t, amount: parseFloat(t.amount) || 0, id: t.id || Date.now() + Math.random() })); setTransactions(validTransactions); }
-                            if (data.recurringPayments) { const validPayments = data.recurringPayments.map(p => ({ name: p.name, amount: parseFloat(p.amount) || 0, category: p.category || '', dueDay: parseInt(p.dueDay || p.day) || 1, linkedDebt: p.linkedDebt || '', id: p.id || Date.now() + Math.random() })); setRecurringPayments(validPayments); }
-                            if (data.debts) { const validDebts = data.debts.map(d => { const currentBalance = parseFloat(d.currentBalance || d.balance) || 0; const originalBalance = parseFloat(d.originalBalance) || currentBalance; return { name: d.name, originalBalance: originalBalance, currentBalance: currentBalance, interestRate: parseFloat(d.interestRate || d.apr) || 0, minimumPayment: parseFloat(d.minimumPayment || d.payment) || 0, category: d.category || 'Other', id: d.id || Date.now() + Math.random() }; }); setDebts(validDebts); }
-                            alert('Data imported successfully!');
-                        } catch (error) { alert('Error importing data. Please check the file format.\n\nError: ' + error.message); }
+<body style="margin:0;padding:0;background:#0f172a;color:white;min-height:100vh;">
+  <div id="root"></div>
+  
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+    
+    // Storage API using localStorage
+    const storage = {
+      get: async (key) => {
+        const value = localStorage.getItem(key);
+        return value ? { key, value, shared: false } : null;
+      },
+      set: async (key, value) => {
+        localStorage.setItem(key, value);
+        return { key, value, shared: false };
+      },
+      delete: async (key) => {
+        localStorage.removeItem(key);
+        return { key, deleted: true, shared: false };
+      }
+    };
+    
+    // Icon Components
+    const PlusCircle = ({ size = 24 }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>
+      </svg>
+    );
+    
+    const Plus = ({ size = 24 }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+      </svg>
+    );
+    
+    const TrendingUp = ({ size = 24 }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>
+      </svg>
+    );
+    
+    const TrendingDown = ({ size = 24 }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/>
+      </svg>
+    );
+    
+    const DollarSign = ({ size = 24 }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+      </svg>
+    );
+    
+    const Calendar = ({ size = 24 }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+      </svg>
+    );
+    
+    const Trash2 = ({ size = 24 }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
+      </svg>
+    );
+    
+    const Edit2 = ({ size = 24 }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+      </svg>
+    );
+    
+    const ChevronDown = ({ size = 24 }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="6 9 12 15 18 9"/>
+      </svg>
+    );
+    
+    const ChevronUp = ({ size = 24 }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="18 15 12 9 6 15"/>
+      </svg>
+    );
+    
+    const Download = ({ size = 24 }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+    );
+    
+    const Upload = ({ size = 24 }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+    );
+    
+    // Helper Functions
+    const formatCurrency = (amount) => {
+      return amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    };
+    
+    const getESTDateString = () => {
+      const date = new Date();
+      const estDate = new Date(date.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+      return estDate.toISOString().split('T')[0];
+    };
+    
+    const getFinancialMonth = (dateStr) => {
+      const date = new Date(dateStr);
+      const day = date.getDate();
+      let month = date.getMonth();
+      let year = date.getFullYear();
+      
+      if (day < 28) {
+        month = month - 1;
+        if (month < 0) {
+          month = 11;
+          year = year - 1;
+        }
+      }
+      
+      return { financialMonth: month, financialYear: year };
+    };
+    
+    // Main App Component
+    const FinanceTracker = () => {
+      // State - All start EMPTY
+      const [transactions, setTransactions] = useState([]);
+      const [recurringPayments, setRecurringPayments] = useState([]);
+      const [debts, setDebts] = useState([]);
+      const [paidRecurring, setPaidRecurring] = useState({});
+      const [customExpenseCategories, setCustomExpenseCategories] = useState([]);
+      const [customIncomeCategories, setCustomIncomeCategories] = useState([]);
+      
+      // UI State
+      const [isRecurringExpanded, setIsRecurringExpanded] = useState(false);
+      const [isDebtTrackerExpanded, setIsDebtTrackerExpanded] = useState(false);
+      const [isYearlyAnalysisExpanded, setIsYearlyAnalysisExpanded] = useState(false);
+      const [isCustomCategoriesExpanded, setIsCustomCategoriesExpanded] = useState(false);
+      const [isAddTransactionExpanded, setIsAddTransactionExpanded] = useState(false); // Changed to collapsed
+      const [expandedMonths, setExpandedMonths] = useState({});
+      const [expandedCategories, setExpandedCategories] = useState({}); // For yearly analysis
+      
+      // Form State
+      const [description, setDescription] = useState('');
+      const [amount, setAmount] = useState('');
+      const [category, setCategory] = useState('');
+      const [customCategory, setCustomCategory] = useState('');
+      const [showCustomCategory, setShowCustomCategory] = useState(false);
+      const [type, setType] = useState('expense');
+      const [date, setDate] = useState(getESTDateString());
+      const [editingId, setEditingId] = useState(null);
+      
+      // Add forms state
+      const [showAddRecurring, setShowAddRecurring] = useState(false);
+      const [showAddDebt, setShowAddDebt] = useState(false);
+      const [newRecurring, setNewRecurring] = useState({
+        name: '', amount: '', category: 'Subscriptions', day: 1, auto: true, varies: false
+      });
+      const [newDebt, setNewDebt] = useState({
+        name: '', balance: '', apr: '', payment: '', dueDay: 1
+      });
+      
+      // Default Categories (NOT hardcoded payments/debts)
+      const defaultExpenseCategories = [
+        'Food', 'Subscriptions', 'Groceries', 'Home', 'Car Payments', 
+        'Personal', 'Pets', 'Utilities', 'Gas (cars)', 'Debt', 
+        'Other', 'Insurance', 'Kids', 'Savings', 'House cleaning'
+      ];
+      const defaultIncomeCategories = ['Salary', 'Freelance', 'Investment', 'Gift', 'Bonus', 'Other'];
+      
+      const expenseCategories = [...defaultExpenseCategories, ...customExpenseCategories].sort();
+      const incomeCategories = [...defaultIncomeCategories, ...customIncomeCategories].sort();
+      
+      // Load data on mount
+      useEffect(() => {
+        loadData();
+      }, []);
+      
+      const loadData = async () => {
+        try {
+          const txResult = await storage.get('finance-transactions');
+          if (txResult?.value) setTransactions(JSON.parse(txResult.value));
+          
+          const recurringResult = await storage.get('recurring-payments');
+          if (recurringResult?.value) setRecurringPayments(JSON.parse(recurringResult.value));
+          
+          const debtsResult = await storage.get('debts');
+          if (debtsResult?.value) setDebts(JSON.parse(debtsResult.value));
+          
+          const paidResult = await storage.get('paid-recurring');
+          if (paidResult?.value) setPaidRecurring(JSON.parse(paidResult.value));
+          
+          const customExpResult = await storage.get('custom-expense-categories');
+          if (customExpResult?.value) setCustomExpenseCategories(JSON.parse(customExpResult.value));
+          
+          const customIncResult = await storage.get('custom-income-categories');
+          if (customIncResult?.value) setCustomIncomeCategories(JSON.parse(customIncResult.value));
+        } catch (error) {
+          console.log('Starting fresh - no saved data found');
+        }
+      };
+      
+      const saveData = async (data) => {
+        await storage.set('finance-transactions', JSON.stringify(data));
+      };
+      
+      const saveRecurringPayments = async (data) => {
+        await storage.set('recurring-payments', JSON.stringify(data));
+      };
+      
+      const saveDebts = async (data) => {
+        await storage.set('debts', JSON.stringify(data));
+      };
+      
+      const savePaidRecurring = async (data) => {
+        await storage.set('paid-recurring', JSON.stringify(data));
+      };
+      
+      const saveCustomCategories = async (exp, inc) => {
+        await storage.set('custom-expense-categories', JSON.stringify(exp));
+        await storage.set('custom-income-categories', JSON.stringify(inc));
+      };
+      
+      // Add Transaction
+      const addTransaction = () => {
+        const finalCategory = showCustomCategory ? customCategory : category;
+        
+        if (!description || !amount || !finalCategory) {
+          alert('Please fill in all fields');
+          return;
+        }
+        
+        // Save custom category if used
+        if (showCustomCategory && customCategory) {
+          const isExpense = type === 'expense';
+          const updated = isExpense ? [...customExpenseCategories, customCategory] : [...customIncomeCategories, customCategory];
+          if (isExpense) {
+            setCustomExpenseCategories(updated);
+            saveCustomCategories(updated, customIncomeCategories);
+          } else {
+            setCustomIncomeCategories(updated);
+            saveCustomCategories(customExpenseCategories, updated);
+          }
+        }
+        
+        const newTransaction = {
+          id: editingId || Date.now(),
+          description,
+          amount: parseFloat(amount),
+          category: finalCategory,
+          type,
+          date,
+          ...getFinancialMonth(date)
+        };
+        
+        let updatedTransactions;
+        if (editingId) {
+          updatedTransactions = transactions.map(t => t.id === editingId ? newTransaction : t);
+          setEditingId(null);
+        } else {
+          updatedTransactions = [...transactions, newTransaction];
+          
+          // Apply to debt if expense and matches debt name
+          if (type === 'expense') {
+            applyPaymentToDebt(description, parseFloat(amount), date, finalCategory);
+          }
+        }
+        
+        setTransactions(updatedTransactions);
+        saveData(updatedTransactions);
+        resetForm();
+      };
+      
+      const resetForm = () => {
+        setDescription('');
+        setAmount('');
+        setCategory('');
+        setCustomCategory('');
+        setShowCustomCategory(false);
+        setType('expense');
+        setDate(getESTDateString());
+      };
+      
+      const deleteTransaction = (id) => {
+        const updated = transactions.filter(t => t.id !== id);
+        setTransactions(updated);
+        saveData(updated);
+      };
+      
+      const editTransaction = (transaction) => {
+        setDescription(transaction.description);
+        setAmount(transaction.amount.toString());
+        setCategory(transaction.category);
+        setType(transaction.type);
+        setDate(transaction.date);
+        setEditingId(transaction.id);
+        setIsAddTransactionExpanded(true);
+        // Scroll to top
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      };
+      
+      // Recurring Payments
+      const addRecurringPayment = () => {
+        if (!newRecurring.name || !newRecurring.amount) {
+          alert('Please fill in name and amount');
+          return;
+        }
+        
+        const payment = {
+          id: Date.now(),
+          name: newRecurring.name,
+          amount: parseFloat(newRecurring.amount),
+          category: newRecurring.category,
+          day: parseInt(newRecurring.day),
+          auto: newRecurring.auto,
+          varies: newRecurring.varies
+        };
+        
+        const updated = [...recurringPayments, payment];
+        setRecurringPayments(updated);
+        saveRecurringPayments(updated);
+        setNewRecurring({ name: '', amount: '', category: 'Subscriptions', day: 1, auto: true, varies: false });
+        setShowAddRecurring(false);
+      };
+      
+      const deleteRecurringPayment = (id) => {
+        if (confirm('Delete this recurring payment?')) {
+          const updated = recurringPayments.filter(p => p.id !== id);
+          setRecurringPayments(updated);
+          saveRecurringPayments(updated);
+        }
+      };
+      
+      const markRecurringAsPaid = (payment, customAmount = null) => {
+        const today = new Date();
+        const monthKey = `${today.getFullYear()}-${today.getMonth()}`;
+        const paymentKey = `${monthKey}-${payment.id}`;
+        const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(payment.day).padStart(2, '0')}`;
+        const paymentAmount = customAmount || payment.amount;
+        
+        const newTransaction = {
+          id: Date.now(),
+          description: payment.name,
+          amount: paymentAmount,
+          category: payment.category,
+          type: 'expense',
+          date: dateStr,
+          ...getFinancialMonth(dateStr)
+        };
+        
+        const updatedTransactions = [...transactions, newTransaction];
+        setTransactions(updatedTransactions);
+        saveData(updatedTransactions);
+        
+        const updatedPaid = { ...paidRecurring, [paymentKey]: true };
+        setPaidRecurring(updatedPaid);
+        savePaidRecurring(updatedPaid);
+        
+        applyPaymentToDebt(payment.name, paymentAmount, dateStr, payment.category);
+      };
+      
+      const isRecurringPaidThisMonth = (paymentId) => {
+        const today = new Date();
+        const monthKey = `${today.getFullYear()}-${today.getMonth()}`;
+        const paymentKey = `${monthKey}-${paymentId}`;
+        return paidRecurring[paymentKey] || false;
+      };
+      
+      // Debts
+      const addDebt = () => {
+        if (!newDebt.name || !newDebt.balance || !newDebt.apr || !newDebt.payment) {
+          alert('Please fill in all fields');
+          return;
+        }
+        
+        const debt = {
+          id: Date.now(),
+          name: newDebt.name,
+          balance: parseFloat(newDebt.balance),
+          originalBalance: parseFloat(newDebt.balance),
+          apr: parseFloat(newDebt.apr),
+          payment: parseFloat(newDebt.payment),
+          dueDay: parseInt(newDebt.dueDay),
+          lastUpdated: getESTDateString(),
+          recurringPaymentId: null
+        };
+        
+        const updated = [...debts, debt];
+        setDebts(updated);
+        saveDebts(updated);
+        setNewDebt({ name: '', balance: '', apr: '', payment: '', dueDay: 1 });
+        setShowAddDebt(false);
+      };
+      
+      const deleteDebt = (id) => {
+        if (confirm('Delete this debt?')) {
+          const updated = debts.filter(d => d.id !== id);
+          setDebts(updated);
+          saveDebts(updated);
+        }
+      };
+      
+      const applyPaymentToDebt = (paymentName, paymentAmount, paymentDate, paymentCategory) => {
+        const normalizeForMatch = (name) => {
+          let normalized = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (normalized === 'szc' || normalized === 'szccar') normalized = 'szccar';
+          if (normalized === 'cic' || normalized === 'ciccar') normalized = 'ciccar';
+          return normalized;
+        };
+        
+        const normalizedPayment = normalizeForMatch(paymentName);
+        const matchingDebt = debts.find(d => {
+          const nameMatches = normalizeForMatch(d.name) === normalizedPayment;
+          const categoryIsDebtRelated = ['debt', 'car payments', 'home', 'personal'].includes(paymentCategory.toLowerCase());
+          return nameMatches && categoryIsDebtRelated;
+        });
+        
+        if (matchingDebt) {
+          const updatedDebts = debts.map(d => {
+            if (d.id === matchingDebt.id) {
+              return {
+                ...d,
+                balance: d.balance - paymentAmount,
+                lastUpdated: paymentDate
+              };
+            }
+            return d;
+          });
+          setDebts(updatedDebts);
+          saveDebts(updatedDebts);
+        }
+      };
+      
+      // Export/Import
+      const exportData = () => {
+        const today = new Date();
+        const dateStr = today.toISOString().split('T')[0];
+        
+        const exportObject = {
+          version: '2.0',
+          exportDate: today.toISOString(),
+          transactions,
+          debts,
+          recurringPayments,
+          paidRecurring,
+          customExpenseCategories,
+          customIncomeCategories
+        };
+        
+        const dataStr = JSON.stringify(exportObject, null, 2);
+        const blob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `finance-data-${dateStr}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      };
+      
+      const importData = (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          try {
+            const data = JSON.parse(e.target.result);
+            
+            if (data.version === '2.0') {
+              if (data.transactions) {
+                // Convert old format (month/year) to new format (financialMonth/financialYear)
+                const convertedTransactions = data.transactions.map(t => {
+                  if (t.month !== undefined && t.financialMonth === undefined) {
+                    return {
+                      ...t,
+                      financialMonth: t.month,
+                      financialYear: t.year
                     };
-                    reader.readAsText(file);
-                }
-                event.target.value = '';
-            };
-
-            const clearAllData = () => {
-                if (confirm('Are you sure you want to clear all data? This cannot be undone.')) {
-                    setTransactions([]);
-                    setRecurringPayments([]);
-                    setDebts([]);
-                    localStorage.clear();
-                }
-            };
-
-            const totals = getMonthlyTotals();
-            const totalDebt = getTotalDebt();
-
-            return (
-                <div className="app-container">
-                    <div className="header">
-                        <h1>💰 Finance Tracker</h1>
-                        <div className="version">v1.5.0 | Yearly Overview + Category Filters</div>
-                    </div>
-                    <div className="tab-navigation">
-                        <button className={`tab-button ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>📊 Dashboard</button>
-                        <button className={`tab-button ${activeTab === 'transactions' ? 'active' : ''}`} onClick={() => setActiveTab('transactions')}>💳 Transactions</button>
-                        <button className={`tab-button ${activeTab === 'recurring' ? 'active' : ''}`} onClick={() => setActiveTab('recurring')}>🔄 Recurring</button>
-                        <button className={`tab-button ${activeTab === 'debts' ? 'active' : ''}`} onClick={() => setActiveTab('debts')}>📉 Debt Tracking</button>
-                        <button className={`tab-button ${activeTab === 'payoff' ? 'active' : ''}`} onClick={() => setActiveTab('payoff')}>🎯 Payoff Strategies</button>
-                        <button className={`tab-button ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>⚙️ Settings</button>
-                    </div>
-                    <div className="tab-content">
-                        {activeTab === 'dashboard' && <DashboardTab totals={totals} totalDebt={totalDebt} currentMonth={currentMonth} transactions={transactions} recurringPayments={recurringPayments} debts={debts} />}
-                        {activeTab === 'transactions' && <TransactionsTab transactions={transactions} setTransactions={setTransactions} currentMonth={currentMonth} />}
-                        {activeTab === 'recurring' && <RecurringTab recurringPayments={recurringPayments} setRecurringPayments={setRecurringPayments} debts={debts} setDebts={setDebts} transactions={transactions} setTransactions={setTransactions} />}
-                        {activeTab === 'debts' && <DebtsTab debts={debts} setDebts={setDebts} />}
-                        {activeTab === 'payoff' && <PayoffStrategiesTab debts={debts} />}
-                        {activeTab === 'settings' && <SettingsTab exportData={exportData} importData={importData} clearAllData={clearAllData} />}
-                    </div>
-                </div>
-            );
-        }
-
-        function DashboardTab({ totals, totalDebt, currentMonth, transactions, recurringPayments, debts }) {
-            const monthName = currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' });
-            const { start, end } = getFinancialMonthRange(currentMonth);
-            const getYearlyTotals = () => {
-                const currentYear = new Date().getFullYear();
-                const yearlyTransactions = transactions.filter(t => { const tDate = new Date(t.date); return tDate.getFullYear() === currentYear; });
-                const income = yearlyTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + parseFloat(t.amount), 0);
-                const expenses = yearlyTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + parseFloat(t.amount), 0);
-                return { income, expenses, net: income - expenses, year: currentYear };
-            };
-            const yearlyTotals = getYearlyTotals();
-
-            return (
-                <div>
-                    <div className="yearly-overview income"><h2>📈 Total Income {yearlyTotals.year}</h2><div className="amount">{formatCurrency(yearlyTotals.income)}</div></div>
-                    <div className="yearly-overview expense"><h2>📉 Total Expenses {yearlyTotals.year}</h2><div className="amount">{formatCurrency(yearlyTotals.expenses)}</div></div>
-                    <div className="yearly-overview net"><h2>💰 Net {yearlyTotals.year}</h2><div className={`amount ${yearlyTotals.net >= 0 ? 'positive' : 'negative'}`}>{formatCurrency(yearlyTotals.net)}</div></div>
-                    <h2 style={{color: '#667eea', marginBottom: '20px', marginTop: '40px'}}>Current Month: {monthName}</h2>
-                    <p style={{color: '#a0aec0', marginBottom: '20px'}}>Period: {start.toLocaleDateString()} - {end.toLocaleDateString()}</p>
-                    <div className="summary-grid">
-                        <div className="summary-card"><h3>Total Income</h3><div className="amount">{formatCurrency(totals.income)}</div></div>
-                        <div className="summary-card"><h3>Total Expenses</h3><div className="amount">{formatCurrency(totals.expenses)}</div><div className="subtitle">{recurringPayments.length} recurring payments</div></div>
-                        <div className="summary-card"><h3>Net Balance</h3><div className="amount">{formatCurrency(totals.net)}</div><div className="subtitle">{totals.income > 0 ? ((totals.net / totals.income) * 100).toFixed(1) : 0}% of income</div></div>
-                        <div className="summary-card"><h3>Total Debt</h3><div className="amount">{formatCurrency(totalDebt)}</div><div className="subtitle">{debts.length} active debt{debts.length !== 1 ? 's' : ''}</div></div>
-                    </div>
-                    {debts.length > 0 && (
-                        <div className="section">
-                            <h2>Debt Overview</h2>
-                            <div className="debt-overview-grid">
-                                {debts.map(debt => {
-                                    const originalBalance = parseFloat(debt.originalBalance) || 0;
-                                    const currentBalance = parseFloat(debt.currentBalance) || 0;
-                                    const interestRate = parseFloat(debt.interestRate) || 0;
-                                    const progressPercent = originalBalance > 0 ? ((originalBalance - currentBalance) / originalBalance * 100) : 0;
-                                    return (
-                                        <div key={debt.id} className="debt-mini-card">
-                                            <h4>{debt.name}</h4>
-                                            <div className="debt-amount">{formatCurrency(currentBalance)}</div>
-                                            <div className="debt-info">{debt.category}</div>
-                                            <div className="debt-info">{interestRate.toFixed(2)}% APR</div>
-                                            <div className="progress-bar" style={{marginTop: '8px'}}><div className="progress-fill" style={{width: `${Math.min(progressPercent, 100)}%`}}></div></div>
-                                            <div className="debt-info" style={{marginTop: '5px'}}>{progressPercent.toFixed(1)}% paid off</div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    )}
-                </div>
-            );
-        }
-
-        function TransactionsTab({ transactions, setTransactions, currentMonth }) {
-            const [formData, setFormData] = useState({ type: 'expense', amount: '', description: '', category: '', date: new Date().toISOString().split('T')[0] });
-            const [expandedMonths, setExpandedMonths] = useState({});
-            const [selectedCategory, setSelectedCategory] = useState('All');
-
-            const handleSubmit = (e) => {
-                e.preventDefault();
-                if (formData.amount && formData.description) {
-                    setTransactions([...transactions, { ...formData, amount: parseFloat(formData.amount), id: Date.now() }]);
-                    setFormData({ type: 'expense', amount: '', description: '', category: '', date: new Date().toISOString().split('T')[0] });
-                }
-            };
-
-            const deleteTransaction = (id) => setTransactions(transactions.filter(t => t.id !== id));
-            const toggleMonth = (monthKey) => setExpandedMonths(prev => ({ ...prev, [monthKey]: !prev[monthKey] }));
-            const getAllCategories = () => { const categories = new Set(); transactions.forEach(t => { if (t.category) categories.add(t.category); }); return ['All', ...Array.from(categories).sort()]; };
-            const filterTransactionsByCategory = (transactionsList) => selectedCategory === 'All' ? transactionsList : transactionsList.filter(t => t.category === selectedCategory);
-            const groupTransactionsByMonth = () => {
-                const grouped = {};
-                const filteredTransactions = filterTransactionsByCategory(transactions);
-                filteredTransactions.forEach(transaction => {
-                    const date = new Date(transaction.date);
-                    const day = date.getDate();
-                    let financialMonth, financialYear;
-                    if (day >= 28) { financialMonth = date.getMonth() + 1; financialYear = date.getFullYear(); if (financialMonth > 11) { financialMonth = 0; financialYear++; } } else { financialMonth = date.getMonth(); financialYear = date.getFullYear(); }
-                    const monthKey = `${financialYear}-${String(financialMonth + 1).padStart(2, '0')}`;
-                    const monthLabel = new Date(financialYear, financialMonth, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-                    if (!grouped[monthKey]) { grouped[monthKey] = { label: monthLabel, transactions: [], income: 0, expenses: 0 }; }
-                    grouped[monthKey].transactions.push(transaction);
-                    const amount = parseFloat(transaction.amount) || 0;
-                    if (transaction.type === 'income') { grouped[monthKey].income += amount; } else { grouped[monthKey].expenses += amount; }
+                  }
+                  return t;
                 });
-                return Object.entries(grouped).sort((a, b) => b[0].localeCompare(a[0]));
-            };
-
-            const categories = getAllCategories();
-            const monthlyGroups = groupTransactionsByMonth();
-
-            return (
-                <div>
-                    <div className="section">
-                        <h2>Add New Transaction</h2>
-                        <form onSubmit={handleSubmit}>
-                            <div className="form-row">
-                                <div className="form-group"><label>Type</label><select value={formData.type} onChange={(e) => setFormData({...formData, type: e.target.value})}><option value="income">Income</option><option value="expense">Expense</option></select></div>
-                                <div className="form-group"><label>Amount</label><input type="number" step="0.01" value={formData.amount} onChange={(e) => setFormData({...formData, amount: e.target.value})} placeholder="0.00" required /></div>
-                                <div className="form-group"><label>Date</label><input type="date" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} required /></div>
-                            </div>
-                            <div className="form-row">
-                                <div className="form-group"><label>Description</label><input type="text" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} placeholder="e.g., Grocery shopping" required /></div>
-                                <div className="form-group"><label>Category</label><input type="text" value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})} placeholder="e.g., Food, Utilities" /></div>
-                            </div>
-                            <button type="submit">Add Transaction</button>
-                        </form>
-                    </div>
-                    <div className="section">
-                        <h2>Transaction History</h2>
-                        <div className="category-filters">
-                            {categories.map(category => (
-                                <button key={category} className={`category-filter-btn ${selectedCategory === category ? 'active' : ''}`} onClick={() => setSelectedCategory(category)}>{category}</button>
-                            ))}
-                        </div>
-                        {monthlyGroups.length === 0 ? (
-                            <p style={{color: '#a0aec0', textAlign: 'center', padding: '20px'}}>No transactions {selectedCategory !== 'All' ? `in category "${selectedCategory}"` : 'yet'}.</p>
-                        ) : (
-                            monthlyGroups.map(([monthKey, data]) => (
-                                <div key={monthKey} className="collapsible-section">
-                                    <div className="collapsible-header" onClick={() => toggleMonth(monthKey)}>
-                                        <div><h3>{data.label}</h3><p style={{fontSize: '0.9em', marginTop: '5px', opacity: 0.9}}>{data.transactions.length} transaction{data.transactions.length !== 1 ? 's' : ''} • Income: {formatCurrency(data.income)} • Expenses: {formatCurrency(data.expenses)}</p></div>
-                                        <div style={{fontSize: '1.5em'}}>{expandedMonths[monthKey] ? '▼' : '▶'}</div>
-                                    </div>
-                                    {expandedMonths[monthKey] && (
-                                        <div className="collapsible-content">
-                                            <div className="transaction-list">
-                                                {[...data.transactions].reverse().map((transaction) => (
-                                                    <div key={transaction.id} className={`transaction-item ${transaction.type}`}>
-                                                        <div className="item-details"><h4>{transaction.description}</h4><p>{transaction.category} • {new Date(transaction.date).toLocaleDateString()}</p></div>
-                                                        <div style={{display: 'flex', alignItems: 'center', gap: '15px'}}>
-                                                            <div className={`item-amount ${transaction.type === 'income' ? 'positive' : 'negative'}`}>{transaction.type === 'income' ? '+' : '-'}{formatCurrency(Math.abs(parseFloat(transaction.amount) || 0))}</div>
-                                                            <button className="danger" onClick={() => deleteTransaction(transaction.id)} style={{padding: '8px 16px', fontSize: '0.9em'}}>Delete</button>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            ))
-                        )}
-                    </div>
-                </div>
-            );
-        }
-
-        function RecurringTab({ recurringPayments, setRecurringPayments, debts, setDebts, transactions, setTransactions }) {
-            const [formData, setFormData] = useState({ name: '', amount: '', category: '', dueDay: '1', linkedDebt: '' });
-            const handleSubmit = (e) => { e.preventDefault(); if (formData.name && formData.amount) { setRecurringPayments([...recurringPayments, { ...formData, amount: parseFloat(formData.amount), dueDay: parseInt(formData.dueDay), id: Date.now() }]); setFormData({ name: '', amount: '', category: '', dueDay: '1', linkedDebt: '' }); } };
-            const deletePayment = (id) => setRecurringPayments(recurringPayments.filter(p => p.id !== id));
-            const processPayment = (payment) => {
-                const newTransaction = { type: 'expense', amount: payment.amount, description: `${payment.name} (Recurring)`, category: payment.category, date: new Date().toISOString().split('T')[0], id: Date.now() };
-                setTransactions([...transactions, newTransaction]);
-                if (payment.linkedDebt) { setDebts(debts.map(debt => { if (debt.id === parseInt(payment.linkedDebt)) { const newBalance = debt.currentBalance - payment.amount; return { ...debt, currentBalance: Math.max(0, newBalance) }; } return debt; })); }
-                alert(`Payment processed: ${payment.name} for ${formatCurrency(payment.amount)}`);
-            };
-
-            return (
-                <div>
-                    <div className="section">
-                        <h2>Add Recurring Payment</h2>
-                        <form onSubmit={handleSubmit}>
-                            <div className="form-row">
-                                <div className="form-group"><label>Payment Name</label><input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} placeholder="e.g., Mortgage, Netflix" required /></div>
-                                <div className="form-group"><label>Amount</label><input type="number" step="0.01" value={formData.amount} onChange={(e) => setFormData({...formData, amount: e.target.value})} placeholder="0.00" required /></div>
-                            </div>
-                            <div className="form-row">
-                                <div className="form-group"><label>Category</label><input type="text" value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})} placeholder="e.g., Housing, Entertainment" /></div>
-                                <div className="form-group"><label>Due Day (1-31)</label><input type="number" min="1" max="31" value={formData.dueDay} onChange={(e) => setFormData({...formData, dueDay: e.target.value})} required /></div>
-                                <div className="form-group"><label>Link to Debt (Optional)</label><select value={formData.linkedDebt} onChange={(e) => setFormData({...formData, linkedDebt: e.target.value})}><option value="">None</option>{debts.map(debt => (<option key={debt.id} value={debt.id}>{debt.name}</option>))}</select></div>
-                            </div>
-                            <button type="submit">Add Recurring Payment</button>
-                        </form>
-                    </div>
-                    <div className="section">
-                        <h2>Recurring Payments ({recurringPayments.length})</h2>
-                        <div className="payment-list">
-                            {recurringPayments.length === 0 ? (
-                                <p style={{color: '#a0aec0', textAlign: 'center', padding: '20px'}}>No recurring payments yet.</p>
-                            ) : (
-                                recurringPayments.map((payment) => {
-                                    const linkedDebt = payment.linkedDebt ? debts.find(d => d.id === parseInt(payment.linkedDebt)) : null;
-                                    return (
-                                        <div key={payment.id} className="payment-item">
-                                            <div className="item-details"><h4>{payment.name}</h4><p>{payment.category} • Due: Day {payment.dueDay}{linkedDebt && ` • Linked to: ${linkedDebt.name}`}</p></div>
-                                            <div style={{display: 'flex', alignItems: 'center', gap: '15px'}}>
-                                                <div className="item-amount negative">{formatCurrency(payment.amount)}</div>
-                                                <button onClick={() => processPayment(payment)} style={{padding: '8px 16px', fontSize: '0.9em'}}>Process</button>
-                                                <button className="danger" onClick={() => deletePayment(payment.id)} style={{padding: '8px 16px', fontSize: '0.9em'}}>Delete</button>
-                                            </div>
-                                        </div>
-                                    );
-                                })
-                            )}
-                        </div>
-                    </div>
-                </div>
-            );
-        }
-
-        function DebtsTab({ debts, setDebts }) {
-            const [formData, setFormData] = useState({ name: '', originalBalance: '', currentBalance: '', interestRate: '', minimumPayment: '', category: 'Credit Card' });
-            const [expandedDebt, setExpandedDebt] = useState(null);
-            const handleSubmit = (e) => { e.preventDefault(); if (formData.name && formData.currentBalance) { setDebts([...debts, { ...formData, originalBalance: parseFloat(formData.originalBalance) || parseFloat(formData.currentBalance), currentBalance: parseFloat(formData.currentBalance), interestRate: parseFloat(formData.interestRate) || 0, minimumPayment: parseFloat(formData.minimumPayment) || 0, id: Date.now() }]); setFormData({ name: '', originalBalance: '', currentBalance: '', interestRate: '', minimumPayment: '', category: 'Credit Card' }); } };
-            const deleteDebt = (id) => setDebts(debts.filter(d => d.id !== id));
-            const calculatePayoffMonths = (debt) => { if (debt.minimumPayment <= 0 || debt.currentBalance <= 0) return 'N/A'; const monthlyRate = (debt.interestRate / 100) / 12; let balance = debt.currentBalance; let months = 0; while (balance > 0 && months < 600) { const interest = balance * monthlyRate; const principal = debt.minimumPayment - interest; if (principal <= 0) return '∞ (payment < interest)'; balance -= principal; months++; } return months; };
-            const formatPayoffDate = (months) => { if (months === 'N/A' || typeof months === 'string') return months; const today = new Date(); const payoffDate = new Date(today.getFullYear(), today.getMonth() + months, today.getDate()); return payoffDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }); };
-
-            return (
-                <div>
-                    <div className="section">
-                        <h2>Add New Debt</h2>
-                        <form onSubmit={handleSubmit}>
-                            <div className="form-row">
-                                <div className="form-group"><label>Debt Name</label><input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} placeholder="e.g., Visa Card, Car Loan" required /></div>
-                                <div className="form-group"><label>Category</label><select value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})}><option value="Credit Card">Credit Card</option><option value="Auto Loan">Auto Loan</option><option value="Mortgage">Mortgage</option><option value="Personal Loan">Personal Loan</option><option value="Student Loan">Student Loan</option><option value="Other">Other</option></select></div>
-                            </div>
-                            <div className="form-row">
-                                <div className="form-group"><label>Original Balance</label><input type="number" step="0.01" value={formData.originalBalance} onChange={(e) => setFormData({...formData, originalBalance: e.target.value})} placeholder="0.00" /></div>
-                                <div className="form-group"><label>Current Balance</label><input type="number" step="0.01" value={formData.currentBalance} onChange={(e) => setFormData({...formData, currentBalance: e.target.value})} placeholder="0.00" required /></div>
-                                <div className="form-group"><label>Interest Rate (%)</label><input type="number" step="0.01" value={formData.interestRate} onChange={(e) => setFormData({...formData, interestRate: e.target.value})} placeholder="0.00" /></div>
-                                <div className="form-group"><label>Minimum Payment</label><input type="number" step="0.01" value={formData.minimumPayment} onChange={(e) => setFormData({...formData, minimumPayment: e.target.value})} placeholder="0.00" /></div>
-                            </div>
-                            <button type="submit">Add Debt</button>
-                        </form>
-                    </div>
-                    <div className="section">
-                        <h2>Active Debts ({debts.length})</h2>
-                        <div className="debt-list">
-                            {debts.length === 0 ? (
-                                <p style={{color: '#a0aec0', textAlign: 'center', padding: '20px'}}>No debts tracked yet.</p>
-                            ) : (
-                                debts.map((debt) => {
-                                    const payoffMonths = calculatePayoffMonths(debt);
-                                    const payoffDate = formatPayoffDate(payoffMonths);
-                                    const progressPercent = debt.originalBalance > 0 ? ((debt.originalBalance - debt.currentBalance) / debt.originalBalance * 100) : 0;
-                                    return (
-                                        <div key={debt.id} className="collapsible-section">
-                                            <div className="collapsible-header" onClick={() => setExpandedDebt(expandedDebt === debt.id ? null : debt.id)}>
-                                                <div><h3>{debt.name}</h3><p style={{fontSize: '0.9em', marginTop: '5px', opacity: 0.9}}>{debt.category} • Balance: {formatCurrency(debt.currentBalance)}</p></div>
-                                                <div style={{fontSize: '1.5em'}}>{expandedDebt === debt.id ? '▼' : '▶'}</div>
-                                            </div>
-                                            {expandedDebt === debt.id && (
-                                                <div className="collapsible-content">
-                                                    <div className="debt-details">
-                                                        <div className="debt-detail-item"><label>Original Balance</label><div className="value">{formatCurrency(debt.originalBalance)}</div></div>
-                                                        <div className="debt-detail-item"><label>Current Balance</label><div className="value">{formatCurrency(debt.currentBalance)}</div></div>
-                                                        <div className="debt-detail-item"><label>Interest Rate</label><div className="value">{debt.interestRate.toFixed(2)}%</div></div>
-                                                        <div className="debt-detail-item"><label>Minimum Payment</label><div className="value">{formatCurrency(debt.minimumPayment)}</div></div>
-                                                        <div className="debt-detail-item"><label>Payoff Timeline</label><div className="value">{typeof payoffMonths === 'number' ? `${payoffMonths} months` : payoffMonths}</div></div>
-                                                        <div className="debt-detail-item"><label>Projected Payoff</label><div className="value">{payoffDate}</div></div>
-                                                    </div>
-                                                    <div style={{marginTop: '15px'}}>
-                                                        <label style={{display: 'block', marginBottom: '8px', fontSize: '0.9em'}}>Progress: {progressPercent.toFixed(1)}% paid off</label>
-                                                        <div className="progress-bar"><div className="progress-fill" style={{width: `${Math.min(progressPercent, 100)}%`}}></div></div>
-                                                    </div>
-                                                    <div style={{marginTop: '20px', display: 'flex', gap: '10px'}}>
-                                                        <button className="danger" onClick={() => deleteDebt(debt.id)}>Delete Debt</button>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })
-                            )}
-                        </div>
-                    </div>
-                </div>
-            );
-        }
-
-        function PayoffStrategiesTab({ debts }) {
-            const [extraPayment, setExtraPayment] = useState(0);
-            const [selectedStrategy, setSelectedStrategy] = useState('snowball');
-            const calculatePayoffOrder = (sortedDebts) => {
-                const timeline = []; let currentMonth = 0; let totalInterest = 0; let remainingDebts = sortedDebts.map(d => ({ ...d })); const extra = parseFloat(extraPayment) || 0;
-                while (remainingDebts.length > 0) {
-                    let availableExtra = extra;
-                    remainingDebts = remainingDebts.filter(debt => {
-                        const monthlyRate = (debt.interestRate / 100) / 12; const interest = debt.currentBalance * monthlyRate; totalInterest += interest;
-                        let payment = debt.minimumPayment; if (debt === remainingDebts[0]) { payment += availableExtra; }
-                        const principal = payment - interest; debt.currentBalance -= principal;
-                        if (debt.currentBalance <= 0) { timeline.push({ name: debt.name, month: currentMonth, category: debt.category }); return false; }
-                        return true;
-                    });
-                    currentMonth++; if (currentMonth > 600) break;
+                setTransactions(convertedTransactions);
+                saveData(convertedTransactions);
+              }
+              if (data.debts) {
+                setDebts(data.debts);
+                saveDebts(data.debts);
+              }
+              if (data.recurringPayments) {
+                setRecurringPayments(data.recurringPayments);
+                saveRecurringPayments(data.recurringPayments);
+              }
+              if (data.paidRecurring) {
+                setPaidRecurring(data.paidRecurring);
+                savePaidRecurring(data.paidRecurring);
+              }
+              if (data.customExpenseCategories) {
+                setCustomExpenseCategories(data.customExpenseCategories);
+              }
+              if (data.customIncomeCategories) {
+                setCustomIncomeCategories(data.customIncomeCategories);
+              }
+              if (data.customExpenseCategories || data.customIncomeCategories) {
+                saveCustomCategories(data.customExpenseCategories || [], data.customIncomeCategories || []);
+              }
+              alert('Data imported successfully!');
+            } else if (Array.isArray(data)) {
+              // Old format - just transactions array
+              const convertedTransactions = data.map(t => {
+                if (t.month !== undefined && t.financialMonth === undefined) {
+                  return {
+                    ...t,
+                    financialMonth: t.month,
+                    financialYear: t.year
+                  };
                 }
-                return { timeline, totalMonths: currentMonth, totalInterest };
-            };
-            const calculateSnowball = () => { const sortedDebts = [...debts].map(d => ({ ...d, currentBalance: parseFloat(d.currentBalance), minimumPayment: parseFloat(d.minimumPayment), interestRate: parseFloat(d.interestRate) })).sort((a, b) => a.currentBalance - b.currentBalance); return calculatePayoffOrder(sortedDebts); };
-            const calculateAvalanche = () => { const sortedDebts = [...debts].map(d => ({ ...d, currentBalance: parseFloat(d.currentBalance), minimumPayment: parseFloat(d.minimumPayment), interestRate: parseFloat(d.interestRate) })).sort((a, b) => b.interestRate - a.interestRate); return calculatePayoffOrder(sortedDebts); };
-            const snowballResult = calculateSnowball(); const avalancheResult = calculateAvalanche(); const activeResult = selectedStrategy === 'snowball' ? snowballResult : avalancheResult;
-            const formatMonth = (monthNum) => { const date = new Date(); date.setMonth(date.getMonth() + monthNum); return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }); };
-
-            return (
-                <div>
-                    <div className="section">
-                        <h2>🎯 Debt Payoff Strategies</h2>
-                        <p style={{color: '#a0aec0', lineHeight: '1.6', marginBottom: '20px'}}>Compare two popular debt payoff strategies to find the best approach for your situation.</p>
-                        <div className="form-row" style={{marginBottom: '20px'}}>
-                            <div className="form-group"><label>Extra Monthly Payment</label><input type="number" step="0.01" value={extraPayment} onChange={(e) => setExtraPayment(e.target.value)} placeholder="0.00" /></div>
-                            <div className="form-group"><label>View Strategy</label><select value={selectedStrategy} onChange={(e) => setSelectedStrategy(e.target.value)}><option value="snowball">Debt Snowball</option><option value="avalanche">Debt Avalanche</option></select></div>
-                        </div>
+                return t;
+              });
+              setTransactions(convertedTransactions);
+              saveData(convertedTransactions);
+              alert('Transactions imported successfully!');
+            } else {
+              alert('Unrecognized file format');
+            }
+          } catch (error) {
+            alert('Error importing file: ' + error.message);
+          }
+        };
+        reader.readAsText(file);
+      };
+      
+      const clearAllData = () => {
+        const confirmation = prompt('Type "yes" to clear all data:');
+        if (confirmation?.toLowerCase() === 'yes') {
+          setTransactions([]);
+          setRecurringPayments([]);
+          setDebts([]);
+          setPaidRecurring({});
+          setCustomExpenseCategories([]);
+          setCustomIncomeCategories([]);
+          
+          storage.delete('finance-transactions');
+          storage.delete('recurring-payments');
+          storage.delete('debts');
+          storage.delete('paid-recurring');
+          storage.delete('custom-expense-categories');
+          storage.delete('custom-income-categories');
+          
+          setTimeout(() => alert('All data cleared!'), 100);
+        }
+      };
+      
+      // Calculate totals
+      const currentMonth = new Date().getMonth();
+      const currentYear = new Date().getFullYear();
+      const { financialMonth: currentFinancialMonth, financialYear: currentFinancialYear } = getFinancialMonth(getESTDateString());
+      
+      // Yearly totals (current financial year)
+      const thisYearTransactions = transactions.filter(t => t.financialYear === currentFinancialYear);
+      
+      const yearlyIncome = thisYearTransactions
+        .filter(t => t.type === 'income')
+        .reduce((sum, t) => sum + t.amount, 0);
+      
+      const yearlyExpenses = thisYearTransactions
+        .filter(t => t.type === 'expense')
+        .reduce((sum, t) => sum + t.amount, 0);
+      
+      const yearlyNet = yearlyIncome - yearlyExpenses;
+      const totalDebt = debts.reduce((sum, d) => sum + d.balance, 0);
+      const totalRecurringMonthly = recurringPayments.reduce((sum, p) => sum + p.amount, 0);
+      
+      // Render
+      return (
+        <div className="min-h-screen bg-slate-950 p-4 md:p-8">
+          <div className="max-w-7xl mx-auto">
+            <h1 className="text-4xl font-bold mb-8 text-center bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+              Finance Tracker
+            </h1>
+            
+            {/* Summary Cards - YEARLY */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+              <div className="bg-gradient-to-br from-green-500 to-green-700 rounded-lg p-6 shadow-lg">
+                <div className="flex items-center gap-3 mb-2">
+                  <TrendingUp size={24} />
+                  <h2 className="text-sm font-semibold">Yearly Income</h2>
+                </div>
+                <p className="text-3xl font-bold">${formatCurrency(yearlyIncome)}</p>
+                <p className="text-xs mt-1 opacity-80">Financial Year {currentFinancialYear}</p>
+              </div>
+              
+              <div className="bg-gradient-to-br from-red-500 to-red-700 rounded-lg p-6 shadow-lg">
+                <div className="flex items-center gap-3 mb-2">
+                  <TrendingDown size={24} />
+                  <h2 className="text-sm font-semibold">Yearly Expenses</h2>
+                </div>
+                <p className="text-3xl font-bold">${formatCurrency(yearlyExpenses)}</p>
+                <p className="text-xs mt-1 opacity-80">Financial Year {currentFinancialYear}</p>
+              </div>
+              
+              <div className={`bg-gradient-to-br ${yearlyNet >= 0 ? 'from-blue-500 to-blue-700' : 'from-orange-500 to-orange-700'} rounded-lg p-6 shadow-lg`}>
+                <div className="flex items-center gap-3 mb-2">
+                  <DollarSign size={24} />
+                  <h2 className="text-sm font-semibold">Yearly Net</h2>
+                </div>
+                <p className="text-3xl font-bold">${formatCurrency(Math.abs(yearlyNet))}</p>
+                <p className="text-xs mt-1">{yearlyNet >= 0 ? 'Surplus' : 'Deficit'}</p>
+              </div>
+            </div>
+            
+            {/* Header Actions */}
+            <div className="flex justify-end gap-3 mb-8">
+              <button onClick={exportData} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold flex items-center gap-2">
+                <Download size={18} /> Export Data
+              </button>
+              <label className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-semibold flex items-center gap-2 cursor-pointer">
+                <Upload size={18} /> Import Data
+                <input type="file" accept=".json" onChange={importData} className="hidden" />
+              </label>
+              <button onClick={clearAllData} className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-semibold">
+                Clear All Data
+              </button>
+            </div>
+            
+            {/* DEBT TRACKER */}
+            <div className="bg-slate-800 rounded-lg border border-slate-700 mb-8">
+              <div className="p-6 cursor-pointer hover:bg-slate-750 transition-colors" onClick={() => setIsDebtTrackerExpanded(!isDebtTrackerExpanded)}>
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    {isDebtTrackerExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                    <h2 className="text-2xl font-bold">Debt Tracker</h2>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-bold text-red-400">${formatCurrency(totalDebt)}</div>
+                    <div className="text-xs text-slate-400">{debts.length} debts</div>
+                  </div>
+                </div>
+              </div>
+              
+              {isDebtTrackerExpanded && (
+                <div className="px-6 pb-6">
+                  {debts.length === 0 ? (
+                    <div className="text-center py-8 text-slate-400">
+                      <p>No debts tracked yet.</p>
+                      <p className="text-sm mt-2">Click "Add Debt" below to get started!</p>
                     </div>
-                    {debts.length === 0 ? (
-                        <div className="section"><p style={{color: '#a0aec0', textAlign: 'center', padding: '40px'}}>No debts to analyze. Add debts in the Debt Tracking tab to see payoff strategies.</p></div>
-                    ) : (
-                        <>
-                            <div className="dashboard-grid">
-                                <div className="section"><h2>❄️ Debt Snowball</h2><p style={{color: '#a0aec0', fontSize: '0.9em', marginBottom: '15px'}}>Pay off smallest balances first for psychological wins</p><div style={{fontSize: '2em', fontWeight: '700', color: '#667eea', marginBottom: '5px'}}>{snowballResult.totalMonths} months</div><div style={{color: '#a0aec0', fontSize: '0.9em'}}>Total Interest: {formatCurrency(snowballResult.totalInterest)}</div><div style={{color: '#a0aec0', fontSize: '0.9em'}}>Debt-Free: {formatMonth(snowballResult.totalMonths)}</div></div>
-                                <div className="section"><h2>⛰️ Debt Avalanche</h2><p style={{color: '#a0aec0', fontSize: '0.9em', marginBottom: '15px'}}>Pay off highest interest rates first to save money</p><div style={{fontSize: '2em', fontWeight: '700', color: '#667eea', marginBottom: '5px'}}>{avalancheResult.totalMonths} months</div><div style={{color: '#a0aec0', fontSize: '0.9em'}}>Total Interest: {formatCurrency(avalancheResult.totalInterest)}</div><div style={{color: '#a0aec0', fontSize: '0.9em'}}>Debt-Free: {formatMonth(avalancheResult.totalMonths)}</div>{avalancheResult.totalInterest < snowballResult.totalInterest && (<div style={{background: '#28a745', color: 'white', padding: '10px', borderRadius: '5px', fontSize: '0.85em', textAlign: 'center', marginTop: '10px'}}>💰 Saves {formatCurrency(snowballResult.totalInterest - avalancheResult.totalInterest)} in interest</div>)}</div>
-                            </div>
-                            <div className="section">
-                                <h2>{selectedStrategy === 'snowball' ? '❄️ Snowball' : '⛰️ Avalanche'} Payoff Timeline</h2>
-                                <div style={{marginTop: '20px'}}>
-                                    {activeResult.timeline.map((item, index) => (
-                                        <div key={index} style={{background: '#1a1f2e', padding: '15px 20px', borderRadius: '8px', marginBottom: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderLeft: '4px solid #28a745'}}>
-                                            <div><h4 style={{color: '#e2e8f0', marginBottom: '5px'}}>{item.name}</h4><p style={{color: '#a0aec0', fontSize: '0.85em'}}>{item.category}</p></div>
-                                            <div style={{textAlign: 'right'}}><div style={{color: '#28a745', fontWeight: '700', fontSize: '1.1em'}}>Month {item.month}</div><div style={{color: '#a0aec0', fontSize: '0.85em'}}>{formatMonth(item.month)}</div></div>
-                                        </div>
-                                    ))}
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                      {debts.map(debt => {
+                        const monthlyInterest = debt.balance * debt.apr / 100 / 12;
+                        const principalPayment = debt.payment - monthlyInterest;
+                        const monthlyRate = debt.apr / 100 / 12;
+                        const monthsToPayoff = principalPayment > 0 ? Math.ceil(
+                          Math.log(debt.payment / (debt.payment - debt.balance * monthlyRate)) / Math.log(1 + monthlyRate)
+                        ) : 999;
+                        const yearsToPayoff = Math.floor(monthsToPayoff / 12);
+                        const remainingMonths = monthsToPayoff % 12;
+                        const payoffDate = new Date();
+                        payoffDate.setMonth(payoffDate.getMonth() + monthsToPayoff);
+                        
+                        return (
+                          <div key={debt.id} className="bg-slate-900 rounded-lg p-4 border border-slate-700">
+                            <div className="flex justify-between items-start mb-3">
+                              <div>
+                                <h3 className="text-lg font-bold text-white">{debt.name}</h3>
+                                <div className="text-xs text-slate-400">Due: {debt.dueDay}{debt.dueDay === 1 ? 'st' : debt.dueDay === 2 ? 'nd' : debt.dueDay === 3 ? 'rd' : 'th'} of month</div>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <button onClick={() => deleteDebt(debt.id)} className="p-1 hover:bg-slate-700 rounded" title="Delete Debt">
+                                  <Trash2 size={16} className="text-red-400" />
+                                </button>
+                                <div className="text-right">
+                                  <div className="text-2xl font-bold text-red-400">${formatCurrency(debt.balance)}</div>
+                                  <div className="text-xs text-slate-400">Balance</div>
                                 </div>
+                              </div>
                             </div>
-                        </>
-                    )}
-                </div>
-            );
-        }
-
-        function SettingsTab({ exportData, importData, clearAllData }) {
-            return (
-                <div>
-                    <div className="section">
-                        <h2>Data Management</h2>
-                        <div className="controls">
-                            <button onClick={exportData}>💾 Export Data</button>
-                            <label style={{background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', padding: '12px 30px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, display: 'inline-block'}}>📁 Import Data<input type="file" accept=".json" onChange={importData} style={{display: 'none'}} /></label>
-                            <button className="danger" onClick={clearAllData}>🗑️ Clear All Data</button>
+                            
+                            <div className="grid grid-cols-2 gap-2 text-sm mb-3">
+                              <div className="bg-slate-800 rounded p-2">
+                                <div className="text-xs text-slate-400">APR</div>
+                                <div className="font-semibold text-blue-400">{debt.apr}%</div>
+                              </div>
+                              <div className="bg-slate-800 rounded p-2">
+                                <div className="text-xs text-slate-400">Payment</div>
+                                <div className="font-semibold text-purple-400">${formatCurrency(debt.payment)}</div>
+                              </div>
+                              <div className="bg-slate-800 rounded p-2">
+                                <div className="text-xs text-slate-400">Interest/Month</div>
+                                <div className="font-semibold text-yellow-400">${formatCurrency(monthlyInterest)}</div>
+                              </div>
+                              <div className="bg-slate-800 rounded p-2">
+                                <div className="text-xs text-slate-400">Principal/Month</div>
+                                <div className="font-semibold text-green-400">${formatCurrency(principalPayment)}</div>
+                              </div>
+                            </div>
+                            
+                            <div className="bg-slate-800 rounded-lg p-3 border-t border-slate-700">
+                              <div className="flex justify-between items-center mb-2">
+                                <div className="text-xs font-semibold text-slate-300">Payoff Projection</div>
+                                {monthsToPayoff < 999 ? (
+                                  <div className="text-xs text-blue-400">
+                                    {yearsToPayoff > 0 && `${yearsToPayoff}y `}{remainingMonths}mo
+                                  </div>
+                                ) : (
+                                  <div className="text-xs text-red-400">Interest Only</div>
+                                )}
+                              </div>
+                              
+                              {monthsToPayoff < 999 ? (
+                                <>
+                                  <div className="w-full bg-slate-700 rounded-full h-2 mb-2">
+                                    <div className="bg-gradient-to-r from-red-500 via-yellow-500 to-green-500 h-2 rounded-full" 
+                                      style={{ width: `${Math.min(100, ((debt.originalBalance - debt.balance) / debt.originalBalance) * 100)}%` }}></div>
+                                  </div>
+                                  <div className="text-xs text-slate-400">
+                                    <div className="flex justify-between">
+                                      <span>Payoff Date:</span>
+                                      <span className="text-slate-300">{payoffDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</span>
+                                    </div>
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="text-xs text-red-400">⚠️ Payment doesn't cover interest. Balance will grow.</div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  
+                  {/* Add Debt Button/Form */}
+                  <div className="mt-6">
+                    {!showAddDebt ? (
+                      <button onClick={() => setShowAddDebt(true)} className="w-full px-4 py-3 bg-green-600 hover:bg-green-700 rounded-lg font-semibold flex items-center justify-center gap-2">
+                        <Plus size={20} /> Add Debt
+                      </button>
+                    ) : (
+                      <div className="bg-slate-900 rounded-lg p-4 border border-slate-700">
+                        <h3 className="text-lg font-semibold mb-4">Add New Debt</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm text-slate-400 mb-1">Debt Name</label>
+                            <input type="text" value={newDebt.name} onChange={(e) => setNewDebt({...newDebt, name: e.target.value})} className="w-full px-3 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-green-500 focus:outline-none" placeholder="e.g., Credit Card" />
+                          </div>
+                          <div>
+                            <label className="block text-sm text-slate-400 mb-1">Current Balance ($)</label>
+                            <input type="number" value={newDebt.balance} onChange={(e) => setNewDebt({...newDebt, balance: e.target.value})} className="w-full px-3 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-green-500 focus:outline-none" placeholder="0.00" />
+                          </div>
+                          <div>
+                            <label className="block text-sm text-slate-400 mb-1">APR (%)</label>
+                            <input type="number" step="0.01" value={newDebt.apr} onChange={(e) => setNewDebt({...newDebt, apr: e.target.value})} className="w-full px-3 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-green-500 focus:outline-none" placeholder="0.00" />
+                          </div>
+                          <div>
+                            <label className="block text-sm text-slate-400 mb-1">Monthly Payment ($)</label>
+                            <input type="number" value={newDebt.payment} onChange={(e) => setNewDebt({...newDebt, payment: e.target.value})} className="w-full px-3 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-green-500 focus:outline-none" placeholder="0.00" />
+                          </div>
+                          <div>
+                            <label className="block text-sm text-slate-400 mb-1">Due Day</label>
+                            <input type="number" min="1" max="31" value={newDebt.dueDay} onChange={(e) => setNewDebt({...newDebt, dueDay: e.target.value})} className="w-full px-3 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-green-500 focus:outline-none" />
+                          </div>
                         </div>
-                        <p style={{marginTop: '20px', color: '#a0aec0', fontSize: '0.9em'}}>Export your data to save a backup, import previously exported data, or clear all data to start fresh.</p>
-                    </div>
-                    <div className="section">
-                        <h2>About</h2>
-                        <p style={{marginBottom: '15px', lineHeight: '1.6', color: '#e2e8f0'}}><strong>Finance Tracker v1.5.0</strong></p>
-                        <p style={{marginBottom: '10px', lineHeight: '1.6', color: '#a0aec0'}}>A comprehensive personal finance management tool with yearly overview, category filters, debt management, and payoff strategies.</p>
-                        <h3 style={{marginTop: '20px', marginBottom: '10px', color: '#667eea'}}>v1.5.0 Features:</h3>
-                        <ul style={{lineHeight: '1.8', color: '#a0aec0', marginLeft: '20px'}}>
-                            <li>Yearly income/expense totals on dashboard</li>
-                            <li>Category filters in transaction history</li>
-                            <li>Financial month grouping (28th-27th cycle)</li>
-                            <li>Dark mode interface</li>
-                            <li>Debt payoff strategies (Snowball & Avalanche)</li>
-                            <li>Import/export compatibility with old format</li>
-                        </ul>
-                    </div>
+                        <div className="flex gap-3 mt-4">
+                          <button onClick={addDebt} className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-semibold">Add Debt</button>
+                          <button onClick={() => { setShowAddDebt(false); setNewDebt({ name: '', balance: '', apr: '', payment: '', dueDay: 1 }); }} className="flex-1 px-4 py-2 bg-slate-600 hover:bg-slate-700 rounded-lg font-semibold">Cancel</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-            );
-        }
-
-        ReactDOM.render(<FinanceTracker />, document.getElementById('root'));
-    </script>
+              )}
+            </div>
+            
+            {/* RECURRING PAYMENTS */}
+            <div className="bg-slate-800 rounded-lg border border-slate-700 mb-8">
+              <div className="p-6 cursor-pointer hover:bg-slate-750 transition-colors" onClick={() => setIsRecurringExpanded(!isRecurringExpanded)}>
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    {isRecurringExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                    <h2 className="text-2xl font-bold flex items-center gap-2">
+                      <Calendar size={24} />
+                      Recurring Payments
+                    </h2>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-bold text-orange-400">${formatCurrency(totalRecurringMonthly)}</div>
+                    <div className="text-xs text-slate-400">{recurringPayments.filter(p => !isRecurringPaidThisMonth(p.id)).length} pending this month</div>
+                  </div>
+                </div>
+              </div>
+              
+              {isRecurringExpanded && (
+                <div className="px-6 pb-6">
+                  {recurringPayments.length === 0 ? (
+                    <div className="text-center py-8 text-slate-400">
+                      <p>No recurring payments yet.</p>
+                      <p className="text-sm mt-2">Click "Add Recurring Payment" below to get started!</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
+                      {recurringPayments.sort((a, b) => a.day - b.day).map(payment => {
+                        const isPaid = isRecurringPaidThisMonth(payment.id);
+                        return (
+                          <div key={payment.id} className={`p-4 rounded-lg border ${isPaid ? 'bg-slate-900 border-green-500/30' : 'bg-slate-900 border-slate-700'}`}>
+                            <div className="flex justify-between items-start mb-2">
+                              <div className="flex-1">
+                                <h4 className="font-semibold text-white">{payment.name}</h4>
+                                <p className="text-xs text-slate-400">{payment.category}</p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button onClick={() => deleteRecurringPayment(payment.id)} className="p-1 hover:bg-slate-700 rounded" title="Delete">
+                                  <Trash2 size={14} className="text-red-400" />
+                                </button>
+                                <span className={`text-xs px-2 py-1 rounded ${payment.auto ? 'bg-blue-500/20 text-blue-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
+                                  {payment.auto ? 'Auto' : 'Manual'}
+                                </span>
+                              </div>
+                            </div>
+                            {isPaid && <div className="text-xs text-green-400 mb-2">✓ Paid</div>}
+                            <div className="text-xl font-bold text-white mb-1">${formatCurrency(payment.amount)}</div>
+                            <div className="text-xs text-slate-400 mb-2">Due: {payment.day}{payment.day === 1 ? 'st' : payment.day === 2 ? 'nd' : payment.day === 3 ? 'rd' : 'th'}</div>
+                            {payment.varies && <div className="text-xs text-yellow-400 mb-2">Amount varies</div>}
+                            {!isPaid && (
+                              <button onClick={() => markRecurringAsPaid(payment)} className="w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded font-semibold text-sm">
+                                Mark as Paid
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  
+                  {/* Add Recurring Payment Button/Form */}
+                  <div className="mt-6">
+                    {!showAddRecurring ? (
+                      <button onClick={() => setShowAddRecurring(true)} className="w-full px-4 py-3 bg-green-600 hover:bg-green-700 rounded-lg font-semibold flex items-center justify-center gap-2">
+                        <Plus size={20} /> Add Recurring Payment
+                      </button>
+                    ) : (
+                      <div className="bg-slate-900 rounded-lg p-4 border border-slate-700">
+                        <h3 className="text-lg font-semibold mb-4">Add New Recurring Payment</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm text-slate-400 mb-1">Name</label>
+                            <input type="text" value={newRecurring.name} onChange={(e) => setNewRecurring({...newRecurring, name: e.target.value})} className="w-full px-3 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-green-500 focus:outline-none" placeholder="e.g., Netflix" />
+                          </div>
+                          <div>
+                            <label className="block text-sm text-slate-400 mb-1">Amount ($)</label>
+                            <input type="number" value={newRecurring.amount} onChange={(e) => setNewRecurring({...newRecurring, amount: e.target.value})} className="w-full px-3 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-green-500 focus:outline-none" placeholder="0.00" />
+                          </div>
+                          <div>
+                            <label className="block text-sm text-slate-400 mb-1">Category</label>
+                            <select value={newRecurring.category} onChange={(e) => setNewRecurring({...newRecurring, category: e.target.value})} className="w-full px-3 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-green-500 focus:outline-none">
+                              {expenseCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm text-slate-400 mb-1">Due Day</label>
+                            <input type="number" min="1" max="31" value={newRecurring.day} onChange={(e) => setNewRecurring({...newRecurring, day: e.target.value})} className="w-full px-3 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-green-500 focus:outline-none" />
+                          </div>
+                          <div>
+                            <label className="block text-sm text-slate-400 mb-1">Auto-add</label>
+                            <select value={newRecurring.auto} onChange={(e) => setNewRecurring({...newRecurring, auto: e.target.value === 'true'})} className="w-full px-3 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-green-500 focus:outline-none">
+                              <option value="true">Yes</option>
+                              <option value="false">No (Manual)</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm text-slate-400 mb-1">Amount Varies</label>
+                            <select value={newRecurring.varies} onChange={(e) => setNewRecurring({...newRecurring, varies: e.target.value === 'true'})} className="w-full px-3 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-green-500 focus:outline-none">
+                              <option value="false">No (Fixed)</option>
+                              <option value="true">Yes (Varies)</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div className="flex gap-3 mt-4">
+                          <button onClick={addRecurringPayment} className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-semibold">Add Payment</button>
+                          <button onClick={() => { setShowAddRecurring(false); setNewRecurring({ name: '', amount: '', category: 'Subscriptions', day: 1, auto: true, varies: false }); }} className="flex-1 px-4 py-2 bg-slate-600 hover:bg-slate-700 rounded-lg font-semibold">Cancel</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            {/* ADD TRANSACTION */}
+            <div className="bg-slate-800 rounded-lg border border-slate-700 mb-8">
+              <div className="p-6 cursor-pointer hover:bg-slate-750 transition-colors" onClick={() => setIsAddTransactionExpanded(!isAddTransactionExpanded)}>
+                <div className="flex items-center gap-3">
+                  {isAddTransactionExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                  <h2 className="text-2xl font-bold flex items-center gap-2">
+                    <PlusCircle size={24} />
+                    {editingId ? 'Edit Transaction' : 'Add Transaction'}
+                  </h2>
+                </div>
+              </div>
+              
+              {isAddTransactionExpanded && (
+                <div className="px-6 pb-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Type</label>
+                      <select value={type} onChange={(e) => setType(e.target.value)} className="w-full px-4 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-blue-500 focus:outline-none">
+                        <option value="expense">Expense</option>
+                        <option value="income">Income</option>
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Date</label>
+                      <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full px-4 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-blue-500 focus:outline-none" />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Description</label>
+                      <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What was this for?" className="w-full px-4 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-blue-500 focus:outline-none" />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Amount</label>
+                      <input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className="w-full px-4 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-blue-500 focus:outline-none" />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Category</label>
+                      <select value={showCustomCategory ? 'custom' : category} onChange={(e) => { if (e.target.value === 'custom') { setShowCustomCategory(true); setCategory(''); } else { setShowCustomCategory(false); setCategory(e.target.value); } }} className="w-full px-4 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-blue-500 focus:outline-none">
+                        <option value="">Select category</option>
+                        {(type === 'expense' ? expenseCategories : incomeCategories).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                        <option value="custom">+ Custom Category</option>
+                      </select>
+                    </div>
+                    
+                    {showCustomCategory && (
+                      <div>
+                        <label className="block text-sm font-medium mb-2">Custom Category</label>
+                        <input type="text" value={customCategory} onChange={(e) => setCustomCategory(e.target.value)} placeholder="Enter category name" className="w-full px-4 py-2 bg-slate-700 rounded-lg border border-slate-600 focus:border-blue-500 focus:outline-none" />
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="flex gap-3 mt-4">
+                    <button onClick={addTransaction} className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold text-lg">
+                      {editingId ? 'Update' : 'Add'} Transaction
+                    </button>
+                    {editingId && (
+                      <button onClick={() => { resetForm(); setEditingId(null); }} className="px-6 py-3 bg-slate-600 hover:bg-slate-700 rounded-lg font-semibold">Cancel</button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            {/* YEARLY CATEGORY ANALYSIS */}
+            {transactions.length > 0 && (
+              <div className="bg-slate-800 rounded-lg border border-slate-700 mb-8">
+                <div className="p-6 cursor-pointer hover:bg-slate-750 transition-colors" onClick={() => setIsYearlyAnalysisExpanded(!isYearlyAnalysisExpanded)}>
+                  <div className="flex items-center gap-3">
+                    {isYearlyAnalysisExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                    <h2 className="text-2xl font-bold">Yearly Category Analysis</h2>
+                  </div>
+                </div>
+                
+                {isYearlyAnalysisExpanded && (
+                  <div className="px-6 pb-6">
+                    {['expense', 'income'].map(txType => {
+                      const yearlyData = {};
+                      const yearlyTransactions = {};
+                      
+                      transactions.filter(t => t.type === txType).forEach(t => {
+                        const yearKey = t.financialYear;
+                        if (!yearlyData[yearKey]) yearlyData[yearKey] = {};
+                        if (!yearlyTransactions[yearKey]) yearlyTransactions[yearKey] = {};
+                        if (!yearlyData[yearKey][t.category]) {
+                          yearlyData[yearKey][t.category] = 0;
+                          yearlyTransactions[yearKey][t.category] = [];
+                        }
+                        yearlyData[yearKey][t.category] += t.amount;
+                        yearlyTransactions[yearKey][t.category].push(t);
+                      });
+                      
+                      return Object.keys(yearlyData).length > 0 && (
+                        <div key={txType} className="mb-6">
+                          <h3 className="text-xl font-semibold mb-4 capitalize text-white">{txType}s by Category</h3>
+                          {Object.keys(yearlyData).sort((a, b) => b - a).map(year => (
+                            <div key={year} className="mb-4">
+                              <h4 className="text-lg font-semibold mb-2 text-slate-300">{year}</h4>
+                              <div className="space-y-2">
+                                {Object.entries(yearlyData[year])
+                                  .sort((a, b) => b[1] - a[1])
+                                  .map(([category, amount]) => {
+                                    const categoryKey = `${txType}-${year}-${category}`;
+                                    const isExpanded = expandedCategories[categoryKey];
+                                    const categoryTransactions = yearlyTransactions[year][category];
+                                    
+                                    return (
+                                      <div key={category} className="bg-slate-900 rounded-lg overflow-hidden">
+                                        <div 
+                                          className="p-3 cursor-pointer hover:bg-slate-800 transition-colors"
+                                          onClick={() => setExpandedCategories(prev => ({ ...prev, [categoryKey]: !isExpanded }))}
+                                        >
+                                          <div className="flex justify-between items-center">
+                                            <div className="flex items-center gap-2">
+                                              {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                              <span className="font-medium">{category}</span>
+                                              <span className="text-xs text-slate-400">({categoryTransactions.length} transactions)</span>
+                                            </div>
+                                            <span className={`font-bold ${txType === 'income' ? 'text-green-400' : 'text-red-400'}`}>
+                                              ${formatCurrency(amount)}
+                                            </span>
+                                          </div>
+                                        </div>
+                                        
+                                        {isExpanded && (
+                                          <div className="px-3 pb-3 space-y-1">
+                                            {categoryTransactions.sort((a, b) => new Date(b.date) - new Date(a.date)).map(t => (
+                                              <div key={t.id} className="flex justify-between items-center p-2 bg-slate-800 rounded text-sm">
+                                                <div className="flex items-center gap-2">
+                                                  <span className="text-slate-300">{t.description}</span>
+                                                  <span className="text-slate-500 text-xs">{t.date}</span>
+                                                </div>
+                                                <span className={`font-semibold ${txType === 'income' ? 'text-green-400' : 'text-red-400'}`}>
+                                                  ${formatCurrency(t.amount)}
+                                                </span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {/* TRANSACTIONS LIST - MONTHLY BREAKDOWN */}
+            {transactions.length > 0 && (
+              <div className="bg-slate-800 rounded-lg border border-slate-700">
+                <div className="p-6">
+                  <h2 className="text-2xl font-bold mb-4">Transactions by Month</h2>
+                  {Object.entries(
+                    transactions.reduce((acc, t) => {
+                      const monthKey = `${t.financialYear}-${String(t.financialMonth).padStart(2, '0')}`;
+                      if (!acc[monthKey]) acc[monthKey] = [];
+                      acc[monthKey].push(t);
+                      return acc;
+                    }, {})
+                  )
+                  .sort((a, b) => b[0].localeCompare(a[0]))
+                  .map(([monthKey, monthTransactions]) => {
+                    const [year, month] = monthKey.split('-');
+                    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    const monthName = monthNames[parseInt(month)];
+                    
+                    const monthIncome = monthTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+                    const monthExpenses = monthTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+                    const monthNet = monthIncome - monthExpenses;
+                    const isExpanded = expandedMonths[monthKey] === true; // Default to collapsed
+                    
+                    return (
+                      <div key={monthKey} className="mb-6">
+                        <div 
+                          className="flex justify-between items-center mb-3 pb-2 border-b border-slate-700 cursor-pointer hover:bg-slate-700/30 p-2 rounded transition-colors"
+                          onClick={() => setExpandedMonths(prev => ({ ...prev, [monthKey]: !isExpanded }))}
+                        >
+                          <div className="flex items-center gap-3">
+                            {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                            <h3 className="text-xl font-semibold text-white">{monthName} {year}</h3>
+                          </div>
+                          <div className="flex gap-4 text-sm">
+                            <span className="text-green-400">Income: ${formatCurrency(monthIncome)}</span>
+                            <span className="text-red-400">Expenses: ${formatCurrency(monthExpenses)}</span>
+                            <span className={monthNet >= 0 ? 'text-blue-400' : 'text-orange-400'}>
+                              Net: ${formatCurrency(Math.abs(monthNet))} {monthNet >= 0 ? '↑' : '↓'}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        {isExpanded && (
+                          <div className="space-y-2">
+                            {monthTransactions.sort((a, b) => new Date(b.date) - new Date(a.date)).map(t => {
+                              // Check if this transaction matches a recurring payment
+                              const normalizeForMatch = (name) => name.toLowerCase().replace(/[^a-z0-9]/g, '');
+                              const isRecurring = recurringPayments.some(p => 
+                                normalizeForMatch(p.name) === normalizeForMatch(t.description)
+                              );
+                              
+                              return (
+                                <div key={t.id} className="flex justify-between items-center p-3 bg-slate-900 rounded-lg hover:bg-slate-700 transition-colors">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-3">
+                                      <span className={`px-2 py-1 rounded text-xs font-semibold ${t.type === 'income' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>{t.type}</span>
+                                      <span className="font-medium">{isRecurring && '🔄 '}{t.description}</span>
+                                      <span className="text-slate-400 text-sm">({t.category})</span>
+                                    </div>
+                                    <div className="text-sm text-slate-400 mt-1">{t.date}</div>
+                                  </div>
+                                  <div className="flex items-center gap-4">
+                                    <span className={`text-lg font-bold ${t.type === 'income' ? 'text-green-400' : 'text-red-400'}`}>
+                                      {t.type === 'income' ? '+' : '-'}${formatCurrency(t.amount)}
+                                    </span>
+                                    <button onClick={(e) => { e.stopPropagation(); editTransaction(t); }} className="p-2 hover:bg-slate-600 rounded transition-colors" title="Edit">
+                                      <Edit2 size={16} className="text-blue-400" />
+                                    </button>
+                                    <button onClick={(e) => { e.stopPropagation(); deleteTransaction(t.id); }} className="p-2 hover:bg-slate-600 rounded transition-colors" title="Delete">
+                                      <Trash2 size={16} />
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+          
+          {/* Version Number */}
+          <div className="fixed bottom-4 left-4 text-slate-500 text-xs">
+            v1.1.0
+          </div>
+        </div>
+      );
+    };
+    
+    // Render app
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<FinanceTracker />);
+  </script>
 </body>
 </html>
