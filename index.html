@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finance Tracker v1.8.5</title>
+    <title>Finance Tracker v1.9.5</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -110,45 +110,40 @@
             const [debts, setDebts] = useState([]);
             const [paidPayments, setPaidPayments] = useState({});
             const [currentMonth, setCurrentMonth] = useState(getCurrentFinancialMonth());
-            const hasAutoProcessed = useRef(false);
+            const lastProcessedDate = useRef(null);
 
             useEffect(() => {
-                const savedTransactions = localStorage.getItem('transactions');
-                const savedPayments = localStorage.getItem('recurringPayments');
-                const savedDebts = localStorage.getItem('debts');
-                const savedPaidPayments = localStorage.getItem('paidPayments');
-                if (savedTransactions) setTransactions(JSON.parse(savedTransactions));
-                if (savedPayments) setRecurringPayments(JSON.parse(savedPayments));
-                if (savedDebts) setDebts(JSON.parse(savedDebts));
-                if (savedPaidPayments) setPaidPayments(JSON.parse(savedPaidPayments));
+                // No localStorage - app starts empty
+                // Data must be imported via Import button
             }, []);
 
-            useEffect(() => { localStorage.setItem('transactions', JSON.stringify(transactions)); }, [transactions]);
-            useEffect(() => { localStorage.setItem('recurringPayments', JSON.stringify(recurringPayments)); }, [recurringPayments]);
-            useEffect(() => { localStorage.setItem('debts', JSON.stringify(debts)); }, [debts]);
-            useEffect(() => { localStorage.setItem('paidPayments', JSON.stringify(paidPayments)); }, [paidPayments]);
+            // No auto-save - use Export button to save data
+            // No auto-save - use Export button to save data
 
-            // Auto-process recurring payments when their due date passes (only on mount and month change)
+            // Auto-process recurring payments when their due date passes
             useEffect(() => {
-                if (recurringPayments.length === 0) {
-                    hasAutoProcessed.current = false;
+                const today = new Date().toDateString();
+                
+                // Only process once per day
+                if (lastProcessedDate.current === today) {
                     return;
                 }
                 
-                const monthKey = getMonthKey(currentMonth);
-                
-                // Prevent duplicate processing in the same month
-                if (hasAutoProcessed.current === monthKey) return;
-                hasAutoProcessed.current = monthKey;
-                
-                const today = new Date();
-                const { start } = getFinancialMonthRange(currentMonth);
-                
-                let newTransactions = [...transactions];
-                let newPaidPayments = {...paidPayments};
-                let hasChanges = false;
-                
-                recurringPayments.forEach(payment => {
+                // Small delay to let data load, then run auto-process
+                const timer = setTimeout(() => {
+                    if (recurringPayments.length === 0) return;
+                    
+                    lastProcessedDate.current = today; // Mark as processed for today
+                    
+                    const monthKey = getMonthKey(currentMonth);
+                    const todayDate = new Date();
+                    const { start } = getFinancialMonthRange(currentMonth);
+                    
+                    let newTransactions = [...transactions];
+                    let newPaidPayments = {...paidPayments};
+                    let hasChanges = false;
+                    
+                    recurringPayments.forEach(payment => {
                     // Skip if not auto-pay
                     if (!payment.auto) return;
                     
@@ -165,7 +160,7 @@
                     }
                     
                     // Check if due date has passed
-                    if (today >= paymentDate) {
+                    if (todayDate >= paymentDate) {
                         // Check if transaction already exists for this payment
                         const transactionExists = newTransactions.some(t => {
                             if (t.type !== 'expense') return false;
@@ -246,7 +241,10 @@
                     setPaidPayments(newPaidPayments);
                     setDebts([...debts]); // Save updated debts
                 }
-            }, [currentMonth]); // Only run on month change, not on every state update
+                }, 500); // Wait 500ms for data to load
+                
+                return () => clearTimeout(timer); // Cleanup
+            }, [currentMonth]); // Run on month change
 
             const getMonthlyTotals = () => {
                 const { start, end } = getFinancialMonthRange(currentMonth);
@@ -418,12 +416,11 @@
             };
 
             const clearAllData = () => {
-                if (confirm('Are you sure you want to clear all data? This cannot be undone.')) {
+                if (confirm('Are you sure you want to clear all data? This cannot be undone. Make sure you have exported your data first!')) {
                     setTransactions([]);
                     setRecurringPayments([]);
                     setDebts([]);
                     setPaidPayments({});
-                    localStorage.clear();
                 }
             };
 
@@ -435,7 +432,7 @@
                 <div className="app-container">
                     <div className="header">
                         <h1>💰 Finance Tracker</h1>
-                        <div className="version">v1.8.5 | How-To Guide in Settings</div>
+                        <div className="version">v1.9.5 | No localStorage - Working!</div>
                     </div>
                     <div className="tab-navigation">
                         <button className={`tab-button ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>📊 Dashboard</button>
@@ -468,6 +465,32 @@
                 return { income, expenses, net: income - expenses, year: currentYear };
             };
             const yearlyTotals = getYearlyTotals();
+
+            // Show welcome message if no data loaded
+            if (transactions.length === 0 && recurringPayments.length === 0 && debts.length === 0) {
+                return (
+                    <div>
+                        <div style={{textAlign: 'center', padding: '60px 20px', background: '#1a1f2e', borderRadius: '15px', margin: '40px auto', maxWidth: '600px'}}>
+                            <h2 style={{color: '#667eea', fontSize: '2em', marginBottom: '20px'}}>👋 Welcome to Finance Tracker!</h2>
+                            <p style={{color: '#a0aec0', fontSize: '1.1em', lineHeight: '1.8', marginBottom: '30px'}}>
+                                Your finance tracker starts empty. To begin tracking your finances, you'll need to import your data.
+                            </p>
+                            <div style={{background: '#0f1419', padding: '30px', borderRadius: '10px', textAlign: 'left'}}>
+                                <h3 style={{color: '#667eea', marginBottom: '15px'}}>📥 To Get Started:</h3>
+                                <ol style={{color: '#e2e8f0', lineHeight: '2', marginLeft: '20px'}}>
+                                    <li>Click the <strong style={{color: '#667eea'}}>⚙️ Settings</strong> tab above</li>
+                                    <li>Click <strong style={{color: '#28a745'}}>Import Data</strong></li>
+                                    <li>Select your finance data JSON file</li>
+                                    <li>Your dashboard will populate with all your data!</li>
+                                </ol>
+                            </div>
+                            <p style={{color: '#a0aec0', fontSize: '0.9em', marginTop: '30px', fontStyle: 'italic'}}>
+                                💡 No localStorage used - all data is managed through JSON import/export
+                            </p>
+                        </div>
+                    </div>
+                );
+            }
 
             return (
                 <div>
@@ -999,7 +1022,7 @@
                                                                         </div>
                                                                         <div style={{display: 'flex', justifyContent: 'space-between', paddingTop: '8px', borderTop: '1px solid #2d3748'}}>
                                                                             <span style={{color: '#a0aec0'}}>Balance:</span>
-                                                                            <span style={{color: '#e2e8f0', fontWeight: '600'}}>{formatCurrency(log.balanceBefore)} → {formatCurrency(log.balanceAfter)}</span>
+                                                                            <span style={{color: '#e2e8f0', fontWeight: '600'}}>{formatCurrency(log.balanceBefore)} to {formatCurrency(log.balanceAfter)}</span>
                                                                         </div>
                                                                     </div>
                                                                 ))}
@@ -1082,6 +1105,24 @@
         function SettingsTab({ exportData, importData, clearAllData }) {
             return (
                 <div>
+                    <div className="section" style={{background: 'linear-gradient(135deg, #667eea22 0%, #764ba222 100%)', border: '2px solid #667eea', padding: '25px'}}>
+                        <h2 style={{color: '#667eea', marginBottom: '15px'}}>⚡ Important: No Auto-Save</h2>
+                        <p style={{color: '#e2e8f0', fontSize: '1.05em', lineHeight: '1.8', marginBottom: '15px'}}>
+                            <strong>This app does NOT use localStorage.</strong> Your data exists only in memory during your session.
+                        </p>
+                        <div style={{background: '#0f1419', padding: '20px', borderRadius: '10px'}}>
+                            <h3 style={{color: '#667eea', marginBottom: '10px'}}>📋 Your Workflow:</h3>
+                            <ol style={{color: '#a0aec0', lineHeight: '2', marginLeft: '20px'}}>
+                                <li><strong style={{color: '#e2e8f0'}}>Start:</strong> Import your JSON file</li>
+                                <li><strong style={{color: '#e2e8f0'}}>Work:</strong> Add transactions, process payments, etc.</li>
+                                <li><strong style={{color: '#e2e8f0'}}>End:</strong> Export to save your changes</li>
+                                <li><strong style={{color: '#e2e8f0'}}>Next time:</strong> Import the latest export to continue</li>
+                            </ol>
+                        </div>
+                        <p style={{color: '#ffc107', fontSize: '0.95em', marginTop: '15px', fontWeight: '600'}}>
+                            ⚠️ Closing/refreshing the page without exporting = data is lost!
+                        </p>
+                    </div>
                     <div className="section">
                         <h2>Data Management</h2>
                         <div className="controls">
@@ -1111,7 +1152,7 @@
                         
                         <h3 style={{marginTop: '20px', marginBottom: '10px', color: '#667eea'}}>📊 Debt Transaction Logs</h3>
                         <p style={{marginBottom: '10px', lineHeight: '1.6', color: '#a0aec0'}}>
-                            <strong>Where to find:</strong> Go to Debts tab → Click on a debt to expand → Scroll to "Transaction History".<br/>
+                            <strong>Where to find:</strong> Go to Debts tab, Click on a debt to expand, Scroll to "Transaction History".<br/>
                             <strong>What it shows:</strong> Date, payment amount, interest charged, principal paid, and balance before/after.<br/>
                             <strong>Note:</strong> Only shows for debts with linked recurring payments that have been processed.
                         </p>
