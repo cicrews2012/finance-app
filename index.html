@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finance Tracker v1.9.5</title>
+    <title>Finance Tracker v1.9.6</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -95,6 +95,12 @@
         const { useState, useEffect, useRef } = React;
         const formatCurrency = (amount) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
         const parseLocalDate = (dateStr) => { const [year, month, day] = dateStr.split('-').map(Number); return new Date(year, month - 1, day); };
+        const getLocalDateString = (date = new Date()) => {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
         const getCurrentFinancialMonth = () => { const today = new Date(); const day = today.getDate(); const month = today.getMonth(); const year = today.getFullYear(); if (day >= 28) { return new Date(year, month + 1, 1); } else { return new Date(year, month, 1); } };
         const getFinancialMonthRange = (date) => { const month = date.getMonth(); const year = date.getFullYear(); const start = new Date(year, month - 1, 28); const end = new Date(year, month, 27, 23, 59, 59); return { start, end }; };
         const getMonthKey = (date) => { const d = new Date(date); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
@@ -195,7 +201,7 @@
                                 amount: parseFloat(payment.amount),
                                 description: `${payment.name} (Auto)`,
                                 category: payment.category,
-                                date: paymentDate.toISOString().split('T')[0],
+                                date: getLocalDateString(paymentDate),
                                 id: Date.now() + Math.random()
                             });
                             hasChanges = true;
@@ -218,7 +224,7 @@
                                 
                                 const transactionLog = debt.transactionLog || [];
                                 const logEntry = {
-                                    date: paymentDate.toISOString().split('T')[0],
+                                    date: getLocalDateString(paymentDate),
                                     paymentAmount: payment.amount,
                                     interestAccrued: interestAccrued,
                                     principalPaid: principalPaid,
@@ -320,7 +326,7 @@
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `finance-tracker-${new Date().toISOString().split('T')[0]}.json`;
+                a.download = `finance-tracker-${getLocalDateString()}.json`;
                 a.click();
             };
 
@@ -432,7 +438,7 @@
                 <div className="app-container">
                     <div className="header">
                         <h1>💰 Finance Tracker</h1>
-                        <div className="version">v1.9.5 | No localStorage - Working!</div>
+                        <div className="version">v1.9.6 | Fix: Use Local Timezone for All Dates</div>
                     </div>
                     <div className="tab-navigation">
                         <button className={`tab-button ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>📊 Dashboard</button>
@@ -551,7 +557,7 @@
         }
 
         function TransactionsTab({ transactions, setTransactions, currentMonth, expenseCategories, incomeCategories }) {
-            const [formData, setFormData] = useState({ type: 'expense', amount: '', description: '', category: '', date: new Date().toISOString().split('T')[0] });
+            const [formData, setFormData] = useState({ type: 'expense', amount: '', description: '', category: '', date: getLocalDateString() });
             const [expandedMonths, setExpandedMonths] = useState({});
             const [selectedCategory, setSelectedCategory] = useState('All');
             const [editingTransaction, setEditingTransaction] = useState(null);
@@ -567,7 +573,7 @@
                         return;
                     }
                     setTransactions([...transactions, { ...formData, category: finalCategory, amount: parseFloat(formData.amount), id: Date.now() }]);
-                    setFormData({ type: 'expense', amount: '', description: '', category: '', date: new Date().toISOString().split('T')[0] });
+                    setFormData({ type: 'expense', amount: '', description: '', category: '', date: getLocalDateString() });
                     setShowCustomCategory(false);
                     setCustomCategory('');
                 }
@@ -789,7 +795,7 @@
                 console.log('Linked debt ID:', payment.linkedDebt);
                 
                 const paymentKey = `${monthKey}-${payment.id}`;
-                const newTransaction = { type: 'expense', amount: payment.amount, description: `${payment.name} (Recurring)`, category: payment.category, date: new Date().toISOString().split('T')[0], id: Date.now() };
+                const newTransaction = { type: 'expense', amount: payment.amount, description: `${payment.name} (Recurring)`, category: payment.category, date: getLocalDateString(), id: Date.now() };
                 setTransactions([...transactions, newTransaction]);
                 setPaidPayments({...paidPayments, [paymentKey]: true});
                 
@@ -806,7 +812,7 @@
                             
                             const transactionLog = debt.transactionLog || [];
                             const logEntry = {
-                                date: new Date().toISOString().split('T')[0],
+                                date: getLocalDateString(),
                                 paymentAmount: payment.amount,
                                 interestAccrued: interestAccrued,
                                 principalPaid: principalPaid,
