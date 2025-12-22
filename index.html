@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finance Tracker v1.9.6</title>
+    <title>Finance Tracker v1.11.0</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -86,6 +86,18 @@
         .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
         .modal { background: #1a1f2e; border-radius: 15px; padding: 30px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; }
         .modal h2 { color: #667eea; margin-bottom: 20px; }
+        .budget-overview { background: linear-gradient(135deg, #28a74522 0%, #20c99722 100%); border: 2px solid #28a745; padding: 30px; border-radius: 15px; margin-bottom: 30px; }
+        .budget-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #2d3748; }
+        .budget-row:last-child { border-bottom: none; }
+        .budget-row.total { border-top: 3px solid #667eea; padding-top: 20px; margin-top: 15px; font-size: 1.3em; font-weight: 700; }
+        .budget-label { color: #a0aec0; font-size: 1.1em; }
+        .budget-label.total { color: #e2e8f0; }
+        .budget-value { font-size: 1.3em; font-weight: 700; color: #e2e8f0; }
+        .budget-value.positive { color: #28a745; }
+        .budget-value.negative { color: #dc3545; }
+        .budget-value.warning { color: #ffc107; }
+        .income-input-group { display: flex; gap: 15px; align-items: flex-end; margin-bottom: 30px; }
+        .income-input-group .form-group { flex: 1; margin-bottom: 0; }
         @media (max-width: 768px) { .tab-navigation { flex-wrap: wrap; } .tab-button { flex: 1 1 50%; } .summary-grid { grid-template-columns: 1fr; } }
     </style>
 </head>
@@ -116,6 +128,7 @@
             const [debts, setDebts] = useState([]);
             const [paidPayments, setPaidPayments] = useState({});
             const [currentMonth, setCurrentMonth] = useState(getCurrentFinancialMonth());
+            const [expectedMonthlyIncome, setExpectedMonthlyIncome] = useState(5000);
             const lastProcessedDate = useRef(null);
 
             useEffect(() => {
@@ -202,7 +215,8 @@
                                 description: `${payment.name} (Auto)`,
                                 category: payment.category,
                                 date: getLocalDateString(paymentDate),
-                                id: Date.now() + Math.random()
+                                id: Date.now() + Math.random(),
+                                isRecurring: true
                             });
                             hasChanges = true;
                         }
@@ -320,7 +334,10 @@
                         lastUpdated: d.lastUpdated,
                         recurringPaymentId: d.recurringPaymentId
                     })),
-                    paidPayments: paidPayments
+                    paidPayments: paidPayments,
+                    settings: {
+                        expectedMonthlyIncome: expectedMonthlyIncome
+                    }
                 };
                 const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
@@ -413,6 +430,12 @@
                             }
                             
                             if (data.paidPayments && !data.recurringPayments) setPaidPayments(data.paidPayments);
+                            
+                            // Import settings
+                            if (data.settings && data.settings.expectedMonthlyIncome) {
+                                setExpectedMonthlyIncome(data.settings.expectedMonthlyIncome);
+                            }
+                            
                             alert('Data imported successfully!');
                         } catch (error) { alert('Error importing data. Please check the file format.\n\nError: ' + error.message); }
                     };
@@ -427,6 +450,7 @@
                     setRecurringPayments([]);
                     setDebts([]);
                     setPaidPayments({});
+                    setExpectedMonthlyIncome(5000);
                 }
             };
 
@@ -438,10 +462,11 @@
                 <div className="app-container">
                     <div className="header">
                         <h1>💰 Finance Tracker</h1>
-                        <div className="version">v1.9.6 | Fix: Use Local Timezone for All Dates</div>
+                        <div className="version">v1.11.0 | Bulk Transaction Entry</div>
                     </div>
                     <div className="tab-navigation">
                         <button className={`tab-button ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>📊 Dashboard</button>
+                        <button className={`tab-button ${activeTab === 'budget' ? 'active' : ''}`} onClick={() => setActiveTab('budget')}>💵 Budget</button>
                         <button className={`tab-button ${activeTab === 'transactions' ? 'active' : ''}`} onClick={() => setActiveTab('transactions')}>💳 Transactions</button>
                         <button className={`tab-button ${activeTab === 'recurring' ? 'active' : ''}`} onClick={() => setActiveTab('recurring')}>🔄 Recurring</button>
                         <button className={`tab-button ${activeTab === 'debts' ? 'active' : ''}`} onClick={() => setActiveTab('debts')}>📉 Debt Tracking</button>
@@ -449,7 +474,8 @@
                         <button className={`tab-button ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>⚙️ Settings</button>
                     </div>
                     <div className="tab-content">
-                        {activeTab === 'dashboard' && <DashboardTab totals={totals} totalDebt={totalDebt} unpaidRecurring={unpaidRecurring} currentMonth={currentMonth} transactions={transactions} recurringPayments={recurringPayments} debts={debts} />}
+                        {activeTab === 'dashboard' && <DashboardTab totals={totals} totalDebt={totalDebt} unpaidRecurring={unpaidRecurring} currentMonth={currentMonth} transactions={transactions} recurringPayments={recurringPayments} debts={debts} expectedMonthlyIncome={expectedMonthlyIncome} importData={importData} />}
+                        {activeTab === 'budget' && <BudgetTab transactions={transactions} recurringPayments={recurringPayments} expectedMonthlyIncome={expectedMonthlyIncome} setExpectedMonthlyIncome={setExpectedMonthlyIncome} currentMonth={currentMonth} unpaidRecurring={unpaidRecurring} />}
                         {activeTab === 'transactions' && <TransactionsTab transactions={transactions} setTransactions={setTransactions} currentMonth={currentMonth} expenseCategories={expenseCategories} incomeCategories={incomeCategories} />}
                         {activeTab === 'recurring' && <RecurringTab recurringPayments={recurringPayments} setRecurringPayments={setRecurringPayments} debts={debts} setDebts={setDebts} transactions={transactions} setTransactions={setTransactions} paidPayments={paidPayments} setPaidPayments={setPaidPayments} currentMonth={currentMonth} />}
                         {activeTab === 'debts' && <DebtsTab debts={debts} setDebts={setDebts} />}
@@ -460,9 +486,34 @@
             );
         }
 
-        function DashboardTab({ totals, totalDebt, unpaidRecurring, currentMonth, transactions, recurringPayments, debts }) {
+        function DashboardTab({ totals, totalDebt, unpaidRecurring, currentMonth, transactions, recurringPayments, debts, expectedMonthlyIncome, importData }) {
+            const [debtsCollapsed, setDebtsCollapsed] = useState(false);
+            const fileInputRef = React.useRef(null); // Move ref to top level
             const monthName = currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' });
             const { start, end } = getFinancialMonthRange(currentMonth);
+            
+            // Simple Money Available calculation
+            // Income - Recurring = Money Left
+            const recurringTotal = recurringPayments
+                .filter(p => {
+                    let paymentDate;
+                    if (p.dueDay >= 28) {
+                        paymentDate = new Date(start.getFullYear(), start.getMonth(), p.dueDay);
+                    } else {
+                        paymentDate = new Date(start.getFullYear(), start.getMonth() + 1, p.dueDay);
+                    }
+                    return paymentDate >= start && paymentDate <= end;
+                })
+                .reduce((sum, p) => sum + parseFloat(p.amount), 0);
+            
+            const moneyLeft = expectedMonthlyIncome - recurringTotal;
+            
+            // Total Expenses - Recurring = Spent So Far
+            const spentSoFar = totals.expenses - recurringTotal;
+            
+            // Money Available = Money Left - Spent So Far - Unpaid Recurring (guaranteed to come out)
+            const moneyAvailable = moneyLeft - spentSoFar - unpaidRecurring;
+            
             const getYearlyTotals = () => {
                 const currentYear = new Date().getFullYear();
                 const yearlyTransactions = transactions.filter(t => { const tDate = parseLocalDate(t.date); return tDate.getFullYear() === currentYear; });
@@ -484,14 +535,48 @@
                             <div style={{background: '#0f1419', padding: '30px', borderRadius: '10px', textAlign: 'left'}}>
                                 <h3 style={{color: '#667eea', marginBottom: '15px'}}>📥 To Get Started:</h3>
                                 <ol style={{color: '#e2e8f0', lineHeight: '2', marginLeft: '20px'}}>
-                                    <li>Click the <strong style={{color: '#667eea'}}>⚙️ Settings</strong> tab above</li>
-                                    <li>Click <strong style={{color: '#28a745'}}>Import Data</strong></li>
+                                    <li>Click <strong style={{color: '#28a745'}}>Import Data</strong> below</li>
                                     <li>Select your finance data JSON file</li>
                                     <li>Your dashboard will populate with all your data!</li>
                                 </ol>
                             </div>
+                            <input 
+                                ref={fileInputRef}
+                                type="file" 
+                                accept=".json" 
+                                onChange={importData} 
+                                style={{display: 'none'}} 
+                            />
+                            <button 
+                                onClick={() => fileInputRef.current?.click()}
+                                style={{
+                                    marginTop: '30px',
+                                    padding: '15px 40px',
+                                    fontSize: '1.1em',
+                                    background: 'linear-gradient(135deg, #28a745 0%, #20c997 100%)',
+                                    border: 'none',
+                                    borderRadius: '10px',
+                                    color: 'white',
+                                    fontWeight: '700',
+                                    cursor: 'pointer',
+                                    transition: 'transform 0.2s, box-shadow 0.2s'
+                                }}
+                                onMouseOver={(e) => {
+                                    e.currentTarget.style.transform = 'translateY(-2px)';
+                                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(40, 167, 69, 0.4)';
+                                }}
+                                onMouseOut={(e) => {
+                                    e.currentTarget.style.transform = 'translateY(0)';
+                                    e.currentTarget.style.boxShadow = 'none';
+                                }}
+                            >
+                                📁 Import Data
+                            </button>
                             <p style={{color: '#a0aec0', fontSize: '0.9em', marginTop: '30px', fontStyle: 'italic'}}>
                                 💡 No localStorage used - all data is managed through JSON import/export
+                            </p>
+                            <p style={{color: '#667eea', fontSize: '0.95em', marginTop: '15px', fontWeight: '600'}}>
+                                📖 New user? Check the <strong>⚙️ Settings</strong> tab for first-time setup instructions!
                             </p>
                         </div>
                     </div>
@@ -509,6 +594,7 @@
                         <div className="summary-card"><h3>Total Income</h3><div className="amount">{formatCurrency(totals.income)}</div></div>
                         <div className="summary-card"><h3>Total Expenses</h3><div className="amount">{formatCurrency(totals.expenses)}</div><div className="subtitle">From transactions only</div></div>
                         <div className="summary-card"><h3>Net Balance</h3><div className="amount">{formatCurrency(totals.net)}</div><div className="subtitle">{totals.income > 0 ? ((totals.net / totals.income) * 100).toFixed(1) : 0}% of income</div></div>
+                        <div className="summary-card" style={{background: moneyAvailable >= 0 ? 'linear-gradient(135deg, #28a745 0%, #20c997 100%)' : 'linear-gradient(135deg, #dc3545 0%, #c92a2a 100%)'}}><h3>💰 Money Available</h3><div className="amount">{formatCurrency(moneyAvailable)}</div><div className="subtitle">After bills & spending<br/><span style={{fontSize: '0.85em', opacity: 0.8}}>(Based on expected income)</span></div></div>
                         <div className="summary-card"><h3>Unpaid Recurring</h3><div className="amount">{formatCurrency(unpaidRecurring)}</div><div className="subtitle">Still due this month</div></div>
                     </div>
                     {transactions.length > 0 && (
@@ -529,26 +615,43 @@
                             </div>
                         </div>
                     )}
-                    {debts.length > 0 && (
+                    {transactions.filter(t => {
+                        const tDate = parseLocalDate(t.date);
+                        return tDate >= start && tDate <= end && t.type === 'expense';
+                    }).length > 0 && (
                         <div className="section">
-                            <h2>Debt Overview</h2>
-                            <div className="debt-overview-grid">
-                                {debts.map(debt => {
-                                    const originalBalance = parseFloat(debt.originalBalance) || 0;
-                                    const currentBalance = parseFloat(debt.currentBalance) || 0;
-                                    const interestRate = parseFloat(debt.interestRate) || 0;
-                                    const progressPercent = originalBalance > 0 ? ((originalBalance - currentBalance) / originalBalance * 100) : 0;
-                                    return (
-                                        <div key={debt.id} className="debt-mini-card">
-                                            <h4>{debt.name}</h4>
-                                            <div className="debt-amount">{formatCurrency(currentBalance)}</div>
-                                            <div className="debt-info">{debt.category}</div>
-                                            <div className="debt-info">{interestRate.toFixed(2)}% APR</div>
-                                            <div className="progress-bar" style={{marginTop: '8px'}}><div className="progress-fill" style={{width: `${Math.min(progressPercent, 100)}%`}}></div></div>
-                                            <div className="debt-info" style={{marginTop: '5px'}}>{progressPercent.toFixed(1)}% paid off</div>
-                                        </div>
-                                    );
-                                })}
+                            <h2>💳 Spending by Category This Month</h2>
+                            <div style={{marginTop: '20px'}}>
+                                {(() => {
+                                    const categoryTotals = {};
+                                    transactions.filter(t => {
+                                        const tDate = parseLocalDate(t.date);
+                                        return tDate >= start && tDate <= end && t.type === 'expense';
+                                    }).forEach(t => {
+                                        categoryTotals[t.category] = (categoryTotals[t.category] || 0) + parseFloat(t.amount);
+                                    });
+                                    
+                                    const totalSpent = Object.values(categoryTotals).reduce((sum, val) => sum + val, 0);
+                                    const sortedCategories = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]).slice(0, 8);
+                                    
+                                    return sortedCategories.map(([category, amount]) => {
+                                        const percentage = (amount / totalSpent) * 100;
+                                        return (
+                                            <div key={category} style={{marginBottom: '15px'}}>
+                                                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px'}}>
+                                                    <span style={{color: '#e2e8f0', fontWeight: '600'}}>{category}</span>
+                                                    <span style={{color: '#667eea', fontWeight: '700', fontSize: '1.1em'}}>{formatCurrency(amount)}</span>
+                                                </div>
+                                                <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
+                                                    <div style={{flex: 1, height: '12px', background: '#2d3748', borderRadius: '6px', overflow: 'hidden'}}>
+                                                        <div style={{width: `${percentage}%`, height: '100%', background: 'linear-gradient(90deg, #667eea, #764ba2)', transition: 'width 0.3s ease'}}></div>
+                                                    </div>
+                                                    <span style={{color: '#a0aec0', fontSize: '0.9em', minWidth: '45px', textAlign: 'right'}}>{percentage.toFixed(1)}%</span>
+                                                </div>
+                                            </div>
+                                        );
+                                    });
+                                })()}
                             </div>
                         </div>
                     )}
@@ -560,9 +663,16 @@
             const [formData, setFormData] = useState({ type: 'expense', amount: '', description: '', category: '', date: getLocalDateString() });
             const [expandedMonths, setExpandedMonths] = useState({});
             const [selectedCategory, setSelectedCategory] = useState('All');
+            const [searchPlace, setSearchPlace] = useState('');
             const [editingTransaction, setEditingTransaction] = useState(null);
             const [showCustomCategory, setShowCustomCategory] = useState(false);
             const [customCategory, setCustomCategory] = useState('');
+            const [showBulkEntry, setShowBulkEntry] = useState(false);
+            const [bulkRows, setBulkRows] = useState([
+                { id: 1, date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense' },
+                { id: 2, date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense' },
+                { id: 3, date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense' }
+            ]);
 
             const handleSubmit = (e) => {
                 e.preventDefault();
@@ -577,6 +687,59 @@
                     setShowCustomCategory(false);
                     setCustomCategory('');
                 }
+            };
+
+            const addBulkRow = () => {
+                setBulkRows([...bulkRows, { 
+                    id: Date.now(), 
+                    date: getLocalDateString(), 
+                    description: '', 
+                    amount: '', 
+                    category: '', 
+                    type: 'expense' 
+                }]);
+            };
+
+            const removeBulkRow = (id) => {
+                if (bulkRows.length > 1) {
+                    setBulkRows(bulkRows.filter(row => row.id !== id));
+                }
+            };
+
+            const updateBulkRow = (id, field, value) => {
+                setBulkRows(bulkRows.map(row => 
+                    row.id === id ? { ...row, [field]: value } : row
+                ));
+            };
+
+            const handleBulkSubmit = (e) => {
+                e.preventDefault();
+                const validRows = bulkRows.filter(row => row.description && row.amount && row.category);
+                
+                if (validRows.length === 0) {
+                    alert('Please fill out at least one complete transaction (description, amount, and category).');
+                    return;
+                }
+
+                const newTransactions = validRows.map(row => ({
+                    type: row.type,
+                    amount: parseFloat(row.amount),
+                    description: row.description,
+                    category: row.category,
+                    date: row.date,
+                    id: Date.now() + Math.random()
+                }));
+
+                setTransactions([...transactions, ...newTransactions]);
+                
+                // Reset bulk rows
+                setBulkRows([
+                    { id: Date.now() + 1, date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense' },
+                    { id: Date.now() + 2, date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense' },
+                    { id: Date.now() + 3, date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense' }
+                ]);
+                
+                alert(`Successfully added ${newTransactions.length} transaction${newTransactions.length !== 1 ? 's' : ''}!`);
             };
 
             const handleEdit = (transaction) => {
@@ -611,13 +774,156 @@
             };
 
             const categories = getAllCategories();
-            const monthlyGroups = groupTransactionsByMonth();
+            
+            // Normalize string for smart matching (remove spaces, punctuation, lowercase)
+            const normalizeForSearch = (str) => {
+                return str.toLowerCase().replace(/[\s\-_.]/g, '');
+            };
+            
+            // Filter transactions by search place with smart matching
+            const filterByPlace = (transactionsList) => {
+                if (!searchPlace.trim()) return transactionsList;
+                const normalizedSearch = normalizeForSearch(searchPlace);
+                return transactionsList.filter(t => 
+                    normalizeForSearch(t.description).includes(normalizedSearch)
+                );
+            };
+            
+            const filteredByCategory = filterTransactionsByCategory(transactions);
+            const filteredByPlace = filterByPlace(filteredByCategory);
+            
+            // Calculate totals for search results
+            const searchTotals = searchPlace.trim() ? {
+                thisMonth: filteredByPlace.filter(t => {
+                    const tDate = parseLocalDate(t.date);
+                    const { start, end } = getFinancialMonthRange(currentMonth);
+                    return tDate >= start && tDate <= end;
+                }).reduce((sum, t) => sum + parseFloat(t.amount), 0),
+                allTime: filteredByPlace.reduce((sum, t) => sum + parseFloat(t.amount), 0)
+            } : null;
+            
+            const groupTransactionsByMonthFiltered = () => {
+                const grouped = {};
+                filteredByPlace.forEach(transaction => {
+                    const date = parseLocalDate(transaction.date);
+                    const day = date.getDate();
+                    let financialMonth, financialYear;
+                    if (day >= 28) { financialMonth = date.getMonth() + 1; financialYear = date.getFullYear(); if (financialMonth > 11) { financialMonth = 0; financialYear++; } } else { financialMonth = date.getMonth(); financialYear = date.getFullYear(); }
+                    const monthKey = `${financialYear}-${String(financialMonth + 1).padStart(2, '0')}`;
+                    const monthLabel = new Date(financialYear, financialMonth, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                    if (!grouped[monthKey]) { grouped[monthKey] = { label: monthLabel, transactions: [], income: 0, expenses: 0 }; }
+                    grouped[monthKey].transactions.push(transaction);
+                    const amount = parseFloat(transaction.amount) || 0;
+                    if (transaction.type === 'income') { grouped[monthKey].income += amount; } else { grouped[monthKey].expenses += amount; }
+                });
+                return Object.entries(grouped).sort((a, b) => b[0].localeCompare(a[0]));
+            };
+            
+            const monthlyGroups = groupTransactionsByMonthFiltered();
 
             return (
                 <div>
                     <div className="section">
-                        <h2>Add New Transaction</h2>
-                        <form onSubmit={handleSubmit}>
+                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px'}}>
+                            <h2>{showBulkEntry ? 'Add Multiple Transactions' : 'Add New Transaction'}</h2>
+                            <button 
+                                type="button"
+                                onClick={() => setShowBulkEntry(!showBulkEntry)}
+                                style={{background: showBulkEntry ? '#6c757d' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'}}
+                            >
+                                {showBulkEntry ? '← Single Entry' : '📝 Bulk Entry'}
+                            </button>
+                        </div>
+                        
+                        {showBulkEntry ? (
+                            <form onSubmit={handleBulkSubmit}>
+                                <div style={{overflowX: 'auto'}}>
+                                    <table style={{width: '100%', borderCollapse: 'collapse', marginBottom: '20px'}}>
+                                        <thead>
+                                            <tr style={{background: '#1a1f2e'}}>
+                                                <th style={{padding: '12px', textAlign: 'left', color: '#667eea', border: '1px solid #2d3748'}}>Type</th>
+                                                <th style={{padding: '12px', textAlign: 'left', color: '#667eea', border: '1px solid #2d3748'}}>Date</th>
+                                                <th style={{padding: '12px', textAlign: 'left', color: '#667eea', border: '1px solid #2d3748'}}>Description</th>
+                                                <th style={{padding: '12px', textAlign: 'left', color: '#667eea', border: '1px solid #2d3748'}}>Amount</th>
+                                                <th style={{padding: '12px', textAlign: 'left', color: '#667eea', border: '1px solid #2d3748'}}>Category</th>
+                                                <th style={{padding: '12px', textAlign: 'center', color: '#667eea', border: '1px solid #2d3748', width: '80px'}}>Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {bulkRows.map(row => (
+                                                <tr key={row.id} style={{background: '#0f1419'}}>
+                                                    <td style={{padding: '8px', border: '1px solid #2d3748'}}>
+                                                        <select 
+                                                            value={row.type} 
+                                                            onChange={(e) => updateBulkRow(row.id, 'type', e.target.value)}
+                                                            style={{width: '100%', padding: '8px'}}
+                                                        >
+                                                            <option value="expense">Expense</option>
+                                                            <option value="income">Income</option>
+                                                        </select>
+                                                    </td>
+                                                    <td style={{padding: '8px', border: '1px solid #2d3748'}}>
+                                                        <input 
+                                                            type="date" 
+                                                            value={row.date} 
+                                                            onChange={(e) => updateBulkRow(row.id, 'date', e.target.value)}
+                                                            style={{width: '100%', padding: '8px'}}
+                                                        />
+                                                    </td>
+                                                    <td style={{padding: '8px', border: '1px solid #2d3748'}}>
+                                                        <input 
+                                                            type="text" 
+                                                            value={row.description} 
+                                                            onChange={(e) => updateBulkRow(row.id, 'description', e.target.value)}
+                                                            placeholder="e.g., 7 Brew"
+                                                            style={{width: '100%', padding: '8px'}}
+                                                        />
+                                                    </td>
+                                                    <td style={{padding: '8px', border: '1px solid #2d3748'}}>
+                                                        <input 
+                                                            type="number" 
+                                                            step="0.01" 
+                                                            value={row.amount} 
+                                                            onChange={(e) => updateBulkRow(row.id, 'amount', e.target.value)}
+                                                            placeholder="0.00"
+                                                            style={{width: '100%', padding: '8px'}}
+                                                        />
+                                                    </td>
+                                                    <td style={{padding: '8px', border: '1px solid #2d3748'}}>
+                                                        <select 
+                                                            value={row.category} 
+                                                            onChange={(e) => updateBulkRow(row.id, 'category', e.target.value)}
+                                                            style={{width: '100%', padding: '8px'}}
+                                                        >
+                                                            <option value="">Select...</option>
+                                                            {(row.type === 'expense' ? expenseCategories : incomeCategories).map(cat => 
+                                                                <option key={cat} value={cat}>{cat}</option>
+                                                            )}
+                                                        </select>
+                                                    </td>
+                                                    <td style={{padding: '8px', border: '1px solid #2d3748', textAlign: 'center'}}>
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => removeBulkRow(row.id)}
+                                                            className="danger"
+                                                            style={{padding: '6px 12px', fontSize: '0.9em'}}
+                                                            disabled={bulkRows.length === 1}
+                                                        >
+                                                            ✕
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div style={{display: 'flex', gap: '10px', marginTop: '15px'}}>
+                                    <button type="button" onClick={addBulkRow} className="secondary">+ Add Row</button>
+                                    <button type="submit">💾 Save All ({bulkRows.filter(r => r.description && r.amount && r.category).length} ready)</button>
+                                </div>
+                            </form>
+                        ) : (
+                            <form onSubmit={handleSubmit}>
                             <div className="form-row">
                                 <div className="form-group"><label>Type</label><select value={formData.type} onChange={(e) => setFormData({...formData, type: e.target.value})}><option value="income">Income</option><option value="expense">Expense</option></select></div>
                                 <div className="form-group"><label>Amount</label><input type="number" step="0.01" value={formData.amount} onChange={(e) => setFormData({...formData, amount: e.target.value})} placeholder="0.00" required /></div>
@@ -663,9 +969,31 @@
                             </div>
                             <button type="submit">Add Transaction</button>
                         </form>
+                        )}
                     </div>
                     <div className="section">
                         <h2>Transaction History</h2>
+                        <div style={{marginBottom: '20px'}}>
+                            <label>🔍 Search by Place/Description</label>
+                            <input 
+                                type="text" 
+                                value={searchPlace} 
+                                onChange={(e) => setSearchPlace(e.target.value)}
+                                placeholder="e.g., 7 Brew, Kroger, Amazon..." 
+                                style={{marginTop: '8px'}}
+                            />
+                            {searchTotals && (
+                                <div style={{marginTop: '10px', padding: '15px', background: '#1a1f2e', borderRadius: '8px', border: '2px solid #667eea'}}>
+                                    <p style={{color: '#e2e8f0', marginBottom: '5px'}}>
+                                        <strong style={{color: '#667eea'}}>"{searchPlace}"</strong> - Found {filteredByPlace.length} transaction{filteredByPlace.length !== 1 ? 's' : ''}
+                                    </p>
+                                    <p style={{color: '#a0aec0', fontSize: '0.95em'}}>
+                                        This Month: <strong style={{color: '#667eea'}}>{formatCurrency(searchTotals.thisMonth)}</strong> • 
+                                        All Time: <strong style={{color: '#667eea'}}>{formatCurrency(searchTotals.allTime)}</strong>
+                                    </p>
+                                </div>
+                            )}
+                        </div>
                         <div className="category-filters">
                             {categories.map(category => (
                                 <button key={category} className={`category-filter-btn ${selectedCategory === category ? 'active' : ''}`} onClick={() => setSelectedCategory(category)}>{category}</button>
@@ -955,6 +1283,29 @@
 
             return (
                 <div>
+                    {debts.length > 0 && (
+                        <div className="section" style={{background: 'linear-gradient(135deg, #dc354522 0%, #c92a2a22 100%)', border: '2px solid #dc3545'}}>
+                            <h2 style={{color: '#dc3545', marginBottom: '20px'}}>💸 Debt Overview</h2>
+                            <div className="debt-overview-grid">
+                                {debts.map(debt => {
+                                    const originalBalance = parseFloat(debt.originalBalance) || 0;
+                                    const currentBalance = parseFloat(debt.currentBalance) || 0;
+                                    const interestRate = parseFloat(debt.interestRate) || 0;
+                                    const progressPercent = originalBalance > 0 ? ((originalBalance - currentBalance) / originalBalance * 100) : 0;
+                                    return (
+                                        <div key={debt.id} className="debt-mini-card">
+                                            <h4>{debt.name}</h4>
+                                            <div className="debt-amount">{formatCurrency(currentBalance)}</div>
+                                            <div className="debt-info">{debt.category}</div>
+                                            <div className="debt-info">{interestRate.toFixed(2)}% APR</div>
+                                            <div className="progress-bar" style={{marginTop: '8px'}}><div className="progress-fill" style={{width: `${Math.min(progressPercent, 100)}%`}}></div></div>
+                                            <div className="debt-info" style={{marginTop: '5px'}}>{progressPercent.toFixed(1)}% paid off</div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
                     <div className="section">
                         <h2>Add New Debt</h2>
                         <form onSubmit={handleSubmit}>
@@ -1108,6 +1459,198 @@
             );
         }
 
+        function BudgetTab({ transactions, recurringPayments, expectedMonthlyIncome, setExpectedMonthlyIncome, currentMonth, unpaidRecurring }) {
+            const [tempIncome, setTempIncome] = useState(expectedMonthlyIncome);
+            const { start, end } = getFinancialMonthRange(currentMonth);
+            
+            // Get transactions for current month
+            const monthTransactions = transactions.filter(t => {
+                const tDate = parseLocalDate(t.date);
+                return tDate >= start && tDate <= end;
+            });
+
+            // Calculate actual income
+            const actualIncome = monthTransactions
+                .filter(t => t.type === 'income')
+                .reduce((sum, t) => sum + parseFloat(t.amount), 0);
+
+            // Calculate total expenses
+            const totalExpenses = monthTransactions
+                .filter(t => t.type === 'expense')
+                .reduce((sum, t) => sum + parseFloat(t.amount), 0);
+
+            // Calculate recurring bills total for this month
+            const recurringTotal = recurringPayments
+                .filter(p => {
+                    let paymentDate;
+                    if (p.dueDay >= 28) {
+                        paymentDate = new Date(start.getFullYear(), start.getMonth(), p.dueDay);
+                    } else {
+                        paymentDate = new Date(start.getFullYear(), start.getMonth() + 1, p.dueDay);
+                    }
+                    return paymentDate >= start && paymentDate <= end;
+                })
+                .reduce((sum, p) => sum + parseFloat(p.amount), 0);
+
+            // Simple calculations
+            const moneyLeft = expectedMonthlyIncome - recurringTotal;
+            const spentSoFar = totalExpenses - recurringTotal;
+            
+            // Calculate with ACTUAL income received so far
+            const moneyLeftActual = actualIncome - recurringTotal;
+            
+            // Remaining = Money Left - Spent So Far - Unpaid Recurring (guaranteed to come out)
+            const remainingExpected = moneyLeft - spentSoFar - unpaidRecurring;
+            const remainingActual = moneyLeftActual - spentSoFar - unpaidRecurring;
+
+            const handleSaveIncome = () => {
+                setExpectedMonthlyIncome(tempIncome);
+                alert('Expected monthly income updated!');
+            };
+
+            const monthLabel = `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+
+            return (
+                <div>
+                    <div className="section">
+                        <h2>💵 Income Settings</h2>
+                        <div className="income-input-group">
+                            <div className="form-group">
+                                <label>Expected Monthly Income</label>
+                                <input 
+                                    type="number" 
+                                    value={tempIncome} 
+                                    onChange={(e) => setTempIncome(Number(e.target.value))}
+                                    placeholder="Enter expected monthly income"
+                                />
+                            </div>
+                            <button onClick={handleSaveIncome}>💾 Save</button>
+                        </div>
+                    </div>
+
+                    <div className="budget-overview">
+                        <h2 style={{color: '#667eea', marginBottom: '25px', fontSize: '1.8em'}}>💰 Money Available This Month</h2>
+                        <p style={{color: '#a0aec0', marginBottom: '20px', fontSize: '0.95em'}}>Current Month: {monthLabel}</p>
+                        
+                        <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px'}}>
+                            <div style={{background: '#1a1f2e', padding: '20px', borderRadius: '10px', border: '2px solid #667eea'}}>
+                                <h3 style={{color: '#667eea', marginBottom: '15px', fontSize: '1.2em'}}>📊 EXPECTED (Budget)</h3>
+                                <div className="budget-row" style={{borderBottom: '1px solid #2d3748', paddingBottom: '10px'}}>
+                                    <span className="budget-label">Expected Income:</span>
+                                    <span className="budget-value" style={{fontSize: '1.1em'}}>{formatCurrency(expectedMonthlyIncome)}</span>
+                                </div>
+                                <div className="budget-row" style={{borderBottom: '1px solid #2d3748', paddingBottom: '10px'}}>
+                                    <span className="budget-label">Recurring Bills:</span>
+                                    <span className="budget-value negative" style={{fontSize: '1.1em'}}>-{formatCurrency(recurringTotal)}</span>
+                                </div>
+                                <div className="budget-row" style={{paddingTop: '10px'}}>
+                                    <span className="budget-label" style={{color: '#e2e8f0', fontWeight: 'bold'}}>Money Left:</span>
+                                    <span className="budget-value" style={{fontSize: '1.3em', fontWeight: 'bold'}}>{formatCurrency(moneyLeft)}</span>
+                                </div>
+                            </div>
+                            
+                            <div style={{background: '#1a1f2e', padding: '20px', borderRadius: '10px', border: '2px solid ' + (actualIncome >= expectedMonthlyIncome ? '#28a745' : '#ffc107')}}>
+                                <h3 style={{color: actualIncome >= expectedMonthlyIncome ? '#28a745' : '#ffc107', marginBottom: '15px', fontSize: '1.2em'}}>💵 ACTUAL (Current Reality)</h3>
+                                <div className="budget-row" style={{borderBottom: '1px solid #2d3748', paddingBottom: '10px'}}>
+                                    <span className="budget-label">Actual Income:</span>
+                                    <span className={`budget-value ${actualIncome >= expectedMonthlyIncome ? 'positive' : 'warning'}`} style={{fontSize: '1.1em'}}>
+                                        {formatCurrency(actualIncome)} {actualIncome < expectedMonthlyIncome && '⚠️'}
+                                    </span>
+                                </div>
+                                <div className="budget-row" style={{borderBottom: '1px solid #2d3748', paddingBottom: '10px'}}>
+                                    <span className="budget-label">Recurring Bills:</span>
+                                    <span className="budget-value negative" style={{fontSize: '1.1em'}}>-{formatCurrency(recurringTotal)}</span>
+                                </div>
+                                <div className="budget-row" style={{paddingTop: '10px'}}>
+                                    <span className="budget-label" style={{color: '#e2e8f0', fontWeight: 'bold'}}>Money Left (actual):</span>
+                                    <span className={`budget-value ${moneyLeftActual >= 0 ? 'positive' : 'negative'}`} style={{fontSize: '1.3em', fontWeight: 'bold'}}>
+                                        {formatCurrency(moneyLeftActual)} {moneyLeftActual < 0 && '⚠️'}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style={{borderTop: '2px solid #667eea', paddingTop: '20px'}}>
+                            <div className="budget-row">
+                                <span className="budget-label">Total Expenses (this month):</span>
+                                <span className="budget-value">{formatCurrency(totalExpenses)}</span>
+                            </div>
+                            
+                            <div className="budget-row">
+                                <span className="budget-label">Unpaid Recurring (still due):</span>
+                                <span className="budget-value warning">{formatCurrency(unpaidRecurring)}</span>
+                            </div>
+                            
+                            <div className="budget-row">
+                                <span className="budget-label">Spent So Far (non-recurring):</span>
+                                <span className="budget-value negative">-{formatCurrency(spentSoFar)}</span>
+                            </div>
+                        </div>
+                        
+                        <div style={{borderTop: '3px solid #667eea', paddingTop: '20px', marginTop: '20px'}}>
+                            <div className="budget-row total">
+                                <span className="budget-label total">Remaining (if expected income comes):</span>
+                                <span className={`budget-value ${remainingExpected >= 0 ? 'positive' : 'negative'}`} style={{fontSize: '1.4em'}}>
+                                    {formatCurrency(remainingExpected)} {remainingExpected >= 0 ? '✓' : '⚠️'}
+                                </span>
+                            </div>
+                            
+                            <div className="budget-row total">
+                                <span className="budget-label total">Remaining (with current income):</span>
+                                <span className={`budget-value ${remainingActual >= 0 ? 'positive' : 'negative'}`} style={{fontSize: '1.4em'}}>
+                                    {formatCurrency(remainingActual)} {remainingActual >= 0 ? '✓' : '⚠️'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="section">
+                        <h2>📊 Budget Breakdown</h2>
+                        <p style={{color: '#a0aec0', marginBottom: '20px', lineHeight: '1.6'}}>
+                            Simple budget tracking: Income - Recurring Bills = Money Left, then subtract what you've spent on non-recurring items.
+                        </p>
+                        
+                        <div style={{background: '#1a1f2e', padding: '20px', borderRadius: '10px'}}>
+                            <div style={{marginBottom: '15px'}}>
+                                <strong style={{color: '#667eea'}}>Expected Income:</strong>
+                                <p style={{color: '#a0aec0', fontSize: '0.9em', marginTop: '5px'}}>
+                                    The amount you expect to earn this month. Set this in the Income Settings above.
+                                </p>
+                            </div>
+                            
+                            <div style={{marginBottom: '15px'}}>
+                                <strong style={{color: '#667eea'}}>Recurring Bills:</strong>
+                                <p style={{color: '#a0aec0', fontSize: '0.9em', marginTop: '5px'}}>
+                                    Total of all recurring payments due this month (from Recurring tab).
+                                </p>
+                            </div>
+                            
+                            <div style={{marginBottom: '15px'}}>
+                                <strong style={{color: '#667eea'}}>Money Left:</strong>
+                                <p style={{color: '#a0aec0', fontSize: '0.9em', marginTop: '5px'}}>
+                                    Expected Income - Recurring Bills = Your budget for discretionary spending.
+                                </p>
+                            </div>
+                            
+                            <div style={{marginBottom: '15px'}}>
+                                <strong style={{color: '#667eea'}}>Spent So Far:</strong>
+                                <p style={{color: '#a0aec0', fontSize: '0.9em', marginTop: '5px'}}>
+                                    Total Expenses - Recurring Bills = What you've actually spent on non-recurring items.
+                                </p>
+                            </div>
+                            
+                            <div>
+                                <strong style={{color: '#667eea'}}>Remaining Available:</strong>
+                                <p style={{color: '#a0aec0', fontSize: '0.9em', marginTop: '5px'}}>
+                                    Money Left - Spent So Far - Unpaid Recurring = How much you truly have left to spend (accounting for bills still due).
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
         function SettingsTab({ exportData, importData, clearAllData }) {
             return (
                 <div>
@@ -1140,25 +1683,58 @@
                     </div>
                     <div className="section">
                         <h2>How to Use Finance Tracker</h2>
-                        <p style={{marginBottom: '20px', lineHeight: '1.6', color: '#a0aec0'}}>Quick guide to get the most out of your finance tracker.</p>
+                        <p style={{marginBottom: '20px', lineHeight: '1.6', color: '#a0aec0'}}>Complete guide for new and existing users.</p>
+                        
+                        <div style={{background: 'linear-gradient(135deg, #28a74522 0%, #20c99722 100%)', border: '2px solid #28a745', padding: '20px', borderRadius: '10px', marginBottom: '30px'}}>
+                            <h3 style={{color: '#28a745', marginBottom: '15px'}}>🎯 First-Time Setup (Recommended Order)</h3>
+                            <ol style={{color: '#e2e8f0', lineHeight: '2', marginLeft: '20px'}}>
+                                <li><strong>Set Expected Income:</strong> Go to <strong style={{color: '#667eea'}}>💵 Budget</strong> tab → Set your expected monthly income</li>
+                                <li><strong>Add Debts:</strong> Go to <strong style={{color: '#667eea'}}>📉 Debt Tracking</strong> tab → Add all your debts (credit cards, loans, etc.)</li>
+                                <li><strong>Add Recurring Payments:</strong> Go to <strong style={{color: '#667eea'}}>🔄 Recurring</strong> tab → Add monthly bills
+                                    <ul style={{marginTop: '5px', marginLeft: '20px'}}>
+                                        <li>Link debt payments to their corresponding debts for automatic balance tracking</li>
+                                        <li>Enable "Auto-pay" checkbox for bills that should create transactions automatically</li>
+                                    </ul>
+                                </li>
+                                <li><strong>Add Transactions:</strong> Go to <strong style={{color: '#667eea'}}>💳 Transactions</strong> tab → Start adding your income and expenses</li>
+                                <li><strong>Check Your Budget:</strong> Return to <strong style={{color: '#667eea'}}>📊 Dashboard</strong> to see your financial overview</li>
+                            </ol>
+                        </div>
+                        
+                        <h3 style={{marginTop: '20px', marginBottom: '10px', color: '#667eea'}}>💵 Budget Tab - Money Available</h3>
+                        <p style={{marginBottom: '10px', lineHeight: '1.6', color: '#a0aec0'}}>
+                            <strong>What it shows:</strong> Expected vs Actual income comparison, and how much discretionary money you have left.<br/>
+                            <strong>Key metrics:</strong> Shows "Remaining (if expected income comes)" and "Remaining (with current income)" so you can plan accordingly.<br/>
+                            <strong>Updates:</strong> Set your expected monthly income here - it's used across the app for budget calculations.
+                        </p>
                         
                         <h3 style={{marginTop: '20px', marginBottom: '10px', color: '#667eea'}}>🔄 Auto-Pay Recurring Payments</h3>
                         <p style={{marginBottom: '10px', lineHeight: '1.6', color: '#a0aec0'}}>
                             <strong>What it does:</strong> Automatically creates transactions when the due date passes.<br/>
                             <strong>How to enable:</strong> When adding/editing a recurring payment, check the "Auto-pay" checkbox.<br/>
-                            <strong>How it works:</strong> On the due date, a transaction is created automatically and the payment is marked as paid.
+                            <strong>How it works:</strong> On the due date, a transaction is created automatically and the payment is marked as paid.<br/>
+                            <strong>Best for:</strong> Bills that auto-pay from your account (Netflix, utilities, car payment, etc.)
                         </p>
                         
                         <h3 style={{marginTop: '20px', marginBottom: '10px', color: '#667eea'}}>💳 Linking Payments to Debts</h3>
                         <p style={{marginBottom: '10px', lineHeight: '1.6', color: '#a0aec0'}}>
-                            <strong>What it does:</strong> Updates debt balance and tracks interest/principal breakdown.<br/>
+                            <strong>What it does:</strong> Automatically updates debt balance and tracks interest/principal breakdown.<br/>
                             <strong>How to link:</strong> When adding/editing a recurring payment, select a debt from the "Link to Debt" dropdown.<br/>
-                            <strong>What you get:</strong> Automatic balance updates + transaction history showing exactly how each payment reduces your debt.
+                            <strong>What you get:</strong> Automatic balance updates + transaction history showing exactly how each payment reduces your debt.<br/>
+                            <strong>Important:</strong> Add your debts FIRST before creating linked recurring payments.
+                        </p>
+                        
+                        <h3 style={{marginTop: '20px', marginBottom: '10px', color: '#667eea'}}>🔍 Search Transactions by Place</h3>
+                        <p style={{marginBottom: '10px', lineHeight: '1.6', color: '#a0aec0'}}>
+                            <strong>Where:</strong> Go to <strong style={{color: '#667eea'}}>💳 Transactions</strong> tab → Use the search box at the top of Transaction History.<br/>
+                            <strong>How it works:</strong> Type any place name (e.g., "7 Brew", "Kroger", "Amazon") to see all matching transactions.<br/>
+                            <strong>Shows:</strong> Total spent at that place this month + all-time total.<br/>
+                            <strong>Smart matching:</strong> Automatically handles variations like "7brew" vs "7 Brew" or "walmart" vs "Wal-Mart"
                         </p>
                         
                         <h3 style={{marginTop: '20px', marginBottom: '10px', color: '#667eea'}}>📊 Debt Transaction Logs</h3>
                         <p style={{marginBottom: '10px', lineHeight: '1.6', color: '#a0aec0'}}>
-                            <strong>Where to find:</strong> Go to Debts tab, Click on a debt to expand, Scroll to "Transaction History".<br/>
+                            <strong>Where to find:</strong> Go to <strong style={{color: '#667eea'}}>📉 Debt Tracking</strong> tab → Click on a debt to expand → Scroll to "Transaction History".<br/>
                             <strong>What it shows:</strong> Date, payment amount, interest charged, principal paid, and balance before/after.<br/>
                             <strong>Note:</strong> Only shows for debts with linked recurring payments that have been processed.
                         </p>
@@ -1167,18 +1743,20 @@
                         <p style={{marginBottom: '10px', lineHeight: '1.6', color: '#a0aec0'}}>
                             <strong>How it works:</strong> Financial months run from the 28th of one month through the 27th of the next.<br/>
                             <strong>Example:</strong> December 2025 = Nov 28 through Dec 27.<br/>
-                            <strong>Why:</strong> Aligns with common payday cycles where bills are due early in the calendar month.
+                            <strong>Why:</strong> Aligns with common payday cycles where bills are due early in the calendar month.<br/>
+                            <strong>All calculations:</strong> Dashboard stats, Budget tab, and recurring payments all use this cycle.
                         </p>
                         
                         <h3 style={{marginTop: '20px', marginBottom: '10px', color: '#667eea'}}>💾 Export & Import</h3>
                         <p style={{marginBottom: '10px', lineHeight: '1.6', color: '#a0aec0'}}>
-                            <strong>Export:</strong> Creates a backup JSON file with all your data (transactions, debts, recurring payments).<br/>
-                            <strong>Import:</strong> Restores data from a backup file.<br/>
-                            <strong>Use case:</strong> Backup your data regularly, or move data between devices/browsers.
+                            <strong>Export:</strong> Creates a backup JSON file with all your data (transactions, debts, recurring payments, settings).<br/>
+                            <strong>Import:</strong> Restores data from a backup file - can be done from Dashboard welcome screen or Settings tab.<br/>
+                            <strong>Use case:</strong> Backup your data regularly, or move data between devices/browsers.<br/>
+                            <strong>Workflow:</strong> Import → Make changes → Export to save. No auto-save!
                         </p>
                         
                         <p style={{marginTop: '30px', padding: '15px', background: '#1a1f2e', borderRadius: '8px', color: '#667eea', fontSize: '0.9em'}}>
-                            <strong>💡 Tip:</strong> All data is stored locally in your browser. No one else can see your financial information, even if they access the same URL.
+                            <strong>💡 Pro Tip:</strong> Export your data at the end of each session! Without exporting, your changes will be lost when you close the page.
                         </p>
                     </div>
                 </div>
