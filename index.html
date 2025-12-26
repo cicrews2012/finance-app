@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finance Tracker v1.11.9</title>
+    <title>Finance Tracker v1.11.10</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -483,7 +483,7 @@
                 <div className="app-container">
                     <div className="header">
                         <h1>💰 Finance Tracker</h1>
-                        <div className="version">v1.11.9 | Fix Debt Disappearance</div>
+                        <div className="version">v1.11.10 | Manual Debt Payments with Interest Tracking</div>
                     </div>
                     <div className="tab-navigation">
                         <button className={`tab-button ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>📊 Dashboard</button>
@@ -497,7 +497,7 @@
                     <div className="tab-content">
                         {activeTab === 'dashboard' && <DashboardTab totals={totals} totalDebt={totalDebt} unpaidRecurring={unpaidRecurring} currentMonth={currentMonth} transactions={transactions} recurringPayments={recurringPayments} debts={debts} expectedMonthlyIncome={expectedMonthlyIncome} importData={importData} />}
                         {activeTab === 'budget' && <BudgetTab transactions={transactions} recurringPayments={recurringPayments} expectedMonthlyIncome={expectedMonthlyIncome} setExpectedMonthlyIncome={setExpectedMonthlyIncome} currentMonth={currentMonth} unpaidRecurring={unpaidRecurring} />}
-                        {activeTab === 'transactions' && <TransactionsTab transactions={transactions} setTransactions={setTransactions} currentMonth={currentMonth} expenseCategories={expenseCategories} incomeCategories={incomeCategories} />}
+                        {activeTab === 'transactions' && <TransactionsTab transactions={transactions} setTransactions={setTransactions} currentMonth={currentMonth} expenseCategories={expenseCategories} incomeCategories={incomeCategories} debts={debts} setDebts={setDebts} />}
                         {activeTab === 'recurring' && <RecurringTab recurringPayments={recurringPayments} setRecurringPayments={setRecurringPayments} debts={debts} setDebts={setDebts} transactions={transactions} setTransactions={setTransactions} paidPayments={paidPayments} setPaidPayments={setPaidPayments} currentMonth={currentMonth} />}
                         {activeTab === 'debts' && <DebtsTab debts={debts} setDebts={setDebts} />}
                         {activeTab === 'payoff' && <PayoffStrategiesTab debts={debts} />}
@@ -706,8 +706,8 @@
             );
         }
 
-        function TransactionsTab({ transactions, setTransactions, currentMonth, expenseCategories, incomeCategories }) {
-            const [formData, setFormData] = useState({ type: 'expense', amount: '', description: '', category: '', date: getLocalDateString() });
+        function TransactionsTab({ transactions, setTransactions, currentMonth, expenseCategories, incomeCategories, debts, setDebts }) {
+            const [formData, setFormData] = useState({ type: 'expense', amount: '', description: '', category: '', date: getLocalDateString(), linkedDebt: '' });
             const [expandedMonths, setExpandedMonths] = useState({});
             const [selectedCategory, setSelectedCategory] = useState('All');
             const [searchPlace, setSearchPlace] = useState('');
@@ -729,8 +729,61 @@
                         alert('Please select or enter a category');
                         return;
                     }
-                    setTransactions([...transactions, { ...formData, category: finalCategory, amount: parseFloat(formData.amount), id: Date.now() }]);
-                    setFormData({ type: 'expense', amount: '', description: '', category: '', date: getLocalDateString() });
+                    
+                    const newTransaction = { 
+                        ...formData, 
+                        category: finalCategory, 
+                        amount: parseFloat(formData.amount), 
+                        id: Date.now() 
+                    };
+                    
+                    setTransactions([...transactions, newTransaction]);
+                    
+                    // If linked to debt, update debt balance with interest calculation
+                    if (formData.linkedDebt && formData.type === 'expense') {
+                        const debtIndex = debts.findIndex(d => d.id === parseInt(formData.linkedDebt));
+                        if (debtIndex !== -1) {
+                            const debt = debts[debtIndex];
+                            const paymentAmount = parseFloat(formData.amount);
+                            
+                            // Calculate interest accrued since last payment
+                            const lastPaymentDate = debt.transactionLog && debt.transactionLog.length > 0
+                                ? new Date(debt.transactionLog[debt.transactionLog.length - 1].date)
+                                : new Date(debt.lastUpdated || formData.date);
+                            
+                            const currentDate = parseLocalDate(formData.date);
+                            const daysSinceLastPayment = Math.max(1, Math.floor((currentDate - lastPaymentDate) / (1000 * 60 * 60 * 24)));
+                            
+                            const annualRate = parseFloat(debt.interestRate) || 0;
+                            const dailyRate = annualRate / 100 / 365;
+                            const interestAccrued = debt.currentBalance * dailyRate * daysSinceLastPayment;
+                            
+                            const principalPaid = Math.max(0, paymentAmount - interestAccrued);
+                            const newBalance = Math.max(0, debt.currentBalance - principalPaid);
+                            
+                            const transactionLog = debt.transactionLog || [];
+                            const logEntry = {
+                                date: formData.date,
+                                paymentAmount: paymentAmount,
+                                interestAccrued: interestAccrued,
+                                principalPaid: principalPaid,
+                                balanceBefore: debt.currentBalance,
+                                balanceAfter: newBalance,
+                                daysSinceLastPayment: daysSinceLastPayment
+                            };
+                            
+                            const updatedDebts = [...debts];
+                            updatedDebts[debtIndex] = {
+                                ...debt,
+                                currentBalance: newBalance,
+                                lastUpdated: formData.date,
+                                transactionLog: [...transactionLog, logEntry]
+                            };
+                            setDebts(updatedDebts);
+                        }
+                    }
+                    
+                    setFormData({ type: 'expense', amount: '', description: '', category: '', date: getLocalDateString(), linkedDebt: '' });
                     setShowCustomCategory(false);
                     setCustomCategory('');
                 }
@@ -1014,6 +1067,27 @@
                                     </div>
                                 )}
                             </div>
+                            {formData.type === 'expense' && debts.length > 0 && (
+                                <div className="form-row">
+                                    <div className="form-group">
+                                        <label>💳 Apply to Debt (Optional)</label>
+                                        <select 
+                                            value={formData.linkedDebt} 
+                                            onChange={(e) => setFormData({...formData, linkedDebt: e.target.value})}
+                                        >
+                                            <option value="">None - Regular expense</option>
+                                            {debts.map(debt => (
+                                                <option key={debt.id} value={debt.id}>
+                                                    {debt.name} (Balance: {formatCurrency(debt.currentBalance)})
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <p style={{color: '#a0aec0', fontSize: '0.85em', marginTop: '5px'}}>
+                                            Select a debt to apply this payment toward principal reduction
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
                             <button type="submit">Add Transaction</button>
                         </form>
                         )}
