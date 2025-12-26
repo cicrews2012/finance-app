@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finance Tracker v1.11.10</title>
+    <title>Finance Tracker v1.11.11</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -483,7 +483,7 @@
                 <div className="app-container">
                     <div className="header">
                         <h1>💰 Finance Tracker</h1>
-                        <div className="version">v1.11.10 | Manual Debt Payments with Interest Tracking</div>
+                        <div className="version">v1.11.11 | Manual Debt Payments + Edit Debts</div>
                     </div>
                     <div className="tab-navigation">
                         <button className={`tab-button ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>📊 Dashboard</button>
@@ -1400,8 +1400,20 @@
         function DebtsTab({ debts, setDebts }) {
             const [formData, setFormData] = useState({ name: '', originalBalance: '', currentBalance: '', interestRate: '', minimumPayment: '', category: 'Credit Card' });
             const [expandedDebt, setExpandedDebt] = useState(null);
+            const [editingDebt, setEditingDebt] = useState(null);
+            
             const handleSubmit = (e) => { e.preventDefault(); if (formData.name && formData.currentBalance) { setDebts([...debts, { ...formData, originalBalance: parseFloat(formData.originalBalance) || parseFloat(formData.currentBalance), currentBalance: parseFloat(formData.currentBalance), interestRate: parseFloat(formData.interestRate) || 0, minimumPayment: parseFloat(formData.minimumPayment) || 0, id: Date.now() }]); setFormData({ name: '', originalBalance: '', currentBalance: '', interestRate: '', minimumPayment: '', category: 'Credit Card' }); } };
             const deleteDebt = (id) => setDebts(debts.filter(d => d.id !== id));
+            
+            const handleEdit = (debt) => {
+                setEditingDebt(debt);
+            };
+            
+            const handleUpdate = (updatedDebt) => {
+                setDebts(debts.map(d => d.id === updatedDebt.id ? updatedDebt : d));
+                setEditingDebt(null);
+            };
+            
             const calculatePayoffMonths = (debt) => { if (debt.minimumPayment <= 0 || debt.currentBalance <= 0) return 'N/A'; const monthlyRate = (debt.interestRate / 100) / 12; let balance = debt.currentBalance; let months = 0; while (balance > 0 && months < 600) { const interest = balance * monthlyRate; const principal = debt.minimumPayment - interest; if (principal <= 0) return '∞ (payment < interest)'; balance -= principal; months++; } return months; };
             const formatPayoffDate = (months) => { if (months === 'N/A' || typeof months === 'string') return months; const today = new Date(); const payoffDate = new Date(today.getFullYear(), today.getMonth() + months, today.getDate()); return payoffDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }); };
 
@@ -1511,6 +1523,7 @@
                                                         </div>
                                                     )}
                                                     <div style={{marginTop: '20px', display: 'flex', gap: '10px'}}>
+                                                        <button onClick={() => handleEdit(debt)}>Edit Debt</button>
                                                         <button className="danger" onClick={() => deleteDebt(debt.id)}>Delete Debt</button>
                                                     </div>
                                                 </div>
@@ -1520,6 +1533,108 @@
                                 })
                             )}
                         </div>
+                    </div>
+                    {editingDebt && <EditDebtModal debt={editingDebt} onUpdate={handleUpdate} onClose={() => setEditingDebt(null)} />}
+                </div>
+            );
+        }
+
+        function EditDebtModal({ debt, onUpdate, onClose }) {
+            const [formData, setFormData] = useState({ ...debt });
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                onUpdate({ 
+                    ...formData, 
+                    originalBalance: parseFloat(formData.originalBalance) || 0,
+                    currentBalance: parseFloat(formData.currentBalance) || 0,
+                    interestRate: parseFloat(formData.interestRate) || 0,
+                    minimumPayment: parseFloat(formData.minimumPayment) || 0
+                });
+            };
+
+            return (
+                <div className="modal-overlay" onClick={onClose}>
+                    <div className="modal" onClick={(e) => e.stopPropagation()}>
+                        <h2>Edit Debt</h2>
+                        <form onSubmit={handleSubmit}>
+                            <div className="form-row">
+                                <div className="form-group">
+                                    <label>Debt Name</label>
+                                    <input 
+                                        type="text" 
+                                        value={formData.name} 
+                                        onChange={(e) => setFormData({...formData, name: e.target.value})} 
+                                        placeholder="e.g., Visa Card, Car Loan" 
+                                        required 
+                                    />
+                                </div>
+                                <div className="form-group">
+                                    <label>Category</label>
+                                    <select 
+                                        value={formData.category} 
+                                        onChange={(e) => setFormData({...formData, category: e.target.value})}
+                                    >
+                                        <option value="Credit Card">Credit Card</option>
+                                        <option value="Auto Loan">Auto Loan</option>
+                                        <option value="Mortgage">Mortgage</option>
+                                        <option value="Personal Loan">Personal Loan</option>
+                                        <option value="Student Loan">Student Loan</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="form-row">
+                                <div className="form-group">
+                                    <label>Original Balance</label>
+                                    <input 
+                                        type="number" 
+                                        step="0.01" 
+                                        value={formData.originalBalance} 
+                                        onChange={(e) => setFormData({...formData, originalBalance: e.target.value})} 
+                                        placeholder="0.00" 
+                                    />
+                                </div>
+                                <div className="form-group">
+                                    <label>Current Balance</label>
+                                    <input 
+                                        type="number" 
+                                        step="0.01" 
+                                        value={formData.currentBalance} 
+                                        onChange={(e) => setFormData({...formData, currentBalance: e.target.value})} 
+                                        placeholder="0.00" 
+                                        required 
+                                    />
+                                </div>
+                                <div className="form-group">
+                                    <label>Interest Rate (%)</label>
+                                    <input 
+                                        type="number" 
+                                        step="0.01" 
+                                        value={formData.interestRate} 
+                                        onChange={(e) => setFormData({...formData, interestRate: e.target.value})} 
+                                        placeholder="0.00" 
+                                    />
+                                </div>
+                                <div className="form-group">
+                                    <label>Minimum Payment</label>
+                                    <input 
+                                        type="number" 
+                                        step="0.01" 
+                                        value={formData.minimumPayment} 
+                                        onChange={(e) => setFormData({...formData, minimumPayment: e.target.value})} 
+                                        placeholder="0.00" 
+                                    />
+                                </div>
+                            </div>
+                            <p style={{color: '#ffc107', fontSize: '0.9em', marginTop: '15px', background: '#0f1419', padding: '10px', borderRadius: '5px'}}>
+                                ⚠️ <strong>Note:</strong> Editing current balance will not create a transaction log entry. For payments, use the Transactions or Recurring tabs.
+                            </p>
+                            <div style={{display: 'flex', gap: '10px', marginTop: '20px'}}>
+                                <button type="submit">Save Changes</button>
+                                <button type="button" className="secondary" onClick={onClose}>Cancel</button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             );
