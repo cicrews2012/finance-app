@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finance Tracker v1.11.11</title>
+    <title>Finance Tracker v1.11.13</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -483,7 +483,7 @@
                 <div className="app-container">
                     <div className="header">
                         <h1>💰 Finance Tracker</h1>
-                        <div className="version">v1.11.11 | Manual Debt Payments + Edit Debts</div>
+                        <div className="version">v1.11.13 | Quick Add Recurring Payment for Debts</div>
                     </div>
                     <div className="tab-navigation">
                         <button className={`tab-button ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>📊 Dashboard</button>
@@ -499,7 +499,7 @@
                         {activeTab === 'budget' && <BudgetTab transactions={transactions} recurringPayments={recurringPayments} expectedMonthlyIncome={expectedMonthlyIncome} setExpectedMonthlyIncome={setExpectedMonthlyIncome} currentMonth={currentMonth} unpaidRecurring={unpaidRecurring} />}
                         {activeTab === 'transactions' && <TransactionsTab transactions={transactions} setTransactions={setTransactions} currentMonth={currentMonth} expenseCategories={expenseCategories} incomeCategories={incomeCategories} debts={debts} setDebts={setDebts} />}
                         {activeTab === 'recurring' && <RecurringTab recurringPayments={recurringPayments} setRecurringPayments={setRecurringPayments} debts={debts} setDebts={setDebts} transactions={transactions} setTransactions={setTransactions} paidPayments={paidPayments} setPaidPayments={setPaidPayments} currentMonth={currentMonth} />}
-                        {activeTab === 'debts' && <DebtsTab debts={debts} setDebts={setDebts} />}
+                        {activeTab === 'debts' && <DebtsTab debts={debts} setDebts={setDebts} recurringPayments={recurringPayments} setRecurringPayments={setRecurringPayments} />}
                         {activeTab === 'payoff' && <PayoffStrategiesTab debts={debts} />}
                         {activeTab === 'settings' && <SettingsTab exportData={exportData} importData={importData} clearAllData={clearAllData} />}
                     </div>
@@ -720,6 +720,14 @@
                 { id: 2, date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense' },
                 { id: 3, date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense' }
             ]);
+            
+            // Advanced filter states
+            const [filterType, setFilterType] = useState('all'); // 'all', 'income', 'expense'
+            const [dateFrom, setDateFrom] = useState('');
+            const [dateTo, setDateTo] = useState('');
+            const [amountMin, setAmountMin] = useState('');
+            const [amountMax, setAmountMax] = useState('');
+            const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
             const handleSubmit = (e) => {
                 e.preventDefault();
@@ -789,6 +797,79 @@
                 }
             };
 
+            // CSV Export Function
+            const exportToCSV = (transactionsToExport) => {
+                // CSV Header
+                const headers = ['Date', 'Type', 'Description', 'Category', 'Amount', 'Linked Debt'];
+                
+                // CSV Rows
+                const rows = transactionsToExport.map(t => {
+                    const debtName = t.linkedDebt ? (debts.find(d => d.id === parseInt(t.linkedDebt))?.name || '') : '';
+                    return [
+                        t.date,
+                        t.type,
+                        `"${t.description}"`, // Quotes for descriptions with commas
+                        t.category,
+                        t.amount.toFixed(2),
+                        debtName ? `"${debtName}"` : ''
+                    ].join(',');
+                });
+                
+                // Combine
+                const csv = [headers.join(','), ...rows].join('\n');
+                
+                // Download
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `finance-transactions-${new Date().toISOString().split('T')[0]}.csv`;
+                a.click();
+                window.URL.revokeObjectURL(url);
+            };
+            
+            // Apply all filters
+            const getFilteredTransactions = () => {
+                return transactions.filter(t => {
+                    // Type filter
+                    if (filterType !== 'all' && t.type !== filterType) return false;
+                    
+                    // Category filter
+                    if (selectedCategory !== 'All' && t.category !== selectedCategory) return false;
+                    
+                    // Search filter
+                    if (searchPlace && !t.description.toLowerCase().includes(searchPlace.toLowerCase())) return false;
+                    
+                    // Date range filter
+                    if (dateFrom) {
+                        const tDate = parseLocalDate(t.date);
+                        const fromDate = parseLocalDate(dateFrom);
+                        if (tDate < fromDate) return false;
+                    }
+                    if (dateTo) {
+                        const tDate = parseLocalDate(t.date);
+                        const toDate = parseLocalDate(dateTo);
+                        if (tDate > toDate) return false;
+                    }
+                    
+                    // Amount range filter
+                    if (amountMin && parseFloat(t.amount) < parseFloat(amountMin)) return false;
+                    if (amountMax && parseFloat(t.amount) > parseFloat(amountMax)) return false;
+                    
+                    return true;
+                });
+            };
+            
+            const clearFilters = () => {
+                setFilterType('all');
+                setSelectedCategory('All');
+                setSearchPlace('');
+                setDateFrom('');
+                setDateTo('');
+                setAmountMin('');
+                setAmountMax('');
+            };
+
             const addBulkRow = () => {
                 setBulkRows([...bulkRows, { 
                     id: Date.now(), 
@@ -854,10 +935,9 @@
             const deleteTransaction = (id) => setTransactions(transactions.filter(t => t.id !== id));
             const toggleMonth = (monthKey) => setExpandedMonths(prev => ({ ...prev, [monthKey]: !prev[monthKey] }));
             const getAllCategories = () => { const categories = new Set(); transactions.forEach(t => { if (t.category) categories.add(t.category); }); return ['All', ...Array.from(categories).sort()]; };
-            const filterTransactionsByCategory = (transactionsList) => selectedCategory === 'All' ? transactionsList : transactionsList.filter(t => t.category === selectedCategory);
             const groupTransactionsByMonth = () => {
                 const grouped = {};
-                const filteredTransactions = filterTransactionsByCategory(transactions);
+                const filteredTransactions = getFilteredTransactions(); // Use new filter function
                 filteredTransactions.forEach(transaction => {
                     const date = parseLocalDate(transaction.date);
                     const day = date.getDate();
@@ -875,51 +955,7 @@
 
             const categories = getAllCategories();
             
-            // Normalize string for smart matching (remove spaces, punctuation, lowercase)
-            const normalizeForSearch = (str) => {
-                return str.toLowerCase().replace(/[\s\-_.]/g, '');
-            };
-            
-            // Filter transactions by search place with smart matching
-            const filterByPlace = (transactionsList) => {
-                if (!searchPlace.trim()) return transactionsList;
-                const normalizedSearch = normalizeForSearch(searchPlace);
-                return transactionsList.filter(t => 
-                    normalizeForSearch(t.description).includes(normalizedSearch)
-                );
-            };
-            
-            const filteredByCategory = filterTransactionsByCategory(transactions);
-            const filteredByPlace = filterByPlace(filteredByCategory);
-            
-            // Calculate totals for search results
-            const searchTotals = searchPlace.trim() ? {
-                thisMonth: filteredByPlace.filter(t => {
-                    const tDate = parseLocalDate(t.date);
-                    const { start, end } = getFinancialMonthRange(currentMonth);
-                    return tDate >= start && tDate <= end;
-                }).reduce((sum, t) => sum + parseFloat(t.amount), 0),
-                allTime: filteredByPlace.reduce((sum, t) => sum + parseFloat(t.amount), 0)
-            } : null;
-            
-            const groupTransactionsByMonthFiltered = () => {
-                const grouped = {};
-                filteredByPlace.forEach(transaction => {
-                    const date = parseLocalDate(transaction.date);
-                    const day = date.getDate();
-                    let financialMonth, financialYear;
-                    if (day >= 28) { financialMonth = date.getMonth() + 1; financialYear = date.getFullYear(); if (financialMonth > 11) { financialMonth = 0; financialYear++; } } else { financialMonth = date.getMonth(); financialYear = date.getFullYear(); }
-                    const monthKey = `${financialYear}-${String(financialMonth + 1).padStart(2, '0')}`;
-                    const monthLabel = new Date(financialYear, financialMonth, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-                    if (!grouped[monthKey]) { grouped[monthKey] = { label: monthLabel, transactions: [], income: 0, expenses: 0 }; }
-                    grouped[monthKey].transactions.push(transaction);
-                    const amount = parseFloat(transaction.amount) || 0;
-                    if (transaction.type === 'income') { grouped[monthKey].income += amount; } else { grouped[monthKey].expenses += amount; }
-                });
-                return Object.entries(grouped).sort((a, b) => b[0].localeCompare(a[0]));
-            };
-            
-            const monthlyGroups = groupTransactionsByMonthFiltered();
+            const monthlyGroups = groupTransactionsByMonth();
 
             return (
                 <div>
@@ -1093,29 +1129,120 @@
                         )}
                     </div>
                     <div className="section">
-                        <h2>Transaction History</h2>
-                        <div style={{marginBottom: '20px'}}>
-                            <label>🔍 Search by Place/Description</label>
-                            <input 
-                                type="text" 
-                                value={searchPlace} 
-                                onChange={(e) => setSearchPlace(e.target.value)}
-                                placeholder="e.g., 7 Brew, Kroger, Amazon..." 
-                                style={{marginTop: '8px'}}
-                            />
-                            {searchTotals && (
-                                <div style={{marginTop: '10px', padding: '15px', background: '#1a1f2e', borderRadius: '8px', border: '2px solid #667eea'}}>
-                                    <p style={{color: '#e2e8f0', marginBottom: '5px'}}>
-                                        <strong style={{color: '#667eea'}}>"{searchPlace}"</strong> - Found {filteredByPlace.length} transaction{filteredByPlace.length !== 1 ? 's' : ''}
-                                    </p>
-                                    <p style={{color: '#a0aec0', fontSize: '0.95em'}}>
-                                        This Month: <strong style={{color: '#667eea'}}>{formatCurrency(searchTotals.thisMonth)}</strong> • 
-                                        All Time: <strong style={{color: '#667eea'}}>{formatCurrency(searchTotals.allTime)}</strong>
-                                    </p>
+                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px'}}>
+                            <h2>Transaction History</h2>
+                            <div style={{display: 'flex', gap: '10px'}}>
+                                <button onClick={() => exportToCSV(getFilteredTransactions())} style={{background: '#28a745'}}>
+                                    📊 Export Filtered to CSV
+                                </button>
+                                <button onClick={() => exportToCSV(transactions)} className="secondary">
+                                    📋 Export All to CSV
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div style={{marginBottom: '20px', padding: '20px', background: '#1a1f2e', borderRadius: '10px', border: '2px solid #667eea'}}>
+                            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px'}}>
+                                <h3 style={{color: '#667eea', margin: 0}}>🔍 Search & Filter</h3>
+                                <div style={{display: 'flex', gap: '10px'}}>
+                                    <button onClick={() => setShowAdvancedFilters(!showAdvancedFilters)} className="secondary" style={{fontSize: '0.9em'}}>
+                                        {showAdvancedFilters ? '▲ Hide Advanced' : '▼ Show Advanced'}
+                                    </button>
+                                    <button onClick={clearFilters} className="secondary" style={{fontSize: '0.9em'}}>
+                                        ✖ Clear All
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            {/* Basic Filters */}
+                            <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px'}}>
+                                <div>
+                                    <label style={{display: 'block', marginBottom: '5px'}}>Type</label>
+                                    <select value={filterType} onChange={(e) => setFilterType(e.target.value)}>
+                                        <option value="all">All Types</option>
+                                        <option value="income">Income Only</option>
+                                        <option value="expense">Expense Only</option>
+                                    </select>
+                                </div>
+                                
+                                <div>
+                                    <label style={{display: 'block', marginBottom: '5px'}}>Category</label>
+                                    <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}>
+                                        <option value="All">All Categories</option>
+                                        {[...new Set(transactions.map(t => t.category))].sort().map(cat => (
+                                            <option key={cat} value={cat}>{cat}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                
+                                <div style={{gridColumn: showAdvancedFilters ? 'auto' : 'span 2'}}>
+                                    <label style={{display: 'block', marginBottom: '5px'}}>Search Description</label>
+                                    <input 
+                                        type="text" 
+                                        value={searchPlace} 
+                                        onChange={(e) => setSearchPlace(e.target.value)}
+                                        placeholder="e.g., 7 Brew, Kroger, Amazon..." 
+                                    />
+                                </div>
+                            </div>
+                            
+                            {/* Advanced Filters */}
+                            {showAdvancedFilters && (
+                                <div style={{marginTop: '15px', paddingTop: '15px', borderTop: '1px solid #2d3748'}}>
+                                    <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px'}}>
+                                        <div>
+                                            <label style={{display: 'block', marginBottom: '5px'}}>Date From</label>
+                                            <input 
+                                                type="date" 
+                                                value={dateFrom} 
+                                                onChange={(e) => setDateFrom(e.target.value)}
+                                            />
+                                        </div>
+                                        
+                                        <div>
+                                            <label style={{display: 'block', marginBottom: '5px'}}>Date To</label>
+                                            <input 
+                                                type="date" 
+                                                value={dateTo} 
+                                                onChange={(e) => setDateTo(e.target.value)}
+                                            />
+                                        </div>
+                                        
+                                        <div>
+                                            <label style={{display: 'block', marginBottom: '5px'}}>Amount Min</label>
+                                            <input 
+                                                type="number" 
+                                                step="0.01"
+                                                value={amountMin} 
+                                                onChange={(e) => setAmountMin(e.target.value)}
+                                                placeholder="0.00"
+                                            />
+                                        </div>
+                                        
+                                        <div>
+                                            <label style={{display: 'block', marginBottom: '5px'}}>Amount Max</label>
+                                            <input 
+                                                type="number" 
+                                                step="0.01"
+                                                value={amountMax} 
+                                                onChange={(e) => setAmountMax(e.target.value)}
+                                                placeholder="0.00"
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
                             )}
+                            
+                            {/* Filter Results Summary */}
+                            <div style={{marginTop: '15px', padding: '10px', background: '#0f1419', borderRadius: '5px'}}>
+                                <p style={{color: '#a0aec0', margin: 0, fontSize: '0.9em'}}>
+                                    Showing <strong style={{color: '#667eea'}}>{getFilteredTransactions().length}</strong> of {transactions.length} transaction{transactions.length !== 1 ? 's' : ''}
+                                    {getFilteredTransactions().length < transactions.length && ' (filtered)'}
+                                </p>
+                            </div>
                         </div>
-                        <div className="category-filters">
+                        <div className="category-filters" style={{display: 'none'}}>
+                            {/* Hidden old category filters */}
                             {categories.map(category => (
                                 <button key={category} className={`category-filter-btn ${selectedCategory === category ? 'active' : ''}`} onClick={() => setSelectedCategory(category)}>{category}</button>
                             ))}
@@ -1397,12 +1524,42 @@
             );
         }
 
-        function DebtsTab({ debts, setDebts }) {
-            const [formData, setFormData] = useState({ name: '', originalBalance: '', currentBalance: '', interestRate: '', minimumPayment: '', category: 'Credit Card' });
+        function DebtsTab({ debts, setDebts, recurringPayments, setRecurringPayments }) {
+            const [formData, setFormData] = useState({ name: '', originalBalance: '', currentBalance: '', interestRate: '', minimumPayment: '', category: 'Credit Card', dueDay: '', createRecurring: false, autoPayRecurring: false });
             const [expandedDebt, setExpandedDebt] = useState(null);
             const [editingDebt, setEditingDebt] = useState(null);
             
-            const handleSubmit = (e) => { e.preventDefault(); if (formData.name && formData.currentBalance) { setDebts([...debts, { ...formData, originalBalance: parseFloat(formData.originalBalance) || parseFloat(formData.currentBalance), currentBalance: parseFloat(formData.currentBalance), interestRate: parseFloat(formData.interestRate) || 0, minimumPayment: parseFloat(formData.minimumPayment) || 0, id: Date.now() }]); setFormData({ name: '', originalBalance: '', currentBalance: '', interestRate: '', minimumPayment: '', category: 'Credit Card' }); } };
+            const handleSubmit = (e) => { 
+                e.preventDefault(); 
+                if (formData.name && formData.currentBalance) { 
+                    const newDebt = { 
+                        ...formData, 
+                        originalBalance: parseFloat(formData.originalBalance) || parseFloat(formData.currentBalance), 
+                        currentBalance: parseFloat(formData.currentBalance), 
+                        interestRate: parseFloat(formData.interestRate) || 0, 
+                        minimumPayment: parseFloat(formData.minimumPayment) || 0, 
+                        id: Date.now() 
+                    };
+                    
+                    setDebts([...debts, newDebt]);
+                    
+                    // If user wants to create recurring payment
+                    if (formData.createRecurring && formData.minimumPayment && formData.dueDay) {
+                        const newRecurringPayment = {
+                            id: Date.now() + 1, // Slightly different ID
+                            name: formData.name + ' Payment',
+                            amount: parseFloat(formData.minimumPayment),
+                            category: 'Debt',
+                            dueDay: parseInt(formData.dueDay),
+                            linkedDebt: newDebt.id.toString(),
+                            auto: formData.autoPayRecurring
+                        };
+                        setRecurringPayments([...recurringPayments, newRecurringPayment]);
+                    }
+                    
+                    setFormData({ name: '', originalBalance: '', currentBalance: '', interestRate: '', minimumPayment: '', category: 'Credit Card', dueDay: '', createRecurring: false, autoPayRecurring: false }); 
+                } 
+            };
             const deleteDebt = (id) => setDebts(debts.filter(d => d.id !== id));
             
             const handleEdit = (debt) => {
@@ -1455,7 +1612,61 @@
                                 <div className="form-group"><label>Interest Rate (%)</label><input type="number" step="0.01" value={formData.interestRate} onChange={(e) => setFormData({...formData, interestRate: e.target.value})} placeholder="0.00" /></div>
                                 <div className="form-group"><label>Minimum Payment</label><input type="number" step="0.01" value={formData.minimumPayment} onChange={(e) => setFormData({...formData, minimumPayment: e.target.value})} placeholder="0.00" /></div>
                             </div>
-                            <button type="submit">Add Debt</button>
+                            
+                            {/* Recurring Payment Option */}
+                            <div style={{marginTop: '20px', padding: '20px', background: '#1a1f2e', borderRadius: '10px', border: '2px solid #667eea'}}>
+                                <div style={{display: 'flex', alignItems: 'center', marginBottom: '15px'}}>
+                                    <input 
+                                        type="checkbox" 
+                                        id="createRecurring" 
+                                        checked={formData.createRecurring} 
+                                        onChange={(e) => setFormData({...formData, createRecurring: e.target.checked})}
+                                        style={{marginRight: '10px', width: '20px', height: '20px', cursor: 'pointer'}}
+                                    />
+                                    <label htmlFor="createRecurring" style={{color: '#667eea', fontSize: '1.1em', fontWeight: '600', cursor: 'pointer', margin: 0}}>
+                                        ➕ Also Create Recurring Payment
+                                    </label>
+                                </div>
+                                
+                                {formData.createRecurring && (
+                                    <div>
+                                        <p style={{color: '#a0aec0', fontSize: '0.9em', marginBottom: '15px'}}>
+                                            This will automatically create a recurring payment in the Recurring tab using the minimum payment amount.
+                                        </p>
+                                        <div className="form-row">
+                                            <div className="form-group">
+                                                <label>Payment Due Day</label>
+                                                <input 
+                                                    type="number" 
+                                                    min="1" 
+                                                    max="31" 
+                                                    value={formData.dueDay} 
+                                                    onChange={(e) => setFormData({...formData, dueDay: e.target.value})} 
+                                                    placeholder="e.g., 15" 
+                                                    required={formData.createRecurring}
+                                                />
+                                                <p style={{color: '#a0aec0', fontSize: '0.85em', marginTop: '5px'}}>
+                                                    Day of month payment is due (1-31)
+                                                </p>
+                                            </div>
+                                            <div className="form-group" style={{display: 'flex', alignItems: 'center', paddingTop: '20px'}}>
+                                                <input 
+                                                    type="checkbox" 
+                                                    id="autoPayRecurring" 
+                                                    checked={formData.autoPayRecurring} 
+                                                    onChange={(e) => setFormData({...formData, autoPayRecurring: e.target.checked})}
+                                                    style={{marginRight: '10px', width: '20px', height: '20px', cursor: 'pointer'}}
+                                                />
+                                                <label htmlFor="autoPayRecurring" style={{cursor: 'pointer', margin: 0}}>
+                                                    Auto-pay (automatically creates transaction on due date)
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                            
+                            <button type="submit" style={{marginTop: '20px'}}>Add Debt{formData.createRecurring ? ' & Recurring Payment' : ''}</button>
                         </form>
                     </div>
                     <div className="section">
