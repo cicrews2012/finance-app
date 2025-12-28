@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finance Tracker v1.11.13</title>
+    <title>Finance Tracker v1.11.17</title>
+    <!-- Build: 2025-12-28-07 - Added Full Year Review option -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -107,6 +108,7 @@
         const { useState, useEffect, useRef } = React;
         const formatCurrency = (amount) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
         const parseLocalDate = (dateStr) => { const [year, month, day] = dateStr.split('-').map(Number); return new Date(year, month - 1, day); };
+        const formatDate = (dateStr) => { const date = parseLocalDate(dateStr); return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); };
         const getLocalDateString = (date = new Date()) => {
             const year = date.getFullYear();
             const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -151,7 +153,7 @@
                     
                     const monthKey = getMonthKey(currentMonth);
                     const todayDate = new Date();
-                    const { start } = getFinancialMonthRange(currentMonth);
+                    const __range = getFinancialMonthRange(currentMonth); const start = __range.start;
                     
                     let newTransactions = [...transactions];
                     let updatedDebts = [...debts];
@@ -288,7 +290,7 @@
             }, [currentMonth, recurringPayments.length]); // Run when month changes or payments added/removed
 
             const getMonthlyTotals = () => {
-                const { start, end } = getFinancialMonthRange(currentMonth);
+                const __range = getFinancialMonthRange(currentMonth); const start = __range.start; const end = __range.end;
                 
                 const monthlyTransactions = transactions.filter(t => { const tDate = parseLocalDate(t.date); return tDate >= start && tDate <= end; });
                 const income = monthlyTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + parseFloat(t.amount), 0);
@@ -303,7 +305,7 @@
             const getUnpaidRecurring = () => {
                 const monthKey = getMonthKey(currentMonth);
                 const today = new Date();
-                const { start } = getFinancialMonthRange(currentMonth);
+                const __range = getFinancialMonthRange(currentMonth); const start = __range.start;
                 
                 return recurringPayments.filter(p => {
                     const isManuallyPaid = paidPayments[`${monthKey}-${p.id}`];
@@ -405,7 +407,7 @@
                                 // Load existing paid payments from export
                                 const monthKey = getMonthKey(currentMonth);
                                 const today = new Date();
-                                const { start } = getFinancialMonthRange(currentMonth);
+                                const __range = getFinancialMonthRange(currentMonth); const start = __range.start;
                                 const newPaidPayments = {...(data.paidPayments || {})};
                                 
                                 // Additionally mark auto-pay items as paid if due date has passed
@@ -483,7 +485,7 @@
                 <div className="app-container">
                     <div className="header">
                         <h1>💰 Finance Tracker</h1>
-                        <div className="version">v1.11.13 | Quick Add Recurring Payment for Debts</div>
+                        <div className="version">v1.11.17 | Full Year Review Added</div>
                     </div>
                     <div className="tab-navigation">
                         <button className={`tab-button ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>📊 Dashboard</button>
@@ -492,6 +494,7 @@
                         <button className={`tab-button ${activeTab === 'recurring' ? 'active' : ''}`} onClick={() => setActiveTab('recurring')}>🔄 Recurring</button>
                         <button className={`tab-button ${activeTab === 'debts' ? 'active' : ''}`} onClick={() => setActiveTab('debts')}>📉 Debt Tracking</button>
                         <button className={`tab-button ${activeTab === 'payoff' ? 'active' : ''}`} onClick={() => setActiveTab('payoff')}>🎯 Payoff Strategies</button>
+                        <button className={`tab-button ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>📈 History</button>
                         <button className={`tab-button ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>⚙️ Settings</button>
                     </div>
                     <div className="tab-content">
@@ -501,6 +504,7 @@
                         {activeTab === 'recurring' && <RecurringTab recurringPayments={recurringPayments} setRecurringPayments={setRecurringPayments} debts={debts} setDebts={setDebts} transactions={transactions} setTransactions={setTransactions} paidPayments={paidPayments} setPaidPayments={setPaidPayments} currentMonth={currentMonth} />}
                         {activeTab === 'debts' && <DebtsTab debts={debts} setDebts={setDebts} recurringPayments={recurringPayments} setRecurringPayments={setRecurringPayments} />}
                         {activeTab === 'payoff' && <PayoffStrategiesTab debts={debts} />}
+                        {activeTab === 'history' && <HistoryTab transactions={transactions} recurringPayments={recurringPayments} debts={debts} />}
                         {activeTab === 'settings' && <SettingsTab exportData={exportData} importData={importData} clearAllData={clearAllData} />}
                     </div>
                 </div>
@@ -512,7 +516,7 @@
             const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
             const fileInputRef = React.useRef(null); // Move ref to top level
             const monthName = currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' });
-            const { start, end } = getFinancialMonthRange(currentMonth);
+            const __range = getFinancialMonthRange(currentMonth); const start = __range.start; const end = __range.end;
             
             // Get available years from transactions
             const availableYears = [...new Set(transactions.map(t => {
@@ -1253,7 +1257,17 @@
                             monthlyGroups.map(([monthKey, data]) => (
                                 <div key={monthKey} className="collapsible-section">
                                     <div className="collapsible-header" onClick={() => toggleMonth(monthKey)}>
-                                        <div><h3>{data.label}</h3><p style={{fontSize: '0.9em', marginTop: '5px', opacity: 0.9}}>{data.transactions.length} transaction{data.transactions.length !== 1 ? 's' : ''} • Income: {formatCurrency(data.income)} • Expenses: {formatCurrency(data.expenses)}</p></div>
+                                        <div>
+                                            <h3>{data.label}</h3>
+                                            <p style={{fontSize: '0.9em', marginTop: '5px', opacity: 0.9}}>
+                                                {data.transactions.length} transaction{data.transactions.length !== 1 ? 's' : ''} • 
+                                                Income: {formatCurrency(data.income)} • 
+                                                Expenses: {formatCurrency(data.expenses)} • 
+                                                Net: <span style={{color: '#e2e8f0', fontWeight: '600'}}>
+                                                    {formatCurrency(data.income - data.expenses)}
+                                                </span>
+                                            </p>
+                                        </div>
                                         <div style={{fontSize: '1.5em'}}>{expandedMonths[monthKey] ? '▼' : '▶'}</div>
                                     </div>
                                     {expandedMonths[monthKey] && (
@@ -1313,9 +1327,138 @@
             );
         }
 
+        function PaymentCalendar({ recurringPayments, paidPayments, monthKey, currentMonth, togglePaidStatus, debts }) {
+            const monthRange = getFinancialMonthRange(currentMonth);
+            const start = monthRange.start;
+            const startDay = start.getDate();
+            const startMonth = start.getMonth();
+            const startYear = start.getFullYear();
+            
+            // Generate calendar days for the financial month (28th to 27th)
+            const calendarDays = [];
+            for (let i = 0; i < 30; i++) {
+                const date = new Date(startYear, startMonth, startDay + i);
+                const day = date.getDate();
+                const paymentsOnDay = recurringPayments.filter(p => parseInt(p.dueDay) === day);
+                
+                calendarDays.push({
+                    date: date,
+                    day: day,
+                    dayOfWeek: date.toLocaleDateString('en-US', { weekday: 'short' }),
+                    monthName: date.toLocaleDateString('en-US', { month: 'short' }),
+                    payments: paymentsOnDay,
+                    isToday: new Date().toDateString() === date.toDateString()
+                });
+            }
+            
+            return (
+                <div style={{background: '#1a1f2e', padding: '20px', borderRadius: '10px', border: '2px solid #667eea'}}>
+                    <h3 style={{color: '#667eea', marginBottom: '20px'}}>📅 Payment Calendar - {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h3>
+                    <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '10px'}}>
+                        {calendarDays.map((calDay, idx) => {
+                            const hasPayments = calDay.payments.length > 0;
+                            const allPaid = hasPayments && calDay.payments.every(p => paidPayments[`${monthKey}-${p.id}`]);
+                            const somePaid = hasPayments && !allPaid && calDay.payments.some(p => paidPayments[`${monthKey}-${p.id}`]);
+                            
+                            return (
+                                <div 
+                                    key={idx}
+                                    style={{
+                                        background: calDay.isToday ? '#667eea22' : '#0f1419',
+                                        border: `2px solid ${calDay.isToday ? '#667eea' : (hasPayments ? (allPaid ? '#28a745' : (somePaid ? '#ffc107' : '#dc3545')) : '#2d3748')}`,
+                                        borderRadius: '8px',
+                                        padding: '10px',
+                                        minHeight: '100px',
+                                        position: 'relative'
+                                    }}
+                                >
+                                    <div style={{marginBottom: '8px', borderBottom: '1px solid #2d3748', paddingBottom: '5px'}}>
+                                        <div style={{color: '#667eea', fontWeight: '600', fontSize: '0.85em'}}>{calDay.dayOfWeek}</div>
+                                        <div style={{color: '#e2e8f0', fontSize: '1.2em', fontWeight: '700'}}>{calDay.day}</div>
+                                        <div style={{color: '#a0aec0', fontSize: '0.75em'}}>{calDay.monthName}</div>
+                                    </div>
+                                    
+                                    {calDay.payments.length === 0 ? (
+                                        <div style={{color: '#4a5568', fontSize: '0.8em', fontStyle: 'italic'}}>No payments</div>
+                                    ) : (
+                                        <div style={{display: 'flex', flexDirection: 'column', gap: '5px'}}>
+                                            {calDay.payments.map(payment => {
+                                                const isPaid = paidPayments[`${monthKey}-${payment.id}`];
+                                                const linkedDebt = payment.linkedDebt ? debts.find(d => d.id === parseInt(payment.linkedDebt)) : null;
+                                                
+                                                return (
+                                                    <div 
+                                                        key={payment.id}
+                                                        style={{
+                                                            background: isPaid ? '#28a74522' : '#dc354522',
+                                                            border: `1px solid ${isPaid ? '#28a745' : '#dc3545'}`,
+                                                            borderRadius: '5px',
+                                                            padding: '6px',
+                                                            fontSize: '0.75em',
+                                                            cursor: 'pointer',
+                                                            transition: 'all 0.2s'
+                                                        }}
+                                                        onClick={() => togglePaidStatus(payment.id)}
+                                                        title={`Click to mark as ${isPaid ? 'unpaid' : 'paid'}`}
+                                                    >
+                                                        <div style={{display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '3px'}}>
+                                                            <span>{isPaid ? '✅' : '⭕'}</span>
+                                                            <span style={{color: '#e2e8f0', fontWeight: '600', fontSize: '0.95em'}}>
+                                                                {payment.name.length > 15 ? payment.name.substring(0, 15) + '...' : payment.name}
+                                                            </span>
+                                                        </div>
+                                                        <div style={{color: isPaid ? '#28a745' : '#dc3545', fontWeight: '700'}}>
+                                                            {formatCurrency(payment.amount)}
+                                                        </div>
+                                                        {linkedDebt && (
+                                                            <div style={{color: '#a0aec0', fontSize: '0.85em', marginTop: '2px'}}>
+                                                                💳 {linkedDebt.name.length > 12 ? linkedDebt.name.substring(0, 12) + '...' : linkedDebt.name}
+                                                            </div>
+                                                        )}
+                                                        {payment.auto && (
+                                                            <div style={{color: '#667eea', fontSize: '0.85em', marginTop: '2px'}}>
+                                                                🤖 Auto-pay
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                    
+                    <div style={{marginTop: '20px', padding: '15px', background: '#0f1419', borderRadius: '8px'}}>
+                        <h4 style={{color: '#667eea', marginBottom: '10px', fontSize: '0.95em'}}>Legend:</h4>
+                        <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px', fontSize: '0.85em'}}>
+                            <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                                <div style={{width: '20px', height: '20px', border: '2px solid #dc3545', borderRadius: '4px'}}></div>
+                                <span style={{color: '#a0aec0'}}>Unpaid</span>
+                            </div>
+                            <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                                <div style={{width: '20px', height: '20px', border: '2px solid #28a745', borderRadius: '4px'}}></div>
+                                <span style={{color: '#a0aec0'}}>All Paid</span>
+                            </div>
+                            <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                                <div style={{width: '20px', height: '20px', border: '2px solid #ffc107', borderRadius: '4px'}}></div>
+                                <span style={{color: '#a0aec0'}}>Partially Paid</span>
+                            </div>
+                            <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                                <div style={{width: '20px', height: '20px', border: '2px solid #667eea', borderRadius: '4px', background: '#667eea22'}}></div>
+                                <span style={{color: '#a0aec0'}}>Today</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
         function RecurringTab({ recurringPayments, setRecurringPayments, debts, setDebts, transactions, setTransactions, paidPayments, setPaidPayments, currentMonth }) {
             const [formData, setFormData] = useState({ name: '', amount: '', category: '', dueDay: '1', linkedDebt: '', auto: false });
             const [editingPayment, setEditingPayment] = useState(null);
+            const [viewMode, setViewMode] = useState('list'); // 'list' or 'calendar'
             const monthKey = getMonthKey(currentMonth);
 
             // Check if auto-pay should be marked as paid (due date has passed in financial month)
@@ -1323,7 +1466,7 @@
                 if (!payment.auto) return false;
                 const today = new Date();
                 const currentDay = today.getDate();
-                const { start } = getFinancialMonthRange(currentMonth);
+                const __range = getFinancialMonthRange(currentMonth); const start = __range.start;
                 
                 // Create a date for the payment due day in the financial month
                 let paymentDate;
@@ -1444,15 +1587,46 @@
                         </form>
                     </div>
                     <div className="section">
-                        <h2>Recurring Payments ({recurringPayments.length})</h2>
-                        <p style={{color: '#a0aec0', marginBottom: '15px', fontSize: '1.1em'}}>
-                            Total Monthly: <strong style={{color: '#667eea'}}>{formatCurrency(recurringPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0))}</strong>
-                        </p>
+                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px'}}>
+                            <div>
+                                <h2>Recurring Payments ({recurringPayments.length})</h2>
+                                <p style={{color: '#a0aec0', fontSize: '1.1em'}}>
+                                    Total Monthly: <strong style={{color: '#667eea'}}>{formatCurrency(recurringPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0))}</strong>
+                                </p>
+                            </div>
+                            <div style={{display: 'flex', gap: '10px'}}>
+                                <button 
+                                    onClick={() => setViewMode('list')} 
+                                    className={viewMode === 'list' ? '' : 'secondary'}
+                                    style={{fontSize: '0.9em'}}
+                                >
+                                    📋 List View
+                                </button>
+                                <button 
+                                    onClick={() => setViewMode('calendar')} 
+                                    className={viewMode === 'calendar' ? '' : 'secondary'}
+                                    style={{fontSize: '0.9em'}}
+                                >
+                                    📅 Calendar View
+                                </button>
+                            </div>
+                        </div>
+                        
+                        {viewMode === 'calendar' ? (
+                            <PaymentCalendar 
+                                recurringPayments={recurringPayments}
+                                paidPayments={paidPayments}
+                                monthKey={monthKey}
+                                currentMonth={currentMonth}
+                                togglePaidStatus={togglePaidStatus}
+                                debts={debts}
+                            />
+                        ) : (
                         <div className="payment-list">
                             {recurringPayments.length === 0 ? (
                                 <p style={{color: '#a0aec0', textAlign: 'center', padding: '20px'}}>No recurring payments yet.</p>
                             ) : (
-                                recurringPayments.sort((a, b) => a.dueDay - b.dueDay).map((payment) => {
+                                [...recurringPayments].sort((a, b) => a.dueDay - b.dueDay).map((payment) => {
                                     const linkedDebt = payment.linkedDebt ? debts.find(d => d.id === parseInt(payment.linkedDebt)) : null;
                                     const isManuallyPaid = paidPayments[`${monthKey}-${payment.id}`];
                                     const isAutoPaid = payment.auto && shouldAutoPayBePaid(payment);
@@ -1480,6 +1654,7 @@
                                 })
                             )}
                         </div>
+                        )}
                     </div>
                     {editingPayment && <EditRecurringPaymentModal payment={editingPayment} onUpdate={handleUpdate} onClose={() => setEditingPayment(null)} debts={debts} />}
                 </div>
@@ -1911,7 +2086,7 @@
 
         function BudgetTab({ transactions, recurringPayments, expectedMonthlyIncome, setExpectedMonthlyIncome, currentMonth, unpaidRecurring }) {
             const [tempIncome, setTempIncome] = useState(expectedMonthlyIncome);
-            const { start, end } = getFinancialMonthRange(currentMonth);
+            const __range = getFinancialMonthRange(currentMonth); const start = __range.start; const end = __range.end;
             
             // Get transactions for current month
             const monthTransactions = transactions.filter(t => {
@@ -2097,6 +2272,361 @@
                             </div>
                         </div>
                     </div>
+                </div>
+            );
+        }
+
+        function HistoryTab({ transactions, recurringPayments, debts }) {
+            // Get available years from transactions
+            const availableYears = [...new Set(transactions.map(t => {
+                const date = parseLocalDate(t.date);
+                return date.getFullYear();
+            }))].sort((a, b) => b - a);
+            
+            // If no years, default to current year
+            if (availableYears.length === 0) {
+                availableYears.push(new Date().getFullYear());
+            }
+            
+            const [selectedYear, setSelectedYear] = useState(availableYears[0]);
+            const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth()); // 0-11, or -1 for "Full Year"
+            
+            // Generate month options for selected year
+            const getAvailableMonths = () => {
+                const months = [{value: -1, label: 'Full Year'}]; // Add Full Year option first
+                const currentYear = new Date().getFullYear();
+                const currentMonth = new Date().getMonth();
+                
+                for (let i = 0; i < 12; i++) {
+                    // Only show months that have passed or current month
+                    if (selectedYear < currentYear || (selectedYear === currentYear && i <= currentMonth)) {
+                        months.push({
+                            value: i,
+                            label: new Date(selectedYear, i, 1).toLocaleDateString('en-US', { month: 'long' })
+                        });
+                    }
+                }
+                return months;
+            };
+            
+            const availableMonths = getAvailableMonths();
+            
+            // Filter transactions for selected FINANCIAL month (28th-27th) OR full year
+            const getMonthTransactions = () => {
+                if (selectedMonth === -1) {
+                    // Full Year: Get all transactions for the selected year
+                    return transactions.filter(t => {
+                        const date = parseLocalDate(t.date);
+                        // Check if transaction falls within any financial month of this year
+                        for (let month = 0; month < 12; month++) {
+                            const testDate = new Date(selectedYear, month, 1);
+                            const monthRange = getFinancialMonthRange(testDate);
+                            if (date >= monthRange.start && date <= monthRange.end) {
+                                return true;
+                            }
+                        }
+                        return false;
+                    });
+                } else {
+                    // Single month: Create a date for the 1st of the selected month
+                    const selectedDate = new Date(selectedYear, selectedMonth, 1);
+                    const monthRange = getFinancialMonthRange(selectedDate);
+                    const start = monthRange.start;
+                    const end = monthRange.end;
+                    
+                    return transactions.filter(t => {
+                        const date = parseLocalDate(t.date);
+                        return date >= start && date <= end;
+                    });
+                }
+            };
+            
+            const monthTransactions = getMonthTransactions();
+            
+            // Calculate totals for selected month
+            const monthIncome = monthTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + parseFloat(t.amount), 0);
+            const monthExpenses = monthTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + parseFloat(t.amount), 0);
+            const monthNet = monthIncome - monthExpenses;
+            
+            // Get top 5 EXPENSES only
+            const topTransactions = [...monthTransactions]
+                .filter(t => t.type === 'expense')
+                .sort((a, b) => parseFloat(b.amount) - parseFloat(a.amount))
+                .slice(0, 5);
+            
+            // Calculate category breakdown
+            const categoryTotals = {};
+            monthTransactions.filter(t => t.type === 'expense').forEach(t => {
+                const cat = t.category || 'Uncategorized';
+                categoryTotals[cat] = (categoryTotals[cat] || 0) + parseFloat(t.amount);
+            });
+            const sortedCategories = Object.entries(categoryTotals)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 8);
+            
+            const monthLabel = availableMonths.find(m => m.value === selectedMonth)?.label || '';
+            
+            return (
+                <div>
+                    {/* Header with Selectors */}
+                    <div className="section" style={{background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: '2px solid #667eea'}}>
+                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px'}}>
+                            <div>
+                                <h2 style={{marginBottom: '5px', color: '#fff'}}>📈 Historical Analysis</h2>
+                                <p style={{color: 'rgba(255,255,255,0.9)', fontSize: '1em', margin: 0}}>View detailed breakdowns of past months</p>
+                            </div>
+                            <div style={{display: 'flex', gap: '15px', alignItems: 'flex-end'}}>
+                                <div>
+                                    <label style={{color: '#fff', display: 'block', marginBottom: '8px', fontSize: '0.9em', fontWeight: '600'}}>Year</label>
+                                    <select 
+                                        value={selectedYear} 
+                                        onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                                        style={{padding: '10px 15px', fontSize: '1.1em', fontWeight: '600', borderRadius: '8px', border: '2px solid #fff', background: '#fff', color: '#1a1f2e', minWidth: '120px', cursor: 'pointer'}}
+                                    >
+                                        {availableYears.map(year => (
+                                            <option key={year} value={year}>{year}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style={{color: '#fff', display: 'block', marginBottom: '8px', fontSize: '0.9em', fontWeight: '600'}}>Month</label>
+                                    <select 
+                                        value={selectedMonth} 
+                                        onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                                        style={{padding: '10px 15px', fontSize: '1.1em', fontWeight: '600', borderRadius: '8px', border: '2px solid #fff', background: '#fff', color: '#1a1f2e', minWidth: '150px', cursor: 'pointer'}}
+                                    >
+                                        {availableMonths.map(month => (
+                                            <option key={month.value} value={month.value}>{month.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {/* Summary Cards */}
+                    <div className="section">
+                        <h2 style={{marginBottom: '20px', fontSize: '1.5em', color: '#667eea'}}>{monthLabel} {selectedYear} Summary</h2>
+                        <div className="stats-grid" style={{gap: '20px'}}>
+                            <div className="stat-card" style={{background: 'linear-gradient(135deg, #667eea22 0%, #764ba222 100%)', border: '2px solid #667eea', padding: '25px'}}>
+                                <div style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px'}}>
+                                    <span style={{fontSize: '1.8em'}}>💰</span>
+                                    <div className="stat-label" style={{fontSize: '1em', color: '#a0aec0'}}>Total Income</div>
+                                </div>
+                                <div className="stat-value positive" style={{fontSize: '2em', fontWeight: '700'}}>{formatCurrency(monthIncome)}</div>
+                            </div>
+                            <div className="stat-card" style={{background: 'linear-gradient(135deg, #dc354522 0%, #ff6b6b22 100%)', border: '2px solid #dc3545', padding: '25px'}}>
+                                <div style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px'}}>
+                                    <span style={{fontSize: '1.8em'}}>💸</span>
+                                    <div className="stat-label" style={{fontSize: '1em', color: '#a0aec0'}}>Total Expenses</div>
+                                </div>
+                                <div className="stat-value negative" style={{fontSize: '2em', fontWeight: '700'}}>{formatCurrency(monthExpenses)}</div>
+                            </div>
+                            <div className="stat-card" style={{background: monthNet >= 0 ? 'linear-gradient(135deg, #28a74522 0%, #20c99722 100%)' : 'linear-gradient(135deg, #dc354522 0%, #ff6b6b22 100%)', border: `2px solid ${monthNet >= 0 ? '#28a745' : '#dc3545'}`, padding: '25px'}}>
+                                <div style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px'}}>
+                                    <span style={{fontSize: '1.8em'}}>{monthNet >= 0 ? '📈' : '📉'}</span>
+                                    <div className="stat-label" style={{fontSize: '1em', color: '#a0aec0'}}>Net (Income - Expenses)</div>
+                                </div>
+                                <div className={`stat-value ${monthNet >= 0 ? 'positive' : 'negative'}`} style={{fontSize: '2em', fontWeight: '700'}}>{formatCurrency(monthNet)}</div>
+                            </div>
+                            <div className="stat-card" style={{background: 'linear-gradient(135deg, #667eea22 0%, #764ba222 100%)', border: '2px solid #667eea', padding: '25px'}}>
+                                <div style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px'}}>
+                                    <span style={{fontSize: '1.8em'}}>📝</span>
+                                    <div className="stat-label" style={{fontSize: '1em', color: '#a0aec0'}}>Total Transactions</div>
+                                </div>
+                                <div className="stat-value" style={{fontSize: '2em', fontWeight: '700', color: '#667eea'}}>{monthTransactions.length}</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {/* Top Transactions */}
+                    {topTransactions.length > 0 && (
+                        <div className="section" style={{background: '#1a1f2e', border: '2px solid #667eea'}}>
+                            <h2 style={{marginBottom: '20px', color: '#667eea'}}>🏆 Top 5 Expenses</h2>
+                            <div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
+                                {topTransactions.map((t, index) => (
+                                    <div key={t.id} style={{
+                                        background: '#0f1419',
+                                        border: '2px solid #2d3748',
+                                        borderRadius: '12px',
+                                        padding: '20px',
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        transition: 'all 0.2s',
+                                        cursor: 'pointer'
+                                    }}
+                                    onMouseOver={(e) => e.currentTarget.style.borderColor = '#667eea'}
+                                    onMouseOut={(e) => e.currentTarget.style.borderColor = '#2d3748'}
+                                    >
+                                        <div style={{display: 'flex', alignItems: 'center', gap: '15px', flex: 1}}>
+                                            <div style={{
+                                                width: '40px',
+                                                height: '40px',
+                                                borderRadius: '50%',
+                                                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                fontSize: '1.2em',
+                                                fontWeight: '700',
+                                                color: '#fff'
+                                            }}>
+                                                #{index + 1}
+                                            </div>
+                                            <div>
+                                                <h4 style={{margin: 0, fontSize: '1.1em', color: '#e2e8f0'}}>{t.description}</h4>
+                                                <p style={{margin: '5px 0 0 0', fontSize: '0.9em', color: '#a0aec0'}}>{t.category} • {formatDate(t.date)}</p>
+                                            </div>
+                                        </div>
+                                        <div style={{
+                                            fontSize: '1.5em',
+                                            fontWeight: '700',
+                                            color: t.type === 'income' ? '#28a745' : '#dc3545'
+                                        }}>
+                                            {t.type === 'income' ? '+' : '-'}{formatCurrency(t.amount)}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    
+                    {/* Category Breakdown */}
+                    {sortedCategories.length > 0 && (
+                        <div className="section" style={{background: '#1a1f2e', border: '2px solid #667eea'}}>
+                            <h2 style={{marginBottom: '20px', color: '#667eea'}}>📊 Spending by Category</h2>
+                            <div style={{display: 'flex', flexDirection: 'column', gap: '15px'}}>
+                                {sortedCategories.map(([cat, amount], index) => {
+                                    const percentage = monthExpenses > 0 ? (amount / monthExpenses * 100) : 0;
+                                    const colors = ['#667eea', '#764ba2', '#f093fb', '#4facfe', '#00f2fe', '#43e97b', '#fa709a', '#fee140'];
+                                    const color = colors[index % colors.length];
+                                    
+                                    return (
+                                        <div key={cat} style={{
+                                            background: '#0f1419',
+                                            border: '2px solid #2d3748',
+                                            borderRadius: '12px',
+                                            padding: '20px',
+                                            transition: 'all 0.2s'
+                                        }}>
+                                            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px'}}>
+                                                <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
+                                                    <div style={{
+                                                        width: '12px',
+                                                        height: '12px',
+                                                        borderRadius: '50%',
+                                                        background: color
+                                                    }}></div>
+                                                    <span style={{fontSize: '1.1em', fontWeight: '600', color: '#e2e8f0'}}>{cat}</span>
+                                                </div>
+                                                <div style={{display: 'flex', alignItems: 'center', gap: '20px'}}>
+                                                    <span style={{fontSize: '1.2em', fontWeight: '700', color: '#dc3545'}}>{formatCurrency(amount)}</span>
+                                                    <span style={{fontSize: '1em', fontWeight: '600', color: '#667eea', minWidth: '60px', textAlign: 'right'}}>{percentage.toFixed(1)}%</span>
+                                                </div>
+                                            </div>
+                                            <div style={{
+                                                width: '100%',
+                                                height: '8px',
+                                                background: '#2d3748',
+                                                borderRadius: '4px',
+                                                overflow: 'hidden'
+                                            }}>
+                                                <div style={{
+                                                    width: `${percentage}%`,
+                                                    height: '100%',
+                                                    background: color,
+                                                    transition: 'width 0.5s ease'
+                                                }}></div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+                    
+                    {/* Monthly Breakdown (Full Year Only) */}
+                    {selectedMonth === -1 && monthTransactions.length > 0 && (
+                        <div className="section" style={{background: '#1a1f2e', border: '2px solid #667eea'}}>
+                            <h2 style={{marginBottom: '20px', color: '#667eea'}}>📅 Monthly Breakdown</h2>
+                            <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '15px'}}>
+                                {(() => {
+                                    const monthlyData = [];
+                                    for (let month = 0; month < 12; month++) {
+                                        const testDate = new Date(selectedYear, month, 1);
+                                        const monthRange = getFinancialMonthRange(testDate);
+                                        const monthTrans = transactions.filter(t => {
+                                            const date = parseLocalDate(t.date);
+                                            return date >= monthRange.start && date <= monthRange.end;
+                                        });
+                                        
+                                        if (monthTrans.length > 0) {
+                                            const income = monthTrans.filter(t => t.type === 'income').reduce((sum, t) => sum + parseFloat(t.amount), 0);
+                                            const expenses = monthTrans.filter(t => t.type === 'expense').reduce((sum, t) => sum + parseFloat(t.amount), 0);
+                                            const net = income - expenses;
+                                            
+                                            monthlyData.push({
+                                                month: month,
+                                                label: new Date(selectedYear, month, 1).toLocaleDateString('en-US', { month: 'long' }),
+                                                income: income,
+                                                expenses: expenses,
+                                                net: net,
+                                                count: monthTrans.length
+                                            });
+                                        }
+                                    }
+                                    
+                                    return monthlyData.map(data => (
+                                        <div key={data.month} style={{
+                                            background: '#0f1419',
+                                            border: '2px solid #2d3748',
+                                            borderRadius: '12px',
+                                            padding: '20px',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s'
+                                        }}
+                                        onClick={() => setSelectedMonth(data.month)}
+                                        onMouseOver={(e) => e.currentTarget.style.borderColor = '#667eea'}
+                                        onMouseOut={(e) => e.currentTarget.style.borderColor = '#2d3748'}
+                                        >
+                                            <h3 style={{color: '#667eea', marginBottom: '15px', fontSize: '1.2em'}}>{data.label}</h3>
+                                            <div style={{display: 'flex', flexDirection: 'column', gap: '8px'}}>
+                                                <div style={{display: 'flex', justifyContent: 'space-between'}}>
+                                                    <span style={{color: '#a0aec0'}}>Income:</span>
+                                                    <span style={{color: '#28a745', fontWeight: '600'}}>{formatCurrency(data.income)}</span>
+                                                </div>
+                                                <div style={{display: 'flex', justifyContent: 'space-between'}}>
+                                                    <span style={{color: '#a0aec0'}}>Expenses:</span>
+                                                    <span style={{color: '#dc3545', fontWeight: '600'}}>{formatCurrency(data.expenses)}</span>
+                                                </div>
+                                                <div style={{display: 'flex', justifyContent: 'space-between', paddingTop: '8px', borderTop: '1px solid #2d3748'}}>
+                                                    <span style={{color: '#e2e8f0', fontWeight: '600'}}>Net:</span>
+                                                    <span style={{color: data.net >= 0 ? '#28a745' : '#dc3545', fontWeight: '700', fontSize: '1.1em'}}>
+                                                        {formatCurrency(data.net)}
+                                                    </span>
+                                                </div>
+                                                <div style={{textAlign: 'center', marginTop: '8px', color: '#667eea', fontSize: '0.9em'}}>
+                                                    {data.count} transactions • Click to view
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ));
+                                })()}
+                            </div>
+                        </div>
+                    )}
+                    
+                    {/* No Data Message */}
+                    {monthTransactions.length === 0 && (
+                        <div className="section" style={{background: '#1a1f2e', border: '2px solid #667eea', textAlign: 'center', padding: '60px 40px'}}>
+                            <div style={{fontSize: '4em', marginBottom: '20px'}}>📭</div>
+                            <h3 style={{color: '#667eea', fontSize: '1.5em', marginBottom: '10px'}}>No Transactions Found</h3>
+                            <p style={{color: '#a0aec0', fontSize: '1.1em'}}>
+                                No transactions recorded for {monthLabel} {selectedYear}
+                            </p>
+                        </div>
+                    )}
                 </div>
             );
         }
