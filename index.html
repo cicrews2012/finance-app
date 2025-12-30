@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finance Tracker v1.11.17</title>
-    <!-- Build: 2025-12-28-07 - Added Full Year Review option -->
+    <title>Finance Tracker v1.11.18</title>
+    <!-- Build: 2025-12-30-02 - Added All-Time Net banner to History -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -485,7 +485,7 @@
                 <div className="app-container">
                     <div className="header">
                         <h1>💰 Finance Tracker</h1>
-                        <div className="version">v1.11.17 | Full Year Review Added</div>
+                        <div className="version">v1.11.18 | All-Time Net Added</div>
                     </div>
                     <div className="tab-navigation">
                         <button className={`tab-button ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>📊 Dashboard</button>
@@ -553,7 +553,19 @@
             const moneyAvailable = moneyLeft - spentSoFar - unpaidRecurring;
             
             const getYearlyTotals = () => {
-                const yearlyTransactions = transactions.filter(t => { const tDate = parseLocalDate(t.date); return tDate.getFullYear() === selectedYear; });
+                // Get all transactions that fall within ANY financial month of the selected year
+                const yearlyTransactions = transactions.filter(t => {
+                    const tDate = parseLocalDate(t.date);
+                    // Check each financial month of the selected year
+                    for (let month = 0; month < 12; month++) {
+                        const testDate = new Date(selectedYear, month, 1);
+                        const monthRange = getFinancialMonthRange(testDate);
+                        if (tDate >= monthRange.start && tDate <= monthRange.end) {
+                            return true;
+                        }
+                    }
+                    return false;
+                });
                 const income = yearlyTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + parseFloat(t.amount), 0);
                 const expenses = yearlyTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + parseFloat(t.amount), 0);
                 return { income, expenses, net: income - expenses, year: selectedYear };
@@ -2277,6 +2289,11 @@
         }
 
         function HistoryTab({ transactions, recurringPayments, debts }) {
+            // Calculate ALL-TIME totals
+            const allTimeIncome = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + parseFloat(t.amount), 0);
+            const allTimeExpenses = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + parseFloat(t.amount), 0);
+            const allTimeNet = allTimeIncome - allTimeExpenses;
+            
             // Get available years from transactions
             const availableYears = [...new Set(transactions.map(t => {
                 const date = parseLocalDate(t.date);
@@ -2368,6 +2385,36 @@
             
             return (
                 <div>
+                    {/* All-Time Net Banner */}
+                    <div style={{
+                        background: allTimeNet >= 0 ? 'linear-gradient(135deg, #28a745 0%, #20c997 100%)' : 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)',
+                        border: `2px solid ${allTimeNet >= 0 ? '#28a745' : '#dc3545'}`,
+                        borderRadius: '10px',
+                        padding: '15px 25px',
+                        marginBottom: '20px',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: '15px'
+                    }}>
+                        <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
+                            <span style={{fontSize: '2em'}}>{allTimeNet >= 0 ? '🎉' : '📊'}</span>
+                            <div>
+                                <div style={{color: '#fff', fontSize: '0.9em', fontWeight: '600', opacity: 0.95}}>All-Time Net</div>
+                                <div style={{color: '#fff', fontSize: '0.85em', opacity: 0.8}}>Total income minus total expenses</div>
+                            </div>
+                        </div>
+                        <div style={{textAlign: 'right'}}>
+                            <div style={{color: '#fff', fontSize: '2em', fontWeight: '700', letterSpacing: '-0.5px'}}>
+                                {formatCurrency(allTimeNet)}
+                            </div>
+                            <div style={{color: 'rgba(255,255,255,0.9)', fontSize: '0.85em', marginTop: '2px'}}>
+                                {formatCurrency(allTimeIncome)} in • {formatCurrency(allTimeExpenses)} out
+                            </div>
+                        </div>
+                    </div>
+                    
                     {/* Header with Selectors */}
                     <div className="section" style={{background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: '2px solid #667eea'}}>
                         <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px'}}>
