@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finance Tracker v1.11.18</title>
-    <!-- Build: 2025-12-30-02 - Added All-Time Net banner to History -->
+    <title>Finance Tracker v1.11.18.1</title>
+    <!-- Build: 2025-12-31-01 - Lightened summary card numbers for better theme match -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -485,7 +485,7 @@
                 <div className="app-container">
                     <div className="header">
                         <h1>💰 Finance Tracker</h1>
-                        <div className="version">v1.11.18 | All-Time Net Added</div>
+                        <div className="version">v1.11.18.1 | Lightened Summary Numbers</div>
                     </div>
                     <div className="tab-navigation">
                         <button className={`tab-button ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>📊 Dashboard</button>
@@ -2460,21 +2460,21 @@
                                     <span style={{fontSize: '1.8em'}}>💰</span>
                                     <div className="stat-label" style={{fontSize: '1em', color: '#a0aec0'}}>Total Income</div>
                                 </div>
-                                <div className="stat-value positive" style={{fontSize: '2em', fontWeight: '700'}}>{formatCurrency(monthIncome)}</div>
+                                <div className="stat-value positive" style={{fontSize: '2em', fontWeight: '700', color: '#e2e8f0'}}>{formatCurrency(monthIncome)}</div>
                             </div>
                             <div className="stat-card" style={{background: 'linear-gradient(135deg, #dc354522 0%, #ff6b6b22 100%)', border: '2px solid #dc3545', padding: '25px'}}>
                                 <div style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px'}}>
                                     <span style={{fontSize: '1.8em'}}>💸</span>
                                     <div className="stat-label" style={{fontSize: '1em', color: '#a0aec0'}}>Total Expenses</div>
                                 </div>
-                                <div className="stat-value negative" style={{fontSize: '2em', fontWeight: '700'}}>{formatCurrency(monthExpenses)}</div>
+                                <div className="stat-value negative" style={{fontSize: '2em', fontWeight: '700', color: '#e2e8f0'}}>{formatCurrency(monthExpenses)}</div>
                             </div>
                             <div className="stat-card" style={{background: monthNet >= 0 ? 'linear-gradient(135deg, #28a74522 0%, #20c99722 100%)' : 'linear-gradient(135deg, #dc354522 0%, #ff6b6b22 100%)', border: `2px solid ${monthNet >= 0 ? '#28a745' : '#dc3545'}`, padding: '25px'}}>
                                 <div style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px'}}>
                                     <span style={{fontSize: '1.8em'}}>{monthNet >= 0 ? '📈' : '📉'}</span>
                                     <div className="stat-label" style={{fontSize: '1em', color: '#a0aec0'}}>Net (Income - Expenses)</div>
                                 </div>
-                                <div className={`stat-value ${monthNet >= 0 ? 'positive' : 'negative'}`} style={{fontSize: '2em', fontWeight: '700'}}>{formatCurrency(monthNet)}</div>
+                                <div className={`stat-value ${monthNet >= 0 ? 'positive' : 'negative'}`} style={{fontSize: '2em', fontWeight: '700', color: '#e2e8f0'}}>{formatCurrency(monthNet)}</div>
                             </div>
                             <div className="stat-card" style={{background: 'linear-gradient(135deg, #667eea22 0%, #764ba222 100%)', border: '2px solid #667eea', padding: '25px'}}>
                                 <div style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px'}}>
