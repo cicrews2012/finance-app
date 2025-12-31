@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finance Tracker v1.11.18.1</title>
-    <!-- Build: 2025-12-31-01 - Lightened summary card numbers for better theme match -->
+    <title>Finance Tracker v1.11.20</title>
+    <!-- Build: 2025-12-31-02 - Added payment link URLs to recurring payments -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -485,7 +485,7 @@
                 <div className="app-container">
                     <div className="header">
                         <h1>💰 Finance Tracker</h1>
-                        <div className="version">v1.11.18.1 | Lightened Summary Numbers</div>
+                        <div className="version">v1.11.20 | Payment Links Added</div>
                     </div>
                     <div className="tab-navigation">
                         <button className={`tab-button ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>📊 Dashboard</button>
@@ -1432,6 +1432,18 @@
                                                                 🤖 Auto-pay
                                                             </div>
                                                         )}
+                                                        {payment.paymentUrl && (
+                                                            <div 
+                                                                style={{color: '#667eea', fontSize: '0.85em', marginTop: '2px', cursor: 'pointer'}}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    window.open(payment.paymentUrl, '_blank');
+                                                                }}
+                                                                title="Open payment link"
+                                                            >
+                                                                🔗 Payment Link
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 );
                                             })}
@@ -1468,7 +1480,7 @@
         }
 
         function RecurringTab({ recurringPayments, setRecurringPayments, debts, setDebts, transactions, setTransactions, paidPayments, setPaidPayments, currentMonth }) {
-            const [formData, setFormData] = useState({ name: '', amount: '', category: '', dueDay: '1', linkedDebt: '', auto: false });
+            const [formData, setFormData] = useState({ name: '', amount: '', category: '', dueDay: '1', linkedDebt: '', auto: false, paymentUrl: '' });
             const [editingPayment, setEditingPayment] = useState(null);
             const [viewMode, setViewMode] = useState('list'); // 'list' or 'calendar'
             const monthKey = getMonthKey(currentMonth);
@@ -1589,6 +1601,16 @@
                                 <div className="form-group"><label>Due Day (1-31)</label><input type="number" min="1" max="31" value={formData.dueDay} onChange={(e) => setFormData({...formData, dueDay: e.target.value})} required /></div>
                                 <div className="form-group"><label>Link to Debt (Optional)</label><select value={formData.linkedDebt} onChange={(e) => setFormData({...formData, linkedDebt: e.target.value})}><option value="">None</option>{debts.map(debt => (<option key={debt.id} value={debt.id}>{debt.name}</option>))}</select></div>
                             </div>
+                            <div className="form-group">
+                                <label>Payment Link (Optional)</label>
+                                <input 
+                                    type="url" 
+                                    value={formData.paymentUrl || ''} 
+                                    onChange={(e) => setFormData({...formData, paymentUrl: e.target.value})} 
+                                    placeholder="https://example.com/pay"
+                                />
+                                <small style={{color: '#a0aec0', fontSize: '0.85em', marginTop: '5px', display: 'block'}}>Add direct link to payment website</small>
+                            </div>
                             <div className="form-group" style={{marginBottom: '0'}}>
                                 <label style={{display: 'flex', alignItems: 'center', cursor: 'pointer'}}>
                                     <input type="checkbox" checked={formData.auto} onChange={(e) => setFormData({...formData, auto: e.target.checked})} style={{width: 'auto', marginRight: '10px'}} />
@@ -1656,6 +1678,14 @@
                                             </div>
                                             <div style={{display: 'flex', alignItems: 'center', gap: '15px'}}>
                                                 <div className="item-amount negative">{formatCurrency(payment.amount)}</div>
+                                                {payment.paymentUrl && (
+                                                    <button 
+                                                        onClick={() => window.open(payment.paymentUrl, '_blank')} 
+                                                        style={{padding: '8px 16px', fontSize: '0.9em', background: '#667eea', color: 'white', border: '2px solid #667eea'}}
+                                                    >
+                                                        🔗 Payment Link
+                                                    </button>
+                                                )}
                                                 {!isPaid && !payment.auto && <button onClick={() => processPayment(payment)} style={{padding: '8px 16px', fontSize: '0.9em'}}>Process</button>}
                                                 {!payment.auto && <button className={isPaid ? 'secondary' : 'success'} onClick={() => togglePaidStatus(payment.id)} style={{padding: '8px 16px', fontSize: '0.9em'}}>{isPaid ? 'Mark Unpaid' : 'Mark Paid'}</button>}
                                                 <button onClick={() => handleEdit(payment)} style={{padding: '8px 16px', fontSize: '0.9em'}}>Edit</button>
@@ -1694,6 +1724,16 @@
                                 <div className="form-group"><label>Category</label><input type="text" value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})} /></div>
                                 <div className="form-group"><label>Due Day (1-31)</label><input type="number" min="1" max="31" value={formData.dueDay} onChange={(e) => setFormData({...formData, dueDay: e.target.value})} required /></div>
                                 <div className="form-group"><label>Link to Debt</label><select value={formData.linkedDebt || ''} onChange={(e) => setFormData({...formData, linkedDebt: e.target.value})}><option value="">None</option>{debts.map(debt => (<option key={debt.id} value={debt.id}>{debt.name}</option>))}</select></div>
+                            </div>
+                            <div className="form-group">
+                                <label>Payment Link (Optional)</label>
+                                <input 
+                                    type="url" 
+                                    value={formData.paymentUrl || ''} 
+                                    onChange={(e) => setFormData({...formData, paymentUrl: e.target.value})} 
+                                    placeholder="https://example.com/pay"
+                                />
+                                <small style={{color: '#a0aec0', fontSize: '0.85em', marginTop: '5px', display: 'block'}}>Add direct link to payment website</small>
                             </div>
                             <div className="form-group" style={{marginBottom: '0'}}>
                                 <label style={{display: 'flex', alignItems: 'center', cursor: 'pointer'}}>
