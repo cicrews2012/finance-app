@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finance Tracker v1.11.21</title>
-    <!-- Build: 2025-12-31-03 - Added notes field to transactions -->
+    <title>Finance Tracker v1.11.21.1</title>
+    <!-- Build: 2026-01-02-01 - Changed "Description" label to "Vendor" for clarity -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -485,7 +485,7 @@
                 <div className="app-container">
                     <div className="header">
                         <h1>💰 Finance Tracker</h1>
-                        <div className="version">v1.11.21 | Transaction Notes Added</div>
+                        <div className="version">v1.11.21.1 | "Vendor" Label Added</div>
                     </div>
                     <div className="tab-navigation">
                         <button className={`tab-button ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>📊 Dashboard</button>
@@ -819,7 +819,7 @@
             // CSV Export Function
             const exportToCSV = (transactionsToExport) => {
                 // CSV Header
-                const headers = ['Date', 'Type', 'Description', 'Category', 'Amount', 'Linked Debt'];
+                const headers = ['Date', 'Type', 'Vendor', 'Category', 'Amount', 'Linked Debt'];
                 
                 // CSV Rows
                 const rows = transactionsToExport.map(t => {
@@ -999,7 +999,7 @@
                                             <tr style={{background: '#1a1f2e'}}>
                                                 <th style={{padding: '12px', textAlign: 'left', color: '#667eea', border: '1px solid #2d3748'}}>Type</th>
                                                 <th style={{padding: '12px', textAlign: 'left', color: '#667eea', border: '1px solid #2d3748'}}>Date</th>
-                                                <th style={{padding: '12px', textAlign: 'left', color: '#667eea', border: '1px solid #2d3748'}}>Description</th>
+                                                <th style={{padding: '12px', textAlign: 'left', color: '#667eea', border: '1px solid #2d3748'}}>Vendor</th>
                                                 <th style={{padding: '12px', textAlign: 'left', color: '#667eea', border: '1px solid #2d3748'}}>Amount</th>
                                                 <th style={{padding: '12px', textAlign: 'left', color: '#667eea', border: '1px solid #2d3748'}}>Category</th>
                                                 <th style={{padding: '12px', textAlign: 'left', color: '#667eea', border: '1px solid #2d3748'}}>Notes</th>
@@ -1032,7 +1032,7 @@
                                                             type="text" 
                                                             value={row.description} 
                                                             onChange={(e) => updateBulkRow(row.id, 'description', e.target.value)}
-                                                            placeholder="e.g., 7 Brew"
+                                                            placeholder="e.g., Kroger, Shell"
                                                             style={{width: '100%', padding: '8px'}}
                                                         />
                                                     </td>
@@ -1096,7 +1096,7 @@
                                 <div className="form-group"><label>Date</label><input type="date" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} required /></div>
                             </div>
                             <div className="form-row">
-                                <div className="form-group"><label>Description</label><input type="text" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} placeholder="e.g., Grocery shopping" required /></div>
+                                <div className="form-group"><label>Vendor</label><input type="text" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} placeholder="e.g., Amazon, Kroger, Shell" required /></div>
                                 <div className="form-group">
                                     <label>Category</label>
                                     <select 
@@ -1218,7 +1218,7 @@
                                 </div>
                                 
                                 <div style={{gridColumn: showAdvancedFilters ? 'auto' : 'span 2'}}>
-                                    <label style={{display: 'block', marginBottom: '5px'}}>Search Description</label>
+                                    <label style={{display: 'block', marginBottom: '5px'}}>Search Vendor</label>
                                     <input 
                                         type="text" 
                                         value={searchPlace} 
@@ -1358,7 +1358,7 @@
                                 <div className="form-group"><label>Date</label><input type="date" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} required /></div>
                             </div>
                             <div className="form-row">
-                                <div className="form-group"><label>Description</label><input type="text" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} required /></div>
+                                <div className="form-group"><label>Vendor</label><input type="text" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} required /></div>
                                 <div className="form-group"><label>Category</label><input type="text" value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})} /></div>
                             </div>
                             <div className="form-group">
