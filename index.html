@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finance Tracker v1.11.21.1</title>
-    <!-- Build: 2026-01-02-01 - Changed "Description" label to "Vendor" for clarity -->
+    <title>Finance Tracker v1.11.21.4</title>
+    <!-- Build: 2026-01-03-03 - Fixed auto-pay timing - wait for debts to load -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -146,10 +146,19 @@
                 const timer = setTimeout(() => {
                     if (recurringPayments.length === 0) return;
                     
+                    // Skip if debts haven't loaded yet (only if there are payments linked to debts)
+                    const hasLinkedPayments = recurringPayments.some(p => p.linkedDebt);
+                    if (hasLinkedPayments && debts.length === 0) {
+                        console.log('⏳ Waiting for debts to load...');
+                        return;
+                    }
+                    
                     console.log('🚀 AUTO-PAY SYSTEM RUNNING');
                     console.log('Current month:', currentMonth);
                     console.log('Transactions before:', transactions.length);
                     console.log('Recurring payments:', recurringPayments.length);
+                    console.log('Debts:', debts.length);
+                    console.log('Debt IDs:', debts.map(d => ({ id: d.id, name: d.name, type: typeof d.id })));
                     
                     const monthKey = getMonthKey(currentMonth);
                     const todayDate = new Date();
@@ -225,20 +234,36 @@
                                 
                                 // Update linked debt if exists and transaction was created
                                 if (payment.linkedDebt) {
-                                    console.log('  Updating linked debt:', payment.linkedDebt);
-                                    const linkedDebtIndex = updatedDebts.findIndex(d => d.id === parseInt(payment.linkedDebt));
+                                    console.log('  Payment has linkedDebt:', payment.linkedDebt, 'type:', typeof payment.linkedDebt);
+                                    const linkedDebtId = parseInt(payment.linkedDebt);
+                                    console.log('  After parseInt:', linkedDebtId, 'type:', typeof linkedDebtId);
+                                    console.log('  Searching in debts:', updatedDebts.map(d => d.id));
+                                    const linkedDebtIndex = updatedDebts.findIndex(d => {
+                                        console.log('    Comparing debt.id:', d.id, 'type:', typeof d.id, 'with linkedDebtId:', linkedDebtId, 'match:', d.id === linkedDebtId);
+                                        return d.id === linkedDebtId;
+                                    });
+                                    console.log('  Found debt at index:', linkedDebtIndex);
+                                    
                                     if (linkedDebtIndex !== -1) {
                                         const debt = updatedDebts[linkedDebtIndex];
+                                        console.log('  Current debt balance:', debt.currentBalance);
+                                        
+                                        const paymentAmount = parseFloat(payment.amount);
                                         const interestRate = parseFloat(debt.interestRate) || 0;
                                         const monthlyInterestRate = interestRate / 100 / 12;
                                         const interestAccrued = debt.currentBalance * monthlyInterestRate;
-                                        const principalPaid = payment.amount - interestAccrued;
+                                        const principalPaid = paymentAmount - interestAccrued;
                                         const newBalance = Math.max(0, debt.currentBalance - principalPaid);
+                                        
+                                        console.log('  Payment amount:', paymentAmount);
+                                        console.log('  Interest accrued:', interestAccrued);
+                                        console.log('  Principal paid:', principalPaid);
+                                        console.log('  New balance:', newBalance);
                                         
                                         const transactionLog = debt.transactionLog || [];
                                         const logEntry = {
                                             date: getLocalDateString(paymentDate),
-                                            paymentAmount: payment.amount,
+                                            paymentAmount: paymentAmount,
                                             interestAccrued: interestAccrued,
                                             principalPaid: principalPaid,
                                             balanceBefore: debt.currentBalance,
@@ -248,11 +273,17 @@
                                         updatedDebts[linkedDebtIndex] = {
                                             ...debt,
                                             currentBalance: newBalance,
-                                            transactionLog: [...transactionLog, logEntry]
+                                            transactionLog: [...transactionLog, logEntry],
+                                            lastUpdated: getLocalDateString(paymentDate)
                                         };
-                                        console.log('  Debt updated:', updatedDebts[linkedDebtIndex].name);
+                                        
+                                        console.log('  ✅ Debt updated:', updatedDebts[linkedDebtIndex].name, 'new balance:', newBalance);
                                         hasDebtChanges = true;
+                                    } else {
+                                        console.log('  ⚠️ Linked debt not found!');
                                     }
+                                } else {
+                                    console.log('  No linked debt for this payment');
                                 }
                             }
                             
@@ -287,7 +318,7 @@
                 }, 500); // Wait 500ms for data to load
                 
                 return () => clearTimeout(timer);
-            }, [currentMonth, recurringPayments.length]); // Run when month changes or payments added/removed
+            }, [currentMonth, recurringPayments.length, debts.length]); // Run when month changes, payments added/removed, or debts loaded
 
             const getMonthlyTotals = () => {
                 const __range = getFinancialMonthRange(currentMonth); const start = __range.start; const end = __range.end;
@@ -485,7 +516,7 @@
                 <div className="app-container">
                     <div className="header">
                         <h1>💰 Finance Tracker</h1>
-                        <div className="version">v1.11.21.1 | "Vendor" Label Added</div>
+                        <div className="version">v1.11.21.4 | Auto-Pay Timing Fixed</div>
                     </div>
                     <div className="tab-navigation">
                         <button className={`tab-button ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>📊 Dashboard</button>
