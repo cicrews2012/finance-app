@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finance Tracker v1.11.21.4</title>
-    <!-- Build: 2026-01-03-03 - Fixed auto-pay timing - wait for debts to load -->
+    <title>Finance Tracker v1.11.22</title>
+    <!-- Build: 2026-01-06-01 - Added monthly payment total to debt section -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -516,7 +516,7 @@
                 <div className="app-container">
                     <div className="header">
                         <h1>💰 Finance Tracker</h1>
-                        <div className="version">v1.11.21.4 | Auto-Pay Timing Fixed</div>
+                        <div className="version">v1.11.22 | Monthly Debt Payment Total</div>
                     </div>
                     <div className="tab-navigation">
                         <button className={`tab-button ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>📊 Dashboard</button>
@@ -1970,9 +1970,14 @@
                     </div>
                     <div className="section">
                         <h2>Active Debts ({debts.length})</h2>
-                        <p style={{color: '#a0aec0', marginBottom: '15px', fontSize: '1.1em'}}>
-                            Total Debt: <strong style={{color: '#dc3545'}}>{formatCurrency(debts.reduce((sum, d) => sum + parseFloat(d.currentBalance), 0))}</strong>
-                        </p>
+                        <div style={{display: 'flex', gap: '30px', marginBottom: '15px', fontSize: '1.1em', flexWrap: 'wrap'}}>
+                            <p style={{color: '#a0aec0', margin: 0}}>
+                                Total Debt: <strong style={{color: '#dc3545'}}>{formatCurrency(debts.reduce((sum, d) => sum + parseFloat(d.currentBalance), 0))}</strong>
+                            </p>
+                            <p style={{color: '#a0aec0', margin: 0}}>
+                                Monthly Payments: <strong style={{color: '#ffc107'}}>{formatCurrency(debts.reduce((sum, d) => sum + parseFloat(d.minimumPayment || 0), 0))}</strong>
+                            </p>
+                        </div>
                         <div className="debt-list">
                             {debts.length === 0 ? (
                                 <p style={{color: '#a0aec0', textAlign: 'center', padding: '20px'}}>No debts tracked yet.</p>
