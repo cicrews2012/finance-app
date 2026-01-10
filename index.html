@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finance Tracker v1.11.22</title>
-    <!-- Build: 2026-01-06-01 - Added monthly payment total to debt section -->
+    <title>Finance Tracker v1.11.23</title>
+    <!-- Build: 2026-01-06-02 - Added duplicate transaction detector -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -516,13 +516,14 @@
                 <div className="app-container">
                     <div className="header">
                         <h1>💰 Finance Tracker</h1>
-                        <div className="version">v1.11.22 | Monthly Debt Payment Total</div>
+                        <div className="version">v1.11.23 | Duplicate Detector Added</div>
                     </div>
                     <div className="tab-navigation">
                         <button className={`tab-button ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>📊 Dashboard</button>
                         <button className={`tab-button ${activeTab === 'budget' ? 'active' : ''}`} onClick={() => setActiveTab('budget')}>💵 Budget</button>
                         <button className={`tab-button ${activeTab === 'transactions' ? 'active' : ''}`} onClick={() => setActiveTab('transactions')}>💳 Transactions</button>
                         <button className={`tab-button ${activeTab === 'recurring' ? 'active' : ''}`} onClick={() => setActiveTab('recurring')}>🔄 Recurring</button>
+                        <button className={`tab-button ${activeTab === 'duplicates' ? 'active' : ''}`} onClick={() => setActiveTab('duplicates')}>🔍 Duplicates</button>
                         <button className={`tab-button ${activeTab === 'debts' ? 'active' : ''}`} onClick={() => setActiveTab('debts')}>📉 Debt Tracking</button>
                         <button className={`tab-button ${activeTab === 'payoff' ? 'active' : ''}`} onClick={() => setActiveTab('payoff')}>🎯 Payoff Strategies</button>
                         <button className={`tab-button ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>📈 History</button>
@@ -533,6 +534,7 @@
                         {activeTab === 'budget' && <BudgetTab transactions={transactions} recurringPayments={recurringPayments} expectedMonthlyIncome={expectedMonthlyIncome} setExpectedMonthlyIncome={setExpectedMonthlyIncome} currentMonth={currentMonth} unpaidRecurring={unpaidRecurring} />}
                         {activeTab === 'transactions' && <TransactionsTab transactions={transactions} setTransactions={setTransactions} currentMonth={currentMonth} expenseCategories={expenseCategories} incomeCategories={incomeCategories} debts={debts} setDebts={setDebts} />}
                         {activeTab === 'recurring' && <RecurringTab recurringPayments={recurringPayments} setRecurringPayments={setRecurringPayments} debts={debts} setDebts={setDebts} transactions={transactions} setTransactions={setTransactions} paidPayments={paidPayments} setPaidPayments={setPaidPayments} currentMonth={currentMonth} />}
+                        {activeTab === 'duplicates' && <DuplicatesTab transactions={transactions} setTransactions={setTransactions} />}
                         {activeTab === 'debts' && <DebtsTab debts={debts} setDebts={setDebts} recurringPayments={recurringPayments} setRecurringPayments={setRecurringPayments} />}
                         {activeTab === 'payoff' && <PayoffStrategiesTab debts={debts} />}
                         {activeTab === 'history' && <HistoryTab transactions={transactions} recurringPayments={recurringPayments} debts={debts} />}
@@ -1818,6 +1820,272 @@
                                 <button type="button" className="secondary" onClick={onClose}>Cancel</button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            );
+        }
+
+        function DuplicatesTab({ transactions, setTransactions }) {
+            const [confidenceFilter, setConfidenceFilter] = useState('all'); // 'all', 'high', 'medium', 'low'
+            const [ignoredPairs, setIgnoredPairs] = useState(new Set());
+            
+            // Find duplicate groups
+            const findDuplicates = () => {
+                const duplicateGroups = [];
+                const processed = new Set();
+                
+                transactions.forEach((t1, i) => {
+                    if (processed.has(t1.id)) return;
+                    
+                    const potentialDuplicates = [];
+                    
+                    transactions.forEach((t2, j) => {
+                        if (i >= j) return; // Skip self and already compared
+                        if (processed.has(t2.id)) return;
+                        
+                        const pairKey = [t1.id, t2.id].sort().join('-');
+                        if (ignoredPairs.has(pairKey)) return;
+                        
+                        // Check if potential duplicate
+                        const sameVendor = t1.description.toLowerCase() === t2.description.toLowerCase();
+                        const sameAmount = Math.abs(parseFloat(t1.amount) - parseFloat(t2.amount)) < 0.01;
+                        const sameType = t1.type === t2.type;
+                        
+                        if (!sameVendor || !sameType) return;
+                        
+                        const date1 = parseLocalDate(t1.date);
+                        const date2 = parseLocalDate(t2.date);
+                        const daysDiff = Math.abs((date1 - date2) / (1000 * 60 * 60 * 24));
+                        
+                        let confidence = 'low';
+                        if (sameAmount && daysDiff === 0) {
+                            confidence = 'high';
+                        } else if (sameAmount && daysDiff <= 2) {
+                            confidence = 'medium';
+                        } else if (Math.abs(parseFloat(t1.amount) - parseFloat(t2.amount)) <= 1 && daysDiff <= 3) {
+                            confidence = 'low';
+                        } else {
+                            return; // Not similar enough
+                        }
+                        
+                        potentialDuplicates.push({
+                            transaction: t2,
+                            confidence,
+                            daysDiff,
+                            pairKey
+                        });
+                    });
+                    
+                    if (potentialDuplicates.length > 0) {
+                        duplicateGroups.push({
+                            original: t1,
+                            duplicates: potentialDuplicates
+                        });
+                        processed.add(t1.id);
+                        potentialDuplicates.forEach(d => processed.add(d.transaction.id));
+                    }
+                });
+                
+                return duplicateGroups;
+            };
+            
+            const duplicateGroups = findDuplicates();
+            
+            // Filter by confidence
+            const filteredGroups = duplicateGroups.filter(group => {
+                if (confidenceFilter === 'all') return true;
+                return group.duplicates.some(d => d.confidence === confidenceFilter);
+            }).map(group => ({
+                ...group,
+                duplicates: confidenceFilter === 'all' 
+                    ? group.duplicates 
+                    : group.duplicates.filter(d => d.confidence === confidenceFilter)
+            }));
+            
+            const deleteDuplicate = (id) => {
+                if (confirm('Delete this transaction?')) {
+                    setTransactions(transactions.filter(t => t.id !== id));
+                }
+            };
+            
+            const markAsNotDuplicate = (pairKey) => {
+                setIgnoredPairs(new Set([...ignoredPairs, pairKey]));
+            };
+            
+            const getConfidenceColor = (confidence) => {
+                switch(confidence) {
+                    case 'high': return '#dc3545';
+                    case 'medium': return '#ffc107';
+                    case 'low': return '#6c757d';
+                    default: return '#a0aec0';
+                }
+            };
+            
+            const getConfidenceLabel = (confidence) => {
+                switch(confidence) {
+                    case 'high': return '⚠️ HIGH CONFIDENCE';
+                    case 'medium': return '⚡ MEDIUM CONFIDENCE';
+                    case 'low': return '💭 LOW CONFIDENCE';
+                    default: return '';
+                }
+            };
+            
+            return (
+                <div>
+                    <div className="section">
+                        <h2>🔍 Duplicate Detector</h2>
+                        <p style={{color: '#a0aec0', marginBottom: '20px'}}>
+                            Found <strong style={{color: '#667eea'}}>{filteredGroups.length}</strong> potential duplicate groups
+                        </p>
+                        
+                        <div style={{marginBottom: '20px'}}>
+                            <label style={{display: 'block', marginBottom: '10px', color: '#e2e8f0'}}>Filter by Confidence:</label>
+                            <div style={{display: 'flex', gap: '10px', flexWrap: 'wrap'}}>
+                                <button 
+                                    className={confidenceFilter === 'all' ? '' : 'secondary'}
+                                    onClick={() => setConfidenceFilter('all')}
+                                    style={{fontSize: '0.9em'}}
+                                >
+                                    All ({duplicateGroups.length})
+                                </button>
+                                <button 
+                                    className={confidenceFilter === 'high' ? '' : 'secondary'}
+                                    onClick={() => setConfidenceFilter('high')}
+                                    style={{fontSize: '0.9em', background: confidenceFilter === 'high' ? '#dc3545' : undefined}}
+                                >
+                                    ⚠️ High ({duplicateGroups.filter(g => g.duplicates.some(d => d.confidence === 'high')).length})
+                                </button>
+                                <button 
+                                    className={confidenceFilter === 'medium' ? '' : 'secondary'}
+                                    onClick={() => setConfidenceFilter('medium')}
+                                    style={{fontSize: '0.9em', background: confidenceFilter === 'medium' ? '#ffc107' : undefined}}
+                                >
+                                    ⚡ Medium ({duplicateGroups.filter(g => g.duplicates.some(d => d.confidence === 'medium')).length})
+                                </button>
+                                <button 
+                                    className={confidenceFilter === 'low' ? '' : 'secondary'}
+                                    onClick={() => setConfidenceFilter('low')}
+                                    style={{fontSize: '0.9em', background: confidenceFilter === 'low' ? '#6c757d' : undefined}}
+                                >
+                                    💭 Low ({duplicateGroups.filter(g => g.duplicates.some(d => d.confidence === 'low')).length})
+                                </button>
+                            </div>
+                        </div>
+                        
+                        {filteredGroups.length === 0 ? (
+                            <div style={{textAlign: 'center', padding: '40px', background: '#1a1f2e', borderRadius: '10px', border: '2px solid #28a745'}}>
+                                <div style={{fontSize: '3em', marginBottom: '10px'}}>✅</div>
+                                <h3 style={{color: '#28a745', marginBottom: '10px'}}>No Duplicates Found!</h3>
+                                <p style={{color: '#a0aec0'}}>Your transactions look clean.</p>
+                            </div>
+                        ) : (
+                            <div>
+                                {filteredGroups.map((group, groupIndex) => {
+                                    const highestConfidence = group.duplicates.reduce((max, d) => {
+                                        const order = {high: 3, medium: 2, low: 1};
+                                        return order[d.confidence] > order[max] ? d.confidence : max;
+                                    }, 'low');
+                                    
+                                    return (
+                                        <div 
+                                            key={groupIndex} 
+                                            style={{
+                                                background: '#1a1f2e', 
+                                                padding: '20px', 
+                                                borderRadius: '10px', 
+                                                marginBottom: '20px',
+                                                border: `2px solid ${getConfidenceColor(highestConfidence)}`
+                                            }}
+                                        >
+                                            <div style={{color: getConfidenceColor(highestConfidence), fontWeight: 'bold', marginBottom: '15px', fontSize: '0.9em'}}>
+                                                {getConfidenceLabel(highestConfidence)}
+                                            </div>
+                                            
+                                            <div style={{marginBottom: '15px'}}>
+                                                <h4 style={{color: '#667eea', marginBottom: '5px'}}>{group.original.description}</h4>
+                                                <p style={{color: '#a0aec0', fontSize: '0.9em'}}>
+                                                    {group.original.category} • {formatCurrency(Math.abs(parseFloat(group.original.amount)))}
+                                                </p>
+                                            </div>
+                                            
+                                            <div style={{borderLeft: '3px solid #667eea', paddingLeft: '15px', marginBottom: '10px'}}>
+                                                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px'}}>
+                                                    <div>
+                                                        <div style={{color: '#e2e8f0', fontSize: '0.95em'}}>
+                                                            📅 {group.original.date}
+                                                        </div>
+                                                        {group.original.notes && (
+                                                            <div style={{color: '#a0aec0', fontSize: '0.85em', marginTop: '3px'}}>
+                                                                Note: {group.original.notes}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                
+                                                {group.duplicates.map((dup, dupIndex) => (
+                                                    <div 
+                                                        key={dupIndex}
+                                                        style={{
+                                                            borderTop: '1px solid #2d3748',
+                                                            paddingTop: '10px',
+                                                            marginTop: '10px'
+                                                        }}
+                                                    >
+                                                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'start'}}>
+                                                            <div style={{flex: 1}}>
+                                                                <div style={{color: '#e2e8f0', fontSize: '0.95em'}}>
+                                                                    📅 {dup.transaction.date}
+                                                                    <span style={{
+                                                                        marginLeft: '10px',
+                                                                        color: getConfidenceColor(dup.confidence),
+                                                                        fontSize: '0.85em'
+                                                                    }}>
+                                                                        {dup.daysDiff === 0 ? 'Same day' : `${dup.daysDiff} day${dup.daysDiff > 1 ? 's' : ''} apart`}
+                                                                    </span>
+                                                                </div>
+                                                                {dup.transaction.notes && (
+                                                                    <div style={{color: '#a0aec0', fontSize: '0.85em', marginTop: '3px'}}>
+                                                                        Note: {dup.transaction.notes}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            <div style={{display: 'flex', gap: '8px', marginLeft: '10px'}}>
+                                                                <button 
+                                                                    className="danger"
+                                                                    onClick={() => deleteDuplicate(dup.transaction.id)}
+                                                                    style={{padding: '6px 12px', fontSize: '0.85em', whiteSpace: 'nowrap'}}
+                                                                >
+                                                                    Delete
+                                                                </button>
+                                                                <button 
+                                                                    className="secondary"
+                                                                    onClick={() => markAsNotDuplicate(dup.pairKey)}
+                                                                    style={{padding: '6px 12px', fontSize: '0.85em', whiteSpace: 'nowrap'}}
+                                                                >
+                                                                    Keep Both
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                    
+                    <div className="section" style={{background: '#1a1f2e', padding: '15px', borderRadius: '10px'}}>
+                        <h4 style={{color: '#667eea', marginBottom: '10px'}}>How Duplicate Detection Works:</h4>
+                        <ul style={{color: '#a0aec0', fontSize: '0.9em', lineHeight: '1.8'}}>
+                            <li><strong style={{color: '#dc3545'}}>⚠️ High Confidence:</strong> Same vendor + exact amount + same date</li>
+                            <li><strong style={{color: '#ffc107'}}>⚡ Medium Confidence:</strong> Same vendor + exact amount + within 2 days</li>
+                            <li><strong style={{color: '#6c757d'}}>💭 Low Confidence:</strong> Same vendor + similar amount (±$1) + within 3 days</li>
+                        </ul>
+                        <p style={{color: '#a0aec0', fontSize: '0.85em', marginTop: '10px', fontStyle: 'italic'}}>
+                            💡 Tip: Click "Keep Both" if transactions aren't actually duplicates to hide them from this list.
+                        </p>
                     </div>
                 </div>
             );
