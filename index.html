@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finance Tracker v1.11.24</title>
-    <!-- Build: 2026-01-06-03 - Mobile responsive design for iPad and iPhone -->
+    <title>Finance Tracker v1.11.26.1</title>
+    <!-- Build: 2026-01-15-02 - Fixed CSV headers + moved paid off section -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -689,6 +689,272 @@
                 a.click();
             };
 
+            const exportToCSV = () => {
+                // Create comprehensive CSV with all transaction data
+                const csvRows = [];
+                
+                // Header
+                csvRows.push([
+                    'Date',
+                    'Type',
+                    'Vendor',
+                    'Category',
+                    'Amount',
+                    'Notes',
+                    'Linked Debt',
+                    'Is Recurring',
+                    'Financial Month',
+                    'Financial Year'
+                ].join(','));
+                
+                // Sort transactions by date (newest first)
+                const sortedTransactions = [...transactions].sort((a, b) => 
+                    new Date(b.date) - new Date(a.date)
+                );
+                
+                // Add transaction rows
+                sortedTransactions.forEach(t => {
+                    const date = parseLocalDate(t.date);
+                    const debtName = t.linkedDebt ? 
+                        (debts.find(d => d.id === parseInt(t.linkedDebt))?.name || '') : 
+                        '';
+                    
+                    // Calculate financial month/year for this transaction
+                    const day = date.getDate();
+                    let financialMonth, financialYear;
+                    if (day >= 28) {
+                        financialMonth = date.getMonth() + 1;
+                        financialYear = date.getFullYear();
+                        if (financialMonth > 11) {
+                            financialMonth = 0;
+                            financialYear++;
+                        }
+                    } else {
+                        financialMonth = date.getMonth();
+                        financialYear = date.getFullYear();
+                    }
+                    const financialMonthName = new Date(financialYear, financialMonth, 1)
+                        .toLocaleDateString('en-US', { month: 'long' });
+                    
+                    csvRows.push([
+                        t.date,
+                        t.type,
+                        `"${(t.description || '').replace(/"/g, '""')}"`, // Escape quotes
+                        t.category || '',
+                        t.amount.toFixed(2),
+                        `"${(t.notes || '').replace(/"/g, '""')}"`, // Escape quotes
+                        `"${debtName.replace(/"/g, '""')}"`, // Escape quotes
+                        t.isRecurring ? 'Yes' : 'No',
+                        financialMonthName,
+                        financialYear
+                    ].join(','));
+                });
+                
+                // Create and download CSV
+                const csvContent = csvRows.join('\n');
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `finance-tracker-transactions-${getLocalDateString()}.csv`;
+                a.click();
+                URL.revokeObjectURL(url);
+            };
+
+            const exportAllDataToCSV = () => {
+                // Create a comprehensive CSV with transactions, debts, and recurring payments
+                const csvRows = [];
+                
+                // === TRANSACTIONS SECTION ===
+                csvRows.push(['TRANSACTIONS']); // Simple text header
+                csvRows.push([
+                    'Date',
+                    'Type',
+                    'Vendor',
+                    'Category',
+                    'Amount',
+                    'Notes',
+                    'Linked Debt',
+                    'Is Recurring',
+                    'Financial Month',
+                    'Financial Year'
+                ].join(','));
+                
+                const sortedTransactions = [...transactions].sort((a, b) => 
+                    new Date(b.date) - new Date(a.date)
+                );
+                
+                sortedTransactions.forEach(t => {
+                    const date = parseLocalDate(t.date);
+                    const debtName = t.linkedDebt ? 
+                        (debts.find(d => d.id === parseInt(t.linkedDebt))?.name || '') : 
+                        '';
+                    
+                    const day = date.getDate();
+                    let financialMonth, financialYear;
+                    if (day >= 28) {
+                        financialMonth = date.getMonth() + 1;
+                        financialYear = date.getFullYear();
+                        if (financialMonth > 11) {
+                            financialMonth = 0;
+                            financialYear++;
+                        }
+                    } else {
+                        financialMonth = date.getMonth();
+                        financialYear = date.getFullYear();
+                    }
+                    const financialMonthName = new Date(financialYear, financialMonth, 1)
+                        .toLocaleDateString('en-US', { month: 'long' });
+                    
+                    csvRows.push([
+                        t.date,
+                        t.type,
+                        `"${(t.description || '').replace(/"/g, '""')}"`,
+                        t.category || '',
+                        t.amount.toFixed(2),
+                        `"${(t.notes || '').replace(/"/g, '""')}"`,
+                        `"${debtName.replace(/"/g, '""')}"`,
+                        t.isRecurring ? 'Yes' : 'No',
+                        financialMonthName,
+                        financialYear
+                    ].join(','));
+                });
+                
+                // === ACTIVE DEBTS SECTION ===
+                csvRows.push(['']); // Empty line
+                csvRows.push(['ACTIVE DEBTS']); // Simple text header
+                csvRows.push([
+                    'Name',
+                    'Category',
+                    'Original Balance',
+                    'Current Balance',
+                    'Interest Rate (%)',
+                    'Minimum Payment',
+                    'Due Day',
+                    'Progress (%)'
+                ].join(','));
+                
+                const activeDebts = debts.filter(d => !d.paidOff);
+                const paidOffDebts = debts.filter(d => d.paidOff);
+                
+                activeDebts.forEach(d => {
+                    const progressPercent = d.originalBalance > 0 ? 
+                        ((d.originalBalance - d.currentBalance) / d.originalBalance * 100).toFixed(2) : 
+                        0;
+                    
+                    csvRows.push([
+                        `"${d.name.replace(/"/g, '""')}"`,
+                        d.category || '',
+                        d.originalBalance.toFixed(2),
+                        d.currentBalance.toFixed(2),
+                        d.interestRate || 0,
+                        d.minimumPayment.toFixed(2),
+                        d.dueDay || '',
+                        progressPercent
+                    ].join(','));
+                });
+                
+                // === PAID OFF DEBTS SECTION ===
+                if (paidOffDebts.length > 0) {
+                    csvRows.push(['']); // Empty line
+                    csvRows.push(['PAID OFF DEBTS']); // Simple text header
+                    csvRows.push([
+                        'Name',
+                        'Category',
+                        'Original Balance',
+                        'Paid Off Date',
+                        'Monthly Payment (Freed Up)'
+                    ].join(','));
+                    
+                    paidOffDebts.forEach(d => {
+                        csvRows.push([
+                            `"${d.name.replace(/"/g, '""')}"`,
+                            d.category || '',
+                            d.originalBalance.toFixed(2),
+                            d.paidOffDate || 'Unknown',
+                            d.minimumPayment.toFixed(2)
+                        ].join(','));
+                    });
+                }
+                
+                // === RECURRING PAYMENTS SECTION ===
+                csvRows.push(['']); // Empty line
+                csvRows.push(['RECURRING PAYMENTS']); // Simple text header
+                csvRows.push([
+                    'Name',
+                    'Amount',
+                    'Category',
+                    'Due Day',
+                    'Auto-Pay',
+                    'Linked Debt',
+                    'Payment URL'
+                ].join(','));
+                
+                recurringPayments.forEach(p => {
+                    const linkedDebtName = p.linkedDebt ? 
+                        (debts.find(d => d.id === parseInt(p.linkedDebt))?.name || '') : 
+                        '';
+                    
+                    csvRows.push([
+                        `"${p.name.replace(/"/g, '""')}"`,
+                        p.amount.toFixed(2),
+                        p.category || '',
+                        p.dueDay,
+                        p.auto ? 'Yes' : 'No',
+                        `"${linkedDebtName.replace(/"/g, '""')}"`,
+                        `"${(p.paymentUrl || '').replace(/"/g, '""')}"`
+                    ].join(','));
+                });
+                
+                // === SUMMARY SECTION ===
+                csvRows.push(['']); // Empty line
+                csvRows.push(['SUMMARY']); // Simple text header
+                
+                const totalIncome = transactions
+                    .filter(t => t.type === 'income')
+                    .reduce((sum, t) => sum + parseFloat(t.amount), 0);
+                
+                const totalExpenses = transactions
+                    .filter(t => t.type === 'expense')
+                    .reduce((sum, t) => sum + parseFloat(t.amount), 0);
+                
+                const totalDebt = debts.filter(d => !d.paidOff).reduce((sum, d) => sum + parseFloat(d.currentBalance), 0);
+                
+                const totalMonthlyDebtPayments = debts.filter(d => !d.paidOff).reduce((sum, d) => 
+                    sum + parseFloat(d.minimumPayment || 0), 0);
+                
+                const totalMonthlyRecurring = recurringPayments.reduce((sum, p) => 
+                    sum + parseFloat(p.amount), 0);
+                
+                const paidOffDebtsCount = debts.filter(d => d.paidOff).length;
+                const totalDebtEliminated = debts.filter(d => d.paidOff).reduce((sum, d) => 
+                    sum + parseFloat(d.originalBalance || 0), 0);
+                const moneyFreedUp = debts.filter(d => d.paidOff).reduce((sum, d) => 
+                    sum + parseFloat(d.minimumPayment || 0), 0);
+                
+                csvRows.push(['Total Income', totalIncome.toFixed(2)]);
+                csvRows.push(['Total Expenses', totalExpenses.toFixed(2)]);
+                csvRows.push(['Net', (totalIncome - totalExpenses).toFixed(2)]);
+                csvRows.push(['Active Debt Balance', totalDebt.toFixed(2)]);
+                csvRows.push(['Monthly Debt Payments (Active)', totalMonthlyDebtPayments.toFixed(2)]);
+                csvRows.push(['Monthly Recurring Payments', totalMonthlyRecurring.toFixed(2)]);
+                csvRows.push(['Paid Off Debts Count', paidOffDebtsCount]);
+                csvRows.push(['Total Debt Eliminated', totalDebtEliminated.toFixed(2)]);
+                csvRows.push(['Money Freed Up (Monthly)', moneyFreedUp.toFixed(2)]);
+                csvRows.push(['Transaction Count', transactions.length]);
+                csvRows.push(['Export Date', new Date().toISOString()]);
+                
+                // Create and download CSV
+                const csvContent = csvRows.join('\n');
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `finance-tracker-full-export-${getLocalDateString()}.csv`;
+                a.click();
+                URL.revokeObjectURL(url);
+            };
+
             const importData = (event) => {
                 const file = event.target.files[0];
                 if (file) {
@@ -804,7 +1070,7 @@
                 <div className="app-container">
                     <div className="header">
                         <h1>💰 Finance Tracker</h1>
-                        <div className="version">v1.11.24 | Mobile Responsive Design</div>
+                        <div className="version">v1.11.26.1 | CSV + Layout Fixed</div>
                     </div>
                     <div className="tab-navigation">
                         <button className={`tab-button ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>📊 Dashboard</button>
@@ -826,7 +1092,7 @@
                         {activeTab === 'debts' && <DebtsTab debts={debts} setDebts={setDebts} recurringPayments={recurringPayments} setRecurringPayments={setRecurringPayments} />}
                         {activeTab === 'payoff' && <PayoffStrategiesTab debts={debts} />}
                         {activeTab === 'history' && <HistoryTab transactions={transactions} recurringPayments={recurringPayments} debts={debts} />}
-                        {activeTab === 'settings' && <SettingsTab exportData={exportData} importData={importData} clearAllData={clearAllData} />}
+                        {activeTab === 'settings' && <SettingsTab exportData={exportData} importData={importData} clearAllData={clearAllData} exportToCSV={exportToCSV} exportAllDataToCSV={exportAllDataToCSV} />}
                     </div>
                 </div>
             );
@@ -2383,6 +2649,19 @@
             const [formData, setFormData] = useState({ name: '', originalBalance: '', currentBalance: '', interestRate: '', minimumPayment: '', category: 'Credit Card', dueDay: '', createRecurring: false, autoPayRecurring: false });
             const [expandedDebt, setExpandedDebt] = useState(null);
             const [editingDebt, setEditingDebt] = useState(null);
+            const [expandedPaidOffSection, setExpandedPaidOffSection] = useState(false);
+            
+            const archiveDebt = (id) => {
+                const debt = debts.find(d => d.id === id);
+                if (debt && confirm(`🎉 Archive "${debt.name}" as PAID OFF?`)) {
+                    const updatedDebt = {
+                        ...debt,
+                        paidOff: true,
+                        paidOffDate: new Date().toISOString().split('T')[0] // YYYY-MM-DD
+                    };
+                    setDebts(debts.map(d => d.id === id ? updatedDebt : d));
+                }
+            };
             
             const handleSubmit = (e) => { 
                 e.preventDefault(); 
@@ -2429,13 +2708,19 @@
             const calculatePayoffMonths = (debt) => { if (debt.minimumPayment <= 0 || debt.currentBalance <= 0) return 'N/A'; const monthlyRate = (debt.interestRate / 100) / 12; let balance = debt.currentBalance; let months = 0; while (balance > 0 && months < 600) { const interest = balance * monthlyRate; const principal = debt.minimumPayment - interest; if (principal <= 0) return '∞ (payment < interest)'; balance -= principal; months++; } return months; };
             const formatPayoffDate = (months) => { if (months === 'N/A' || typeof months === 'string') return months; const today = new Date(); const payoffDate = new Date(today.getFullYear(), today.getMonth() + months, today.getDate()); return payoffDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }); };
 
+            // Separate active and paid off debts
+            const activeDebts = debts.filter(d => !d.paidOff);
+            const paidOffDebts = debts.filter(d => d.paidOff);
+            const totalDebtEliminated = paidOffDebts.reduce((sum, d) => sum + parseFloat(d.originalBalance || 0), 0);
+            const moneyFreedUp = paidOffDebts.reduce((sum, d) => sum + parseFloat(d.minimumPayment || 0), 0);
+
             return (
                 <div>
-                    {debts.length > 0 && (
+                    {activeDebts.length > 0 && (
                         <div className="section" style={{background: 'linear-gradient(135deg, #dc354522 0%, #c92a2a22 100%)', border: '2px solid #dc3545'}}>
                             <h2 style={{color: '#dc3545', marginBottom: '20px'}}>💸 Debt Overview</h2>
                             <div className="debt-overview-grid">
-                                {debts.map(debt => {
+                                {activeDebts.map(debt => {
                                     const originalBalance = parseFloat(debt.originalBalance) || 0;
                                     const currentBalance = parseFloat(debt.currentBalance) || 0;
                                     const interestRate = parseFloat(debt.interestRate) || 0;
@@ -2452,6 +2737,69 @@
                                     );
                                 })}
                             </div>
+                        </div>
+                    )}
+                    {paidOffDebts.length > 0 && (
+                        <div className="section" style={{background: 'linear-gradient(135deg, #28a74522 0%, #20c99722 100%)', border: '2px solid #28a745'}}>
+                            <div 
+                                className="collapsible-header" 
+                                onClick={() => setExpandedPaidOffSection(!expandedPaidOffSection)}
+                                style={{cursor: 'pointer', padding: '20px', borderRadius: '10px', background: '#1a1f2e'}}
+                            >
+                                <div>
+                                    <h2 style={{color: '#28a745', margin: 0}}>✅ Paid Off Debts ({paidOffDebts.length})</h2>
+                                    <div style={{display: 'flex', gap: '30px', marginTop: '10px', fontSize: '1em', flexWrap: 'wrap'}}>
+                                        <p style={{color: '#a0aec0', margin: 0}}>
+                                            Total Debt Eliminated: <strong style={{color: '#28a745'}}>{formatCurrency(totalDebtEliminated)}</strong>
+                                        </p>
+                                        <p style={{color: '#a0aec0', margin: 0}}>
+                                            Money Freed Up: <strong style={{color: '#ffc107'}}>{formatCurrency(moneyFreedUp)}/month</strong>
+                                        </p>
+                                    </div>
+                                </div>
+                                <div style={{fontSize: '1.5em'}}>{expandedPaidOffSection ? '▼' : '▶'}</div>
+                            </div>
+                            {expandedPaidOffSection && (
+                                <div style={{marginTop: '20px'}}>
+                                    <div className="debt-list">
+                                        {paidOffDebts.map((debt) => (
+                                            <div key={debt.id} className="collapsible-section" style={{borderColor: '#28a745'}}>
+                                                <div style={{padding: '20px', background: '#1a1f2e', borderRadius: '10px'}}>
+                                                    <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '15px'}}>
+                                                        <div>
+                                                            <h3 style={{color: '#28a745', margin: 0, marginBottom: '5px'}}>✅ {debt.name}</h3>
+                                                            <p style={{fontSize: '0.9em', color: '#a0aec0', margin: 0}}>{debt.category}</p>
+                                                        </div>
+                                                        <div style={{textAlign: 'right'}}>
+                                                            <div style={{fontSize: '1.2em', color: '#28a745', fontWeight: 'bold'}}>PAID OFF</div>
+                                                            <div style={{fontSize: '0.85em', color: '#a0aec0', marginTop: '3px'}}>
+                                                                {debt.paidOffDate ? new Date(debt.paidOffDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'Recently'}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px', marginTop: '15px'}}>
+                                                        <div>
+                                                            <div style={{color: '#a0aec0', fontSize: '0.85em', marginBottom: '5px'}}>Original Balance</div>
+                                                            <div style={{color: '#e2e8f0', fontWeight: '600'}}>{formatCurrency(debt.originalBalance)}</div>
+                                                        </div>
+                                                        <div>
+                                                            <div style={{color: '#a0aec0', fontSize: '0.85em', marginBottom: '5px'}}>Monthly Payment Freed</div>
+                                                            <div style={{color: '#ffc107', fontWeight: '600'}}>{formatCurrency(debt.minimumPayment)}</div>
+                                                        </div>
+                                                    </div>
+                                                    <div style={{marginTop: '15px'}}>
+                                                        <div className="progress-bar"><div className="progress-fill" style={{width: '100%', background: '#28a745'}}></div></div>
+                                                        <div style={{textAlign: 'center', marginTop: '8px', color: '#28a745', fontSize: '0.9em', fontWeight: '600'}}>100% Complete! 🎉</div>
+                                                    </div>
+                                                    <div style={{marginTop: '15px', display: 'flex', gap: '10px'}}>
+                                                        <button className="danger" onClick={() => deleteDebt(debt.id)} style={{fontSize: '0.9em'}}>Delete from History</button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
                     <div className="section">
@@ -2525,23 +2873,24 @@
                         </form>
                     </div>
                     <div className="section">
-                        <h2>Active Debts ({debts.length})</h2>
+                        <h2>Active Debts ({activeDebts.length})</h2>
                         <div style={{display: 'flex', gap: '30px', marginBottom: '15px', fontSize: '1.1em', flexWrap: 'wrap'}}>
                             <p style={{color: '#a0aec0', margin: 0}}>
-                                Total Debt: <strong style={{color: '#dc3545'}}>{formatCurrency(debts.reduce((sum, d) => sum + parseFloat(d.currentBalance), 0))}</strong>
+                                Total Debt: <strong style={{color: '#dc3545'}}>{formatCurrency(activeDebts.reduce((sum, d) => sum + parseFloat(d.currentBalance), 0))}</strong>
                             </p>
                             <p style={{color: '#a0aec0', margin: 0}}>
-                                Monthly Payments: <strong style={{color: '#ffc107'}}>{formatCurrency(debts.reduce((sum, d) => sum + parseFloat(d.minimumPayment || 0), 0))}</strong>
+                                Monthly Payments: <strong style={{color: '#ffc107'}}>{formatCurrency(activeDebts.reduce((sum, d) => sum + parseFloat(d.minimumPayment || 0), 0))}</strong>
                             </p>
                         </div>
                         <div className="debt-list">
-                            {debts.length === 0 ? (
-                                <p style={{color: '#a0aec0', textAlign: 'center', padding: '20px'}}>No debts tracked yet.</p>
+                            {activeDebts.length === 0 ? (
+                                <p style={{color: '#a0aec0', textAlign: 'center', padding: '20px'}}>No active debts.</p>
                             ) : (
-                                debts.map((debt) => {
+                                activeDebts.map((debt) => {
                                     const payoffMonths = calculatePayoffMonths(debt);
                                     const payoffDate = formatPayoffDate(payoffMonths);
                                     const progressPercent = debt.originalBalance > 0 ? ((debt.originalBalance - debt.currentBalance) / debt.originalBalance * 100) : 0;
+                                    const canArchive = debt.currentBalance === 0 || Math.abs(debt.currentBalance) < 0.01;
                                     return (
                                         <div key={debt.id} className="collapsible-section">
                                             <div className="collapsible-header" onClick={() => setExpandedDebt(expandedDebt === debt.id ? null : debt.id)}>
@@ -2593,7 +2942,15 @@
                                                             </div>
                                                         </div>
                                                     )}
-                                                    <div style={{marginTop: '20px', display: 'flex', gap: '10px'}}>
+                                                    <div style={{marginTop: '20px', display: 'flex', gap: '10px', flexWrap: 'wrap'}}>
+                                                        {canArchive && (
+                                                            <button 
+                                                                onClick={() => archiveDebt(debt.id)}
+                                                                style={{background: 'linear-gradient(135deg, #28a745 0%, #20c997 100%)', fontWeight: 'bold'}}
+                                                            >
+                                                                🎉 Archive as Paid Off
+                                                            </button>
+                                                        )}
                                                         <button onClick={() => handleEdit(debt)}>Edit Debt</button>
                                                         <button className="danger" onClick={() => deleteDebt(debt.id)}>Delete Debt</button>
                                                     </div>
@@ -3351,7 +3708,7 @@
             );
         }
 
-        function SettingsTab({ exportData, importData, clearAllData }) {
+        function SettingsTab({ exportData, importData, clearAllData, exportToCSV, exportAllDataToCSV }) {
             return (
                 <div>
                     <div className="section" style={{background: 'linear-gradient(135deg, #667eea22 0%, #764ba222 100%)', border: '2px solid #667eea', padding: '25px'}}>
@@ -3374,12 +3731,36 @@
                     </div>
                     <div className="section">
                         <h2>Data Management</h2>
-                        <div className="controls">
-                            <button onClick={exportData}>💾 Export Data</button>
-                            <label style={{background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', padding: '12px 30px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, display: 'inline-block'}}>📁 Import Data<input type="file" accept=".json" onChange={importData} style={{display: 'none'}} /></label>
-                            <button className="danger" onClick={clearAllData}>🗑️ Clear All Data</button>
+                        <div style={{marginBottom: '30px'}}>
+                            <h3 style={{color: '#667eea', marginBottom: '15px'}}>JSON Export/Import (Full Backup)</h3>
+                            <div className="controls">
+                                <button onClick={exportData}>💾 Export JSON</button>
+                                <label style={{background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', padding: '12px 30px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, display: 'inline-block'}}>📁 Import JSON<input type="file" accept=".json" onChange={importData} style={{display: 'none'}} /></label>
+                            </div>
+                            <p style={{marginTop: '10px', color: '#a0aec0', fontSize: '0.9em'}}>
+                                JSON format preserves all data and can be re-imported. Use for backups and moving between devices.
+                            </p>
                         </div>
-                        <p style={{marginTop: '20px', color: '#a0aec0', fontSize: '0.9em'}}>Export your data to save a backup, import previously exported data, or clear all data to start fresh.</p>
+                        
+                        <div style={{marginBottom: '30px'}}>
+                            <h3 style={{color: '#28a745', marginBottom: '15px'}}>CSV Export (For Analysis)</h3>
+                            <div className="controls">
+                                <button onClick={exportToCSV} style={{background: '#28a745'}}>📊 Export Transactions CSV</button>
+                                <button onClick={exportAllDataToCSV} style={{background: '#20c997'}}>📋 Export Full Data CSV</button>
+                            </div>
+                            <p style={{marginTop: '10px', color: '#a0aec0', fontSize: '0.9em'}}>
+                                <strong>Transactions CSV:</strong> Just your transaction history for analysis<br/>
+                                <strong>Full Data CSV:</strong> Transactions + Debts + Recurring Payments + Summary (best for Claude analysis)
+                            </p>
+                        </div>
+                        
+                        <div>
+                            <h3 style={{color: '#dc3545', marginBottom: '15px'}}>Danger Zone</h3>
+                            <button className="danger" onClick={clearAllData}>🗑️ Clear All Data</button>
+                            <p style={{marginTop: '10px', color: '#a0aec0', fontSize: '0.9em'}}>
+                                Clears all data from memory. Export first if you want to keep anything!
+                            </p>
+                        </div>
                     </div>
                     <div className="section">
                         <h2>How to Use Finance Tracker</h2>
