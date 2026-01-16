@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finance Tracker v1.11.26.1</title>
-    <!-- Build: 2026-01-15-02 - Fixed CSV headers + moved paid off section -->
+    <title>Finance Tracker v1.11.27</title>
+    <!-- Build: 2026-01-15-03 - Reordered navigation tabs for better workflow -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -1070,17 +1070,17 @@
                 <div className="app-container">
                     <div className="header">
                         <h1>💰 Finance Tracker</h1>
-                        <div className="version">v1.11.26.1 | CSV + Layout Fixed</div>
+                        <div className="version">v1.11.27 | Navigation Reordered</div>
                     </div>
                     <div className="tab-navigation">
                         <button className={`tab-button ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>📊 Dashboard</button>
-                        <button className={`tab-button ${activeTab === 'budget' ? 'active' : ''}`} onClick={() => setActiveTab('budget')}>💵 Budget</button>
                         <button className={`tab-button ${activeTab === 'transactions' ? 'active' : ''}`} onClick={() => setActiveTab('transactions')}>💳 Transactions</button>
                         <button className={`tab-button ${activeTab === 'recurring' ? 'active' : ''}`} onClick={() => setActiveTab('recurring')}>🔄 Recurring</button>
-                        <button className={`tab-button ${activeTab === 'duplicates' ? 'active' : ''}`} onClick={() => setActiveTab('duplicates')}>🔍 Duplicates</button>
                         <button className={`tab-button ${activeTab === 'debts' ? 'active' : ''}`} onClick={() => setActiveTab('debts')}>📉 Debt Tracking</button>
-                        <button className={`tab-button ${activeTab === 'payoff' ? 'active' : ''}`} onClick={() => setActiveTab('payoff')}>🎯 Payoff Strategies</button>
+                        <button className={`tab-button ${activeTab === 'budget' ? 'active' : ''}`} onClick={() => setActiveTab('budget')}>💵 Budget</button>
                         <button className={`tab-button ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>📈 History</button>
+                        <button className={`tab-button ${activeTab === 'duplicates' ? 'active' : ''}`} onClick={() => setActiveTab('duplicates')}>🔍 Duplicates</button>
+                        <button className={`tab-button ${activeTab === 'payoff' ? 'active' : ''}`} onClick={() => setActiveTab('payoff')}>🎯 Payoff Strategies</button>
                         <button className={`tab-button ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>⚙️ Settings</button>
                     </div>
                     <div className="tab-content">
