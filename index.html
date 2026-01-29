@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finance Tracker v1.11.27</title>
-    <!-- Build: 2026-01-15-03 - Reordered navigation tabs for better workflow -->
+    <title>Finance Tracker v1.11.28</title>
+    <!-- Build: 2026-01-29-01 - Fixed Spent So Far calculation to use paid recurring bills -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -1070,7 +1070,7 @@
                 <div className="app-container">
                     <div className="header">
                         <h1>💰 Finance Tracker</h1>
-                        <div className="version">v1.11.27 | Navigation Reordered</div>
+                        <div className="version">v1.11.28 | Budget Calculation Fixed</div>
                     </div>
                     <div className="tab-navigation">
                         <button className={`tab-button ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>📊 Dashboard</button>
@@ -3159,9 +3159,14 @@
                 })
                 .reduce((sum, p) => sum + parseFloat(p.amount), 0);
 
+            // Calculate PAID recurring bills (from transactions marked as recurring)
+            const paidRecurring = monthTransactions
+                .filter(t => t.type === 'expense' && t.isRecurring)
+                .reduce((sum, t) => sum + parseFloat(t.amount), 0);
+
             // Simple calculations
             const moneyLeft = expectedMonthlyIncome - recurringTotal;
-            const spentSoFar = totalExpenses - recurringTotal;
+            const spentSoFar = totalExpenses - paidRecurring; // Fixed: use paidRecurring instead of recurringTotal
             
             // Calculate with ACTUAL income received so far
             const moneyLeftActual = actualIncome - recurringTotal;
