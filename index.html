@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finance Tracker v1.11.27</title>
-    <!-- Build: 2026-01-15-03 - Reordered navigation tabs for better workflow -->
+    <title>Finance Tracker v1.16.0</title>
+    <!-- Build: 2026-05-27-05 - Debt strategy: per-debt include/exclude selector for plan -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -99,7 +99,23 @@
         .budget-value.warning { color: #ffc107; }
         .income-input-group { display: flex; gap: 15px; align-items: flex-end; margin-bottom: 30px; }
         .income-input-group .form-group { flex: 1; margin-bottom: 0; }
-        
+
+        /* Toast notifications */
+        @keyframes slideInRight { from { transform: translateX(110%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .toast-wrapper { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; pointer-events: none; max-width: 380px; }
+        .toast { padding: 14px 18px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); font-size: 0.95em; font-weight: 600; animation: slideInRight 0.3s ease; pointer-events: auto; display: flex; align-items: center; gap: 10px; border-left: 4px solid; }
+        .toast-success { background: #1a3a2a; color: #4ade80; border-color: #28a745; }
+        .toast-error { background: #3a1a1a; color: #f87171; border-color: #dc3545; }
+        .toast-warning { background: #3a2e00; color: #fbbf24; border-color: #ffc107; }
+        .toast-info { background: #1a2040; color: #93c5fd; border-color: #667eea; }
+
+        /* Savings rate badge */
+        .rate-badge { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 20px; font-weight: 700; }
+        .rate-excellent { background: #28a74522; color: #28a745; border: 2px solid #28a745; }
+        .rate-good { background: #20c99722; color: #20c997; border: 2px solid #20c997; }
+        .rate-fair { background: #ffc10722; color: #ffc107; border: 2px solid #ffc107; }
+        .rate-poor { background: #dc354522; color: #dc3545; border: 2px solid #dc3545; }
+
         /* ========================================
            MOBILE RESPONSIVE DESIGN
            ======================================== */
@@ -394,6 +410,36 @@
     <div id="root"></div>
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
+
+        // Global toast system
+        let _globalToast = null;
+        function showToast(message, type = 'success') { if (_globalToast) _globalToast(message, type); }
+
+        function ToastContainer() {
+            const [toasts, setToasts] = useState([]);
+            useEffect(() => {
+                _globalToast = (message, type) => {
+                    const id = Date.now() + Math.random();
+                    setToasts(prev => [...prev, { id, message, type }]);
+                    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3500);
+                };
+                return () => { _globalToast = null; };
+            }, []);
+            const icons = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
+            if (toasts.length === 0) return null;
+            return ReactDOM.createPortal(
+                <div className="toast-wrapper">
+                    {toasts.map(t => (
+                        <div key={t.id} className={`toast toast-${t.type}`}>
+                            <span style={{fontSize: '1.1em'}}>{icons[t.type] || '✓'}</span>
+                            <span>{t.message}</span>
+                        </div>
+                    ))}
+                </div>,
+                document.body
+            );
+        }
+
         const formatCurrency = (amount) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
         const parseLocalDate = (dateStr) => { const [year, month, day] = dateStr.split('-').map(Number); return new Date(year, month - 1, day); };
         const formatDate = (dateStr) => { const date = parseLocalDate(dateStr); return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); };
@@ -419,94 +465,73 @@
             const [paidPayments, setPaidPayments] = useState({});
             const [currentMonth, setCurrentMonth] = useState(getCurrentFinancialMonth());
             const [expectedMonthlyIncome, setExpectedMonthlyIncome] = useState(5000);
+            const [dataLoaded, setDataLoaded] = useState(false);
+            const [categoryBudgets, setCategoryBudgets] = useState({});
 
+            // Load from localStorage on startup
             useEffect(() => {
-                // No localStorage - app starts empty
-                // Data must be imported via Import button
+                try {
+                    const saved = localStorage.getItem('financeTracker_v2');
+                    if (saved) {
+                        const data = JSON.parse(saved);
+                        if (data.transactions) setTransactions(data.transactions.map(t => ({...t, amount: parseFloat(t.amount) || 0, id: t.id || (Date.now() + Math.random())})));
+                        if (data.recurringPayments) setRecurringPayments(data.recurringPayments.map(p => ({...p, amount: parseFloat(p.amount) || 0, dueDay: parseInt(p.dueDay || p.day) || 1, day: parseInt(p.day || p.dueDay) || 1, id: p.id || (Date.now() + Math.random())})));
+                        if (data.debts) setDebts(data.debts.map(d => ({...d, currentBalance: parseFloat(d.currentBalance || d.balance) || 0, originalBalance: parseFloat(d.originalBalance) || parseFloat(d.currentBalance || d.balance) || 0, interestRate: parseFloat(d.interestRate || d.apr) || 0, minimumPayment: parseFloat(d.minimumPayment || d.payment) || 0, id: d.id || (Date.now() + Math.random())})));
+                        if (data.paidPayments) setPaidPayments(data.paidPayments);
+                        if (data.settings?.expectedMonthlyIncome) setExpectedMonthlyIncome(data.settings.expectedMonthlyIncome);
+                        if (data.settings?.categoryBudgets) setCategoryBudgets(data.settings.categoryBudgets);
+                    }
+                } catch(e) {}
+                setDataLoaded(true);
             }, []);
 
-            // No auto-save - use Export button to save data
-            // No auto-save - use Export button to save data
+            // Auto-save to localStorage whenever state changes
+            useEffect(() => {
+                if (!dataLoaded) return;
+                const data = { version: '2.0', exportDate: new Date().toISOString(), transactions, recurringPayments, debts, paidPayments, settings: { expectedMonthlyIncome, categoryBudgets } };
+                localStorage.setItem('financeTracker_v2', JSON.stringify(data));
+            }, [transactions, recurringPayments, debts, paidPayments, expectedMonthlyIncome, categoryBudgets, dataLoaded]);
 
             // Auto-process recurring payments when their due date passes
             useEffect(() => {
-                // Run immediately when data loads or month changes
                 const timer = setTimeout(() => {
                     if (recurringPayments.length === 0) return;
-                    
-                    // Skip if debts haven't loaded yet (only if there are payments linked to debts)
                     const hasLinkedPayments = recurringPayments.some(p => p.linkedDebt);
-                    if (hasLinkedPayments && debts.length === 0) {
-                        console.log('⏳ Waiting for debts to load...');
-                        return;
-                    }
-                    
-                    console.log('🚀 AUTO-PAY SYSTEM RUNNING');
-                    console.log('Current month:', currentMonth);
-                    console.log('Transactions before:', transactions.length);
-                    console.log('Recurring payments:', recurringPayments.length);
-                    console.log('Debts:', debts.length);
-                    console.log('Debt IDs:', debts.map(d => ({ id: d.id, name: d.name, type: typeof d.id })));
-                    
+                    if (hasLinkedPayments && debts.length === 0) return;
+
                     const monthKey = getMonthKey(currentMonth);
                     const todayDate = new Date();
                     const __range = getFinancialMonthRange(currentMonth); const start = __range.start;
-                    
+
                     let newTransactions = [...transactions];
                     let updatedDebts = [...debts];
                     let hasTransactionChanges = false;
                     let hasDebtChanges = false;
-                    
+
                     recurringPayments.forEach(payment => {
-                        console.log(`\n--- Checking ${payment.name} ---`);
-                        
-                        // Skip if not auto-pay
-                        if (!payment.auto) {
-                            console.log('  Skipped: Not auto-pay');
-                            return;
-                        }
-                        
-                        // Calculate payment date
+                        if (!payment.auto) return;
+
                         let paymentDate;
                         if (payment.dueDay >= 28) {
                             paymentDate = new Date(start.getFullYear(), start.getMonth(), payment.dueDay);
                         } else {
                             paymentDate = new Date(start.getFullYear(), start.getMonth() + 1, payment.dueDay);
                         }
-                        
-                        console.log('  Payment date:', paymentDate.toDateString());
-                        console.log('  Today:', todayDate.toDateString());
-                        console.log('  Due date passed:', todayDate >= paymentDate);
-                        
-                        // Check if due date has passed
+
                         if (todayDate >= paymentDate) {
                             const paymentKey = `${monthKey}-${payment.id}`;
-                            
-                            // Check if transaction already exists for this payment (simple check)
                             const transactionExists = newTransactions.some(t => {
-                                // Must be expense in current financial month with matching amount
                                 if (t.type !== 'expense') return false;
-                                
                                 const tDate = parseLocalDate(t.date);
                                 const endDate = new Date(start.getFullYear(), start.getMonth() + 1, 27);
                                 if (tDate < start || tDate > endDate) return false;
-                                
-                                // Amount must match within $0.01
                                 if (Math.abs(parseFloat(t.amount) - parseFloat(payment.amount)) > 0.01) return false;
-                                
-                                // Description must contain payment name OR category must match
                                 const descMatch = t.description.toLowerCase().includes(payment.name.toLowerCase());
-                                const catMatch = payment.category && t.category && 
-                                                t.category.toLowerCase() === payment.category.toLowerCase();
-                                
+                                const catMatch = payment.category && t.category && t.category.toLowerCase() === payment.category.toLowerCase();
                                 return descMatch || catMatch;
                             });
-                            
-                            console.log('  Transaction exists:', transactionExists);
-                            
-                            // Create transaction if it doesn't exist
+
                             if (!transactionExists) {
-                                console.log('  ✅ CREATING TRANSACTION');
                                 const newTransaction = {
                                     type: 'expense',
                                     amount: parseFloat(payment.amount),
@@ -517,96 +542,44 @@
                                     isRecurring: true
                                 };
                                 newTransactions.push(newTransaction);
-                                console.log('  Created transaction:', newTransaction);
                                 hasTransactionChanges = true;
-                                
-                                // Update linked debt if exists and transaction was created
+
                                 if (payment.linkedDebt) {
-                                    console.log('  Payment has linkedDebt:', payment.linkedDebt, 'type:', typeof payment.linkedDebt);
                                     const linkedDebtId = parseInt(payment.linkedDebt);
-                                    console.log('  After parseInt:', linkedDebtId, 'type:', typeof linkedDebtId);
-                                    console.log('  Searching in debts:', updatedDebts.map(d => d.id));
-                                    const linkedDebtIndex = updatedDebts.findIndex(d => {
-                                        console.log('    Comparing debt.id:', d.id, 'type:', typeof d.id, 'with linkedDebtId:', linkedDebtId, 'match:', d.id === linkedDebtId);
-                                        return d.id === linkedDebtId;
-                                    });
-                                    console.log('  Found debt at index:', linkedDebtIndex);
-                                    
+                                    const linkedDebtIndex = updatedDebts.findIndex(d => d.id === linkedDebtId);
                                     if (linkedDebtIndex !== -1) {
                                         const debt = updatedDebts[linkedDebtIndex];
-                                        console.log('  Current debt balance:', debt.currentBalance);
-                                        
                                         const paymentAmount = parseFloat(payment.amount);
-                                        const interestRate = parseFloat(debt.interestRate) || 0;
-                                        const monthlyInterestRate = interestRate / 100 / 12;
+                                        const monthlyInterestRate = (parseFloat(debt.interestRate) || 0) / 100 / 12;
                                         const interestAccrued = debt.currentBalance * monthlyInterestRate;
                                         const principalPaid = paymentAmount - interestAccrued;
                                         const newBalance = Math.max(0, debt.currentBalance - principalPaid);
-                                        
-                                        console.log('  Payment amount:', paymentAmount);
-                                        console.log('  Interest accrued:', interestAccrued);
-                                        console.log('  Principal paid:', principalPaid);
-                                        console.log('  New balance:', newBalance);
-                                        
-                                        const transactionLog = debt.transactionLog || [];
                                         const logEntry = {
                                             date: getLocalDateString(paymentDate),
-                                            paymentAmount: paymentAmount,
-                                            interestAccrued: interestAccrued,
-                                            principalPaid: principalPaid,
-                                            balanceBefore: debt.currentBalance,
-                                            balanceAfter: newBalance
+                                            paymentAmount, interestAccrued, principalPaid,
+                                            balanceBefore: debt.currentBalance, balanceAfter: newBalance
                                         };
-                                        
                                         updatedDebts[linkedDebtIndex] = {
                                             ...debt,
                                             currentBalance: newBalance,
-                                            transactionLog: [...transactionLog, logEntry],
+                                            transactionLog: [...(debt.transactionLog || []), logEntry],
                                             lastUpdated: getLocalDateString(paymentDate)
                                         };
-                                        
-                                        console.log('  ✅ Debt updated:', updatedDebts[linkedDebtIndex].name, 'new balance:', newBalance);
                                         hasDebtChanges = true;
-                                    } else {
-                                        console.log('  ⚠️ Linked debt not found!');
                                     }
-                                } else {
-                                    console.log('  No linked debt for this payment');
                                 }
                             }
-                            
-                            // Mark as paid using functional form to preserve manual toggles
-                            setPaidPayments(prevPaid => {
-                                // Only update if not already paid
-                                if (!prevPaid[paymentKey]) {
-                                    console.log('  Marking as paid');
-                                    return {...prevPaid, [paymentKey]: true};
-                                }
-                                console.log('  Already marked paid:', prevPaid[paymentKey]);
-                                return prevPaid;
-                            });
+
+                            setPaidPayments(prevPaid => prevPaid[paymentKey] ? prevPaid : {...prevPaid, [paymentKey]: true});
                         }
                     });
-                    
-                    console.log('\n--- Summary ---');
-                    console.log('Has transaction changes:', hasTransactionChanges);
-                    console.log('Has debt changes:', hasDebtChanges);
-                    console.log('New transactions count:', newTransactions.length);
-                    console.log('Transactions added:', newTransactions.length - transactions.length);
-                    
-                    if (hasTransactionChanges) {
-                        console.log('💾 Saving transactions to state');
-                        setTransactions(newTransactions);
-                    }
-                    
-                    if (hasDebtChanges) {
-                        console.log('💾 Saving debts to state');
-                        setDebts(updatedDebts);
-                    }
-                }, 500); // Wait 500ms for data to load
-                
+
+                    if (hasTransactionChanges) setTransactions(newTransactions);
+                    if (hasDebtChanges) setDebts(updatedDebts);
+                }, 500);
+
                 return () => clearTimeout(timer);
-            }, [currentMonth, recurringPayments.length, debts.length]); // Run when month changes, payments added/removed, or debts loaded
+            }, [currentMonth, recurringPayments.length, debts.length]);
 
             const getMonthlyTotals = () => {
                 const __range = getFinancialMonthRange(currentMonth); const start = __range.start; const end = __range.end;
@@ -1044,8 +1017,8 @@
                                 setExpectedMonthlyIncome(data.settings.expectedMonthlyIncome);
                             }
                             
-                            alert('Data imported successfully!');
-                        } catch (error) { alert('Error importing data. Please check the file format.\n\nError: ' + error.message); }
+                            showToast('Data imported successfully!');
+                        } catch (error) { showToast('Error importing: ' + error.message, 'error'); }
                     };
                     reader.readAsText(file);
                 }
@@ -1053,12 +1026,14 @@
             };
 
             const clearAllData = () => {
-                if (confirm('Are you sure you want to clear all data? This cannot be undone. Make sure you have exported your data first!')) {
+                if (confirm('Are you sure you want to clear all data? This cannot be undone!')) {
                     setTransactions([]);
                     setRecurringPayments([]);
                     setDebts([]);
                     setPaidPayments({});
                     setExpectedMonthlyIncome(5000);
+                    localStorage.removeItem('financeTracker_v2');
+                    showToast('All data cleared', 'warning');
                 }
             };
 
@@ -1068,29 +1043,30 @@
 
             return (
                 <div className="app-container">
+                    <ToastContainer />
                     <div className="header">
                         <h1>💰 Finance Tracker</h1>
-                        <div className="version">v1.11.27 | Navigation Reordered</div>
+                        <div className="version">Auto-saves to browser • Export JSON to back up or share</div>
                     </div>
                     <div className="tab-navigation">
                         <button className={`tab-button ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>📊 Dashboard</button>
                         <button className={`tab-button ${activeTab === 'transactions' ? 'active' : ''}`} onClick={() => setActiveTab('transactions')}>💳 Transactions</button>
                         <button className={`tab-button ${activeTab === 'recurring' ? 'active' : ''}`} onClick={() => setActiveTab('recurring')}>🔄 Recurring</button>
                         <button className={`tab-button ${activeTab === 'debts' ? 'active' : ''}`} onClick={() => setActiveTab('debts')}>📉 Debt Tracking</button>
+                        <button className={`tab-button ${activeTab === 'tracker' ? 'active' : ''}`} onClick={() => setActiveTab('tracker')}>🎯 Debt Strategy</button>
                         <button className={`tab-button ${activeTab === 'budget' ? 'active' : ''}`} onClick={() => setActiveTab('budget')}>💵 Budget</button>
                         <button className={`tab-button ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>📈 History</button>
                         <button className={`tab-button ${activeTab === 'duplicates' ? 'active' : ''}`} onClick={() => setActiveTab('duplicates')}>🔍 Duplicates</button>
-                        <button className={`tab-button ${activeTab === 'payoff' ? 'active' : ''}`} onClick={() => setActiveTab('payoff')}>🎯 Payoff Strategies</button>
                         <button className={`tab-button ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>⚙️ Settings</button>
                     </div>
                     <div className="tab-content">
-                        {activeTab === 'dashboard' && <DashboardTab totals={totals} totalDebt={totalDebt} unpaidRecurring={unpaidRecurring} currentMonth={currentMonth} transactions={transactions} recurringPayments={recurringPayments} debts={debts} expectedMonthlyIncome={expectedMonthlyIncome} importData={importData} />}
-                        {activeTab === 'budget' && <BudgetTab transactions={transactions} recurringPayments={recurringPayments} expectedMonthlyIncome={expectedMonthlyIncome} setExpectedMonthlyIncome={setExpectedMonthlyIncome} currentMonth={currentMonth} unpaidRecurring={unpaidRecurring} />}
+                        {activeTab === 'dashboard' && <DashboardTab totals={totals} totalDebt={totalDebt} unpaidRecurring={unpaidRecurring} currentMonth={currentMonth} transactions={transactions} recurringPayments={recurringPayments} debts={debts} expectedMonthlyIncome={expectedMonthlyIncome} importData={importData} paidPayments={paidPayments} categoryBudgets={categoryBudgets} />}
+                        {activeTab === 'budget' && <BudgetTab transactions={transactions} recurringPayments={recurringPayments} expectedMonthlyIncome={expectedMonthlyIncome} setExpectedMonthlyIncome={setExpectedMonthlyIncome} currentMonth={currentMonth} unpaidRecurring={unpaidRecurring} categoryBudgets={categoryBudgets} setCategoryBudgets={setCategoryBudgets} />}
                         {activeTab === 'transactions' && <TransactionsTab transactions={transactions} setTransactions={setTransactions} currentMonth={currentMonth} expenseCategories={expenseCategories} incomeCategories={incomeCategories} debts={debts} setDebts={setDebts} />}
                         {activeTab === 'recurring' && <RecurringTab recurringPayments={recurringPayments} setRecurringPayments={setRecurringPayments} debts={debts} setDebts={setDebts} transactions={transactions} setTransactions={setTransactions} paidPayments={paidPayments} setPaidPayments={setPaidPayments} currentMonth={currentMonth} />}
                         {activeTab === 'duplicates' && <DuplicatesTab transactions={transactions} setTransactions={setTransactions} />}
                         {activeTab === 'debts' && <DebtsTab debts={debts} setDebts={setDebts} recurringPayments={recurringPayments} setRecurringPayments={setRecurringPayments} />}
-                        {activeTab === 'payoff' && <PayoffStrategiesTab debts={debts} />}
+                        {activeTab === 'tracker' && <DebtPayoffTrackerTab debts={debts} />}
                         {activeTab === 'history' && <HistoryTab transactions={transactions} recurringPayments={recurringPayments} debts={debts} />}
                         {activeTab === 'settings' && <SettingsTab exportData={exportData} importData={importData} clearAllData={clearAllData} exportToCSV={exportToCSV} exportAllDataToCSV={exportAllDataToCSV} />}
                     </div>
@@ -1098,7 +1074,7 @@
             );
         }
 
-        function DashboardTab({ totals, totalDebt, unpaidRecurring, currentMonth, transactions, recurringPayments, debts, expectedMonthlyIncome, importData }) {
+        function DashboardTab({ totals, totalDebt, unpaidRecurring, currentMonth, transactions, recurringPayments, debts, expectedMonthlyIncome, importData, paidPayments, categoryBudgets }) {
             const [debtsCollapsed, setDebtsCollapsed] = useState(false);
             const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
             const fileInputRef = React.useRef(null); // Move ref to top level
@@ -1159,6 +1135,26 @@
             };
             const yearlyTotals = getYearlyTotals();
 
+            const billsDueSoon = (() => {
+                const today = new Date();
+                const todayMs = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+                const monthKey = getMonthKey(currentMonth);
+                const __range = getFinancialMonthRange(currentMonth);
+                const rangeStart = __range.start;
+                return recurringPayments.map(payment => {
+                    let paymentDate;
+                    if (payment.dueDay >= 28) {
+                        paymentDate = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), payment.dueDay);
+                    } else {
+                        paymentDate = new Date(rangeStart.getFullYear(), rangeStart.getMonth() + 1, payment.dueDay);
+                    }
+                    const daysUntil = Math.round((paymentDate.getTime() - todayMs) / 86400000);
+                    const isPaid = paidPayments && paidPayments[`${monthKey}-${payment.id}`];
+                    return { ...payment, paymentDate, daysUntil, isPaid };
+                }).filter(p => !p.isPaid && p.daysUntil >= 0 && p.daysUntil <= 7)
+                  .sort((a, b) => a.daysUntil - b.daysUntil);
+            })();
+
             // Show welcome message if no data loaded
             if (transactions.length === 0 && recurringPayments.length === 0 && debts.length === 0) {
                 return (
@@ -1209,7 +1205,7 @@
                                 📁 Import Data
                             </button>
                             <p style={{color: '#a0aec0', fontSize: '0.9em', marginTop: '30px', fontStyle: 'italic'}}>
-                                💡 No localStorage used - all data is managed through JSON import/export
+                                💡 Data auto-saves in this browser. Export JSON to back up or move to another device.
                             </p>
                             <p style={{color: '#667eea', fontSize: '0.95em', marginTop: '15px', fontWeight: '600'}}>
                                 📖 New user? Check the <strong>⚙️ Settings</strong> tab for first-time setup instructions!
@@ -1247,6 +1243,36 @@
                         <div className="summary-card" style={{background: moneyAvailable >= 0 ? 'linear-gradient(135deg, #28a745 0%, #20c997 100%)' : 'linear-gradient(135deg, #dc3545 0%, #c92a2a 100%)'}}><h3>💰 Money Available</h3><div className="amount">{formatCurrency(moneyAvailable)}</div><div className="subtitle">After bills & spending<br/><span style={{fontSize: '0.85em', opacity: 0.8}}>(Based on expected income)</span></div></div>
                         <div className="summary-card"><h3>Unpaid Recurring</h3><div className="amount">{formatCurrency(unpaidRecurring)}</div><div className="subtitle">Still due this month</div></div>
                     </div>
+                    {billsDueSoon.length > 0 && (
+                        <div className="section" style={{border: '2px solid #ffc107', background: 'linear-gradient(135deg, #ffc10708 0%, #ff980008 100%)'}}>
+                            <h2 style={{color: '#ffc107', marginBottom: '15px'}}>⚠️ Bills Due in the Next 7 Days</h2>
+                            <div style={{display: 'flex', flexDirection: 'column', gap: '10px'}}>
+                                {billsDueSoon.map(p => (
+                                    <div key={p.id} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#1a1f2e', padding: '14px 18px', borderRadius: '10px', borderLeft: `4px solid ${p.daysUntil === 0 ? '#dc3545' : p.daysUntil <= 2 ? '#ffc107' : '#667eea'}`, flexWrap: 'wrap', gap: '10px'}}>
+                                        <div>
+                                            <div style={{color: '#e2e8f0', fontWeight: '600'}}>{p.name}</div>
+                                            <div style={{color: '#a0aec0', fontSize: '0.85em', marginTop: '3px'}}>
+                                                {p.category}
+                                                {p.daysUntil === 0
+                                                    ? <span style={{color: '#dc3545', fontWeight: '700'}}> • Due TODAY</span>
+                                                    : <span> • Due in <strong style={{color: '#ffc107'}}>{p.daysUntil} day{p.daysUntil > 1 ? 's' : ''}</strong></span>
+                                                }
+                                            </div>
+                                        </div>
+                                        <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
+                                            <span style={{color: '#ffc107', fontWeight: '700', fontSize: '1.15em'}}>{formatCurrency(p.amount)}</span>
+                                            {p.paymentUrl && (
+                                                <button onClick={() => window.open(p.paymentUrl, '_blank')} style={{padding: '6px 14px', fontSize: '0.85em', background: '#667eea'}}>Pay Now</button>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <div style={{marginTop: '12px', color: '#a0aec0', fontSize: '0.88em'}}>
+                                Total due soon: <strong style={{color: '#ffc107'}}>{formatCurrency(billsDueSoon.reduce((s, p) => s + parseFloat(p.amount), 0))}</strong>
+                            </div>
+                        </div>
+                    )}
                     {transactions.length > 0 && (
                         <div className="section">
                             <h2>Recent Transactions</h2>
@@ -1289,17 +1315,33 @@
                                     
                                     return sortedCategories.map(([category, amount]) => {
                                         const percentage = (amount / totalSpent) * 100;
+                                        const budget = categoryBudgets && categoryBudgets[category];
+                                        const budgetPct = budget ? Math.min((amount / budget) * 100, 100) : null;
+                                        const overBudget = budget && amount > budget;
+                                        const nearBudget = budget && !overBudget && (amount / budget) >= 0.75;
+                                        const barColor = budget
+                                            ? (overBudget ? '#dc3545' : nearBudget ? '#ffc107' : '#28a745')
+                                            : 'linear-gradient(90deg, #667eea, #764ba2)';
                                         return (
                                             <div key={category} style={{marginBottom: '15px'}}>
-                                                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px'}}>
-                                                    <span style={{color: '#e2e8f0', fontWeight: '600'}}>{category}</span>
-                                                    <span style={{color: '#667eea', fontWeight: '700', fontSize: '1.1em'}}>{formatCurrency(amount)}</span>
+                                                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px', flexWrap: 'wrap', gap: '4px'}}>
+                                                    <div style={{display: 'flex', alignItems: 'center', gap: '7px'}}>
+                                                        <span style={{color: '#e2e8f0', fontWeight: '600'}}>{category}</span>
+                                                        {overBudget && <span style={{background: '#dc354522', color: '#dc3545', padding: '1px 7px', borderRadius: '8px', fontSize: '0.75em', fontWeight: '700'}}>OVER</span>}
+                                                        {nearBudget && <span style={{background: '#ffc10722', color: '#ffc107', padding: '1px 7px', borderRadius: '8px', fontSize: '0.75em', fontWeight: '700'}}>75%+</span>}
+                                                    </div>
+                                                    <div style={{display: 'flex', alignItems: 'center', gap: '6px'}}>
+                                                        <span style={{color: overBudget ? '#dc3545' : '#667eea', fontWeight: '700', fontSize: '1.1em'}}>{formatCurrency(amount)}</span>
+                                                        {budget && <span style={{color: '#a0aec0', fontSize: '0.85em'}}>/ {formatCurrency(budget)}</span>}
+                                                    </div>
                                                 </div>
                                                 <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
                                                     <div style={{flex: 1, height: '12px', background: '#2d3748', borderRadius: '6px', overflow: 'hidden'}}>
-                                                        <div style={{width: `${percentage}%`, height: '100%', background: 'linear-gradient(90deg, #667eea, #764ba2)', transition: 'width 0.3s ease'}}></div>
+                                                        <div style={{width: `${budget ? budgetPct : percentage}%`, height: '100%', background: barColor, transition: 'width 0.3s ease'}}></div>
                                                     </div>
-                                                    <span style={{color: '#a0aec0', fontSize: '0.9em', minWidth: '45px', textAlign: 'right'}}>{percentage.toFixed(1)}%</span>
+                                                    <span style={{color: '#a0aec0', fontSize: '0.9em', minWidth: '45px', textAlign: 'right'}}>
+                                                        {budget ? `${((amount / budget) * 100).toFixed(0)}%` : `${percentage.toFixed(1)}%`}
+                                                    </span>
                                                 </div>
                                             </div>
                                         );
@@ -1324,7 +1366,9 @@
             const [bulkRows, setBulkRows] = useState([
                 { id: 1, date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense', notes: '' },
                 { id: 2, date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense', notes: '' },
-                { id: 3, date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense', notes: '' }
+                { id: 3, date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense', notes: '' },
+                { id: 4, date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense', notes: '' },
+                { id: 5, date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense', notes: '' }
             ]);
             
             // Advanced filter states
@@ -1397,7 +1441,7 @@
                         }
                     }
                     
-                    setFormData({ type: 'expense', amount: '', description: '', category: '', date: getLocalDateString(), linkedDebt: '' });
+                    setFormData({ type: 'expense', amount: '', description: '', category: '', date: getLocalDateString(), linkedDebt: '', notes: '' });
                     setShowCustomCategory(false);
                     setCustomCategory('');
                 }
@@ -1476,14 +1520,15 @@
                 setAmountMax('');
             };
 
-            const addBulkRow = () => {
-                setBulkRows([...bulkRows, { 
-                    id: Date.now(), 
-                    date: getLocalDateString(), 
-                    description: '', 
-                    amount: '', 
-                    category: '', 
-                    type: 'expense',
+            const addBulkRow = (inheritFrom) => {
+                const last = inheritFrom || bulkRows[bulkRows.length - 1];
+                setBulkRows(prev => [...prev, {
+                    id: Date.now(),
+                    date: last.date,
+                    description: '',
+                    amount: '',
+                    category: last.category,
+                    type: last.type,
                     notes: ''
                 }]);
             };
@@ -1495,9 +1540,15 @@
             };
 
             const updateBulkRow = (id, field, value) => {
-                setBulkRows(bulkRows.map(row => 
-                    row.id === id ? { ...row, [field]: value } : row
-                ));
+                setBulkRows(prev => {
+                    const updated = prev.map(row => row.id === id ? { ...row, [field]: value } : row);
+                    const lastRow = prev[prev.length - 1];
+                    if (lastRow.id === id && field === 'description' && !lastRow.description && value) {
+                        const fromRow = updated[updated.length - 1];
+                        updated.push({ id: Date.now(), date: fromRow.date, description: '', amount: '', category: fromRow.category, type: fromRow.type, notes: '' });
+                    }
+                    return updated;
+                });
             };
 
             const handleBulkSubmit = (e) => {
@@ -1521,13 +1572,16 @@
                 setTransactions([...transactions, ...newTransactions]);
                 
                 // Reset bulk rows
+                const t0 = Date.now();
                 setBulkRows([
-                    { id: Date.now() + 1, date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense' },
-                    { id: Date.now() + 2, date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense' },
-                    { id: Date.now() + 3, date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense' }
+                    { id: t0 + 1, date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense', notes: '' },
+                    { id: t0 + 2, date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense', notes: '' },
+                    { id: t0 + 3, date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense', notes: '' },
+                    { id: t0 + 4, date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense', notes: '' },
+                    { id: t0 + 5, date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense', notes: '' }
                 ]);
                 
-                alert(`Successfully added ${newTransactions.length} transaction${newTransactions.length !== 1 ? 's' : ''}!`);
+                showToast(`Added ${newTransactions.length} transaction${newTransactions.length !== 1 ? 's' : ''}`);
             };
 
             const handleEdit = (transaction) => {
@@ -1580,99 +1634,120 @@
                         
                         {showBulkEntry ? (
                             <form onSubmit={handleBulkSubmit}>
+                                <p style={{color: '#a0aec0', fontSize: '0.88em', marginBottom: '12px', marginTop: '-8px'}}>Tip: typing a vendor on the last row auto-adds a new row. New rows inherit the date, type, and category from the row above.</p>
                                 <div style={{overflowX: 'auto'}}>
-                                    <table style={{width: '100%', borderCollapse: 'collapse', marginBottom: '20px'}}>
+                                    <table style={{width: '100%', borderCollapse: 'collapse', marginBottom: '12px', fontSize: '0.93em'}}>
                                         <thead>
                                             <tr style={{background: '#1a1f2e'}}>
-                                                <th style={{padding: '12px', textAlign: 'left', color: '#667eea', border: '1px solid #2d3748'}}>Type</th>
-                                                <th style={{padding: '12px', textAlign: 'left', color: '#667eea', border: '1px solid #2d3748'}}>Date</th>
-                                                <th style={{padding: '12px', textAlign: 'left', color: '#667eea', border: '1px solid #2d3748'}}>Vendor</th>
-                                                <th style={{padding: '12px', textAlign: 'left', color: '#667eea', border: '1px solid #2d3748'}}>Amount</th>
-                                                <th style={{padding: '12px', textAlign: 'left', color: '#667eea', border: '1px solid #2d3748'}}>Category</th>
-                                                <th style={{padding: '12px', textAlign: 'left', color: '#667eea', border: '1px solid #2d3748'}}>Notes</th>
-                                                <th style={{padding: '12px', textAlign: 'center', color: '#667eea', border: '1px solid #2d3748', width: '80px'}}>Action</th>
+                                                <th style={{padding: '8px 10px', textAlign: 'left', color: '#667eea', border: '1px solid #2d3748'}}>Type</th>
+                                                <th style={{padding: '8px 10px', textAlign: 'left', color: '#667eea', border: '1px solid #2d3748'}}>Date</th>
+                                                <th style={{padding: '8px 10px', textAlign: 'left', color: '#667eea', border: '1px solid #2d3748'}}>Vendor</th>
+                                                <th style={{padding: '8px 10px', textAlign: 'left', color: '#667eea', border: '1px solid #2d3748'}}>Amount</th>
+                                                <th style={{padding: '8px 10px', textAlign: 'left', color: '#667eea', border: '1px solid #2d3748'}}>Category</th>
+                                                <th style={{padding: '8px 10px', textAlign: 'left', color: '#667eea', border: '1px solid #2d3748'}}>Notes</th>
+                                                <th style={{padding: '8px 10px', textAlign: 'center', color: '#667eea', border: '1px solid #2d3748', width: '50px'}}></th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {bulkRows.map(row => (
-                                                <tr key={row.id} style={{background: '#0f1419'}}>
-                                                    <td style={{padding: '8px', border: '1px solid #2d3748'}}>
-                                                        <select 
-                                                            value={row.type} 
+                                            {bulkRows.map((row, idx) => {
+                                                const isReady = row.description && row.amount && row.category;
+                                                return (
+                                                <tr key={row.id} style={{background: isReady ? '#0d1f0d' : '#0f1419'}}>
+                                                    <td style={{padding: '5px 6px', border: '1px solid #2d3748'}}>
+                                                        <select
+                                                            value={row.type}
                                                             onChange={(e) => updateBulkRow(row.id, 'type', e.target.value)}
-                                                            style={{width: '100%', padding: '8px'}}
+                                                            style={{width: '100%', padding: '5px'}}
                                                         >
                                                             <option value="expense">Expense</option>
                                                             <option value="income">Income</option>
                                                         </select>
                                                     </td>
-                                                    <td style={{padding: '8px', border: '1px solid #2d3748'}}>
-                                                        <input 
-                                                            type="date" 
-                                                            value={row.date} 
+                                                    <td style={{padding: '5px 6px', border: '1px solid #2d3748'}}>
+                                                        <input
+                                                            type="date"
+                                                            value={row.date}
                                                             onChange={(e) => updateBulkRow(row.id, 'date', e.target.value)}
-                                                            style={{width: '100%', padding: '8px'}}
+                                                            style={{width: '100%', padding: '5px'}}
                                                         />
                                                     </td>
-                                                    <td style={{padding: '8px', border: '1px solid #2d3748'}}>
-                                                        <input 
-                                                            type="text" 
-                                                            value={row.description} 
+                                                    <td style={{padding: '5px 6px', border: '1px solid #2d3748'}}>
+                                                        <input
+                                                            type="text"
+                                                            value={row.description}
                                                             onChange={(e) => updateBulkRow(row.id, 'description', e.target.value)}
-                                                            placeholder="e.g., Kroger, Shell"
-                                                            style={{width: '100%', padding: '8px'}}
+                                                            placeholder="Vendor name"
+                                                            style={{width: '100%', padding: '5px'}}
                                                         />
                                                     </td>
-                                                    <td style={{padding: '8px', border: '1px solid #2d3748'}}>
-                                                        <input 
-                                                            type="number" 
-                                                            step="0.01" 
-                                                            value={row.amount} 
+                                                    <td style={{padding: '5px 6px', border: '1px solid #2d3748'}}>
+                                                        <input
+                                                            type="number"
+                                                            step="0.01"
+                                                            min="0"
+                                                            value={row.amount}
                                                             onChange={(e) => updateBulkRow(row.id, 'amount', e.target.value)}
                                                             placeholder="0.00"
-                                                            style={{width: '100%', padding: '8px'}}
+                                                            style={{width: '100%', padding: '5px'}}
                                                         />
                                                     </td>
-                                                    <td style={{padding: '8px', border: '1px solid #2d3748'}}>
-                                                        <select 
-                                                            value={row.category} 
+                                                    <td style={{padding: '5px 6px', border: '1px solid #2d3748'}}>
+                                                        <select
+                                                            value={row.category}
                                                             onChange={(e) => updateBulkRow(row.id, 'category', e.target.value)}
-                                                            style={{width: '100%', padding: '8px'}}
+                                                            style={{width: '100%', padding: '5px'}}
                                                         >
                                                             <option value="">Select...</option>
-                                                            {(row.type === 'expense' ? expenseCategories : incomeCategories).map(cat => 
+                                                            {(row.type === 'expense' ? expenseCategories : incomeCategories).map(cat =>
                                                                 <option key={cat} value={cat}>{cat}</option>
                                                             )}
                                                         </select>
                                                     </td>
-                                                    <td style={{padding: '8px', border: '1px solid #2d3748'}}>
-                                                        <input 
-                                                            type="text" 
-                                                            value={row.notes || ''} 
+                                                    <td style={{padding: '5px 6px', border: '1px solid #2d3748'}}>
+                                                        <input
+                                                            type="text"
+                                                            value={row.notes || ''}
                                                             onChange={(e) => updateBulkRow(row.id, 'notes', e.target.value)}
                                                             placeholder="Optional"
-                                                            style={{width: '100%', padding: '8px'}}
+                                                            style={{width: '100%', padding: '5px'}}
                                                         />
                                                     </td>
-                                                    <td style={{padding: '8px', border: '1px solid #2d3748', textAlign: 'center'}}>
-                                                        <button 
-                                                            type="button" 
+                                                    <td style={{padding: '5px 6px', border: '1px solid #2d3748', textAlign: 'center'}}>
+                                                        <button
+                                                            type="button"
                                                             onClick={() => removeBulkRow(row.id)}
                                                             className="danger"
-                                                            style={{padding: '6px 12px', fontSize: '0.9em'}}
+                                                            style={{padding: '4px 9px', fontSize: '0.85em'}}
                                                             disabled={bulkRows.length === 1}
                                                         >
                                                             ✕
                                                         </button>
                                                     </td>
                                                 </tr>
-                                            ))}
+                                                );
+                                            })}
                                         </tbody>
                                     </table>
                                 </div>
-                                <div style={{display: 'flex', gap: '10px', marginTop: '15px'}}>
-                                    <button type="button" onClick={addBulkRow} className="secondary">+ Add Row</button>
-                                    <button type="submit">💾 Save All ({bulkRows.filter(r => r.description && r.amount && r.category).length} ready)</button>
+                                {(() => {
+                                    const readyRows = bulkRows.filter(r => r.description && r.amount && r.category);
+                                    const expTotal = readyRows.filter(r => r.type === 'expense').reduce((s, r) => s + parseFloat(r.amount || 0), 0);
+                                    const incTotal = readyRows.filter(r => r.type === 'income').reduce((s, r) => s + parseFloat(r.amount || 0), 0);
+                                    if (readyRows.length === 0) return null;
+                                    return (
+                                        <div style={{display: 'flex', gap: '20px', padding: '10px 14px', background: '#1a1f2e', borderRadius: '8px', marginBottom: '12px', fontSize: '0.9em', flexWrap: 'wrap'}}>
+                                            <span style={{color: '#a0aec0'}}>{readyRows.length} row{readyRows.length !== 1 ? 's' : ''} ready</span>
+                                            {expTotal > 0 && <span style={{color: '#dc3545'}}>Expenses: <strong>{formatCurrency(expTotal)}</strong></span>}
+                                            {incTotal > 0 && <span style={{color: '#28a745'}}>Income: <strong>{formatCurrency(incTotal)}</strong></span>}
+                                            {expTotal > 0 && incTotal > 0 && <span style={{color: incTotal - expTotal >= 0 ? '#28a745' : '#dc3545'}}>Net: <strong>{formatCurrency(incTotal - expTotal)}</strong></span>}
+                                        </div>
+                                    );
+                                })()}
+                                <div style={{display: 'flex', gap: '10px', marginTop: '4px'}}>
+                                    <button type="button" onClick={() => addBulkRow()} className="secondary">+ Add Row</button>
+                                    <button type="submit" disabled={bulkRows.filter(r => r.description && r.amount && r.category).length === 0}>
+                                        💾 Save {bulkRows.filter(r => r.description && r.amount && r.category).length > 0 ? `${bulkRows.filter(r => r.description && r.amount && r.category).length} Transaction${bulkRows.filter(r => r.description && r.amount && r.category).length !== 1 ? 's' : ''}` : 'All'}
+                                    </button>
                                 </div>
                             </form>
                         ) : (
@@ -2162,19 +2237,14 @@
             };
             
             const processPayment = (payment) => {
-                console.log('Processing payment:', payment.name);
-                console.log('Linked debt ID:', payment.linkedDebt);
-                
                 const paymentKey = `${monthKey}-${payment.id}`;
                 const newTransaction = { type: 'expense', amount: payment.amount, description: `${payment.name} (Recurring)`, category: payment.category, date: getLocalDateString(), id: Date.now() };
                 setTransactions([...transactions, newTransaction]);
                 setPaidPayments({...paidPayments, [paymentKey]: true});
                 
                 if (payment.linkedDebt) {
-                    console.log('Payment has linked debt, processing...');
-                    setDebts(debts.map(debt => { 
+                    setDebts(debts.map(debt => {
                         if (debt.id === parseInt(payment.linkedDebt)) {
-                            console.log('Found matching debt:', debt.name);
                             const interestRate = parseFloat(debt.interestRate) || 0;
                             const monthlyInterestRate = interestRate / 100 / 12;
                             const interestAccrued = debt.currentBalance * monthlyInterestRate;
@@ -2191,11 +2261,7 @@
                                 balanceAfter: newBalance
                             };
                             
-                            console.log('Creating log entry:', logEntry);
-                            console.log('Transaction log length before:', transactionLog.length);
-                            console.log('Transaction log length after:', transactionLog.length + 1);
-                            
-                            return { 
+                            return {
                                 ...debt, 
                                 currentBalance: newBalance,
                                 transactionLog: [...transactionLog, logEntry]
@@ -2204,7 +2270,7 @@
                         return debt; 
                     })); 
                 }
-                alert(`Payment processed: ${payment.name} for ${formatCurrency(payment.amount)}`);
+                showToast(`Payment processed: ${payment.name} — ${formatCurrency(payment.amount)}`);
             };
 
             const togglePaidStatus = (paymentId) => {
@@ -2731,6 +2797,7 @@
                                             <div className="debt-amount">{formatCurrency(currentBalance)}</div>
                                             <div className="debt-info">{debt.category}</div>
                                             <div className="debt-info">{interestRate.toFixed(2)}% APR</div>
+                                            <div className="debt-info" style={{color: '#ffc107', fontWeight: '600'}}>Min: {formatCurrency(parseFloat(debt.minimumPayment) || 0)}/mo</div>
                                             <div className="progress-bar" style={{marginTop: '8px'}}><div className="progress-fill" style={{width: `${Math.min(progressPercent, 100)}%`}}></div></div>
                                             <div className="debt-info" style={{marginTop: '5px'}}>{progressPercent.toFixed(1)}% paid off</div>
                                         </div>
@@ -3068,65 +3135,503 @@
             );
         }
 
-        function PayoffStrategiesTab({ debts }) {
-            const [extraPayment, setExtraPayment] = useState(0);
-            const [selectedStrategy, setSelectedStrategy] = useState('snowball');
-            const calculatePayoffOrder = (sortedDebts) => {
-                const timeline = []; let currentMonth = 0; let totalInterest = 0; let remainingDebts = sortedDebts.map(d => ({ ...d })); const extra = parseFloat(extraPayment) || 0;
-                while (remainingDebts.length > 0) {
-                    let availableExtra = extra;
-                    remainingDebts = remainingDebts.filter(debt => {
-                        const monthlyRate = (debt.interestRate / 100) / 12; const interest = debt.currentBalance * monthlyRate; totalInterest += interest;
-                        let payment = debt.minimumPayment; if (debt === remainingDebts[0]) { payment += availableExtra; }
-                        const principal = payment - interest; debt.currentBalance -= principal;
-                        if (debt.currentBalance <= 0) { timeline.push({ name: debt.name, month: currentMonth, category: debt.category }); return false; }
-                        return true;
-                    });
-                    currentMonth++; if (currentMonth > 600) break;
-                }
-                return { timeline, totalMonths: currentMonth, totalInterest };
+        function DebtPayoffTrackerTab({ debts }) {
+            const [strategy, setStrategy] = React.useState('avalanche');
+            const [extraBudget, setExtraBudget] = React.useState('');
+            const [expandedDebt, setExpandedDebt] = React.useState(null);
+            const [excludedIds, setExcludedIds] = React.useState(new Set());
+
+            const toggleDebt = (id) => setExcludedIds(prev => {
+                const n = new Set(prev);
+                n.has(id) ? n.delete(id) : n.add(id);
+                return n;
+            });
+
+            const activeDebts = debts.filter(d => !d.paidOff && parseFloat(d.currentBalance) > 0.01);
+            const paidOffDebts = debts.filter(d => d.paidOff);
+            const totalOriginal = debts.reduce((s, d) => s + (parseFloat(d.originalBalance) || parseFloat(d.currentBalance) || 0), 0);
+            const totalRemaining = activeDebts.reduce((s, d) => s + (parseFloat(d.currentBalance) || 0), 0);
+            const totalPaid = totalOriginal - totalRemaining;
+            const overallProgress = totalOriginal > 0 ? (totalPaid / totalOriginal * 100) : 0;
+            const totalMin = activeDebts.reduce((s, d) => s + (parseFloat(d.minimumPayment) || 0), 0);
+            const extra = parseFloat(extraBudget) || 0;
+
+            const planDebts = activeDebts.filter(d => !excludedIds.has(d.id));
+            const planMin = planDebts.reduce((s, d) => s + (parseFloat(d.minimumPayment) || 0), 0);
+
+            const sortDebts = (strat) => {
+                const list = planDebts.map(d => ({
+                    id: d.id, name: d.name,
+                    balance: parseFloat(d.currentBalance) || 0,
+                    rate: parseFloat(d.interestRate) || 0,
+                    min: parseFloat(d.minimumPayment) || 0
+                }));
+                if (strat === 'avalanche') return [...list].sort((a, b) => b.rate - a.rate);
+                if (strat === 'snowball') return [...list].sort((a, b) => a.balance - b.balance);
+                return list;
             };
-            const calculateSnowball = () => { const sortedDebts = [...debts].map(d => ({ ...d, currentBalance: parseFloat(d.currentBalance), minimumPayment: parseFloat(d.minimumPayment), interestRate: parseFloat(d.interestRate) })).sort((a, b) => a.currentBalance - b.currentBalance); return calculatePayoffOrder(sortedDebts); };
-            const calculateAvalanche = () => { const sortedDebts = [...debts].map(d => ({ ...d, currentBalance: parseFloat(d.currentBalance), minimumPayment: parseFloat(d.minimumPayment), interestRate: parseFloat(d.interestRate) })).sort((a, b) => b.interestRate - a.interestRate); return calculatePayoffOrder(sortedDebts); };
-            const snowballResult = calculateSnowball(); const avalancheResult = calculateAvalanche(); const activeResult = selectedStrategy === 'snowball' ? snowballResult : avalancheResult;
-            const formatMonth = (monthNum) => { const date = new Date(); date.setMonth(date.getMonth() + monthNum); return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }); };
+
+            const simulate = (orderedList, extraMonthly) => {
+                if (!orderedList.length) return null;
+                let state = orderedList.map(d => ({ ...d, paidOffMonth: null, totalInterest: 0 }));
+                let avail = extraMonthly;
+                let month = 0;
+                const yearSnaps = [];
+                while (state.some(d => d.balance > 0.01) && month < 601) {
+                    month++;
+                    state = state.map(d => {
+                        if (d.balance <= 0.01) return d;
+                        const interest = d.balance * (d.rate / 100 / 12);
+                        return { ...d, balance: d.balance + interest, totalInterest: d.totalInterest + interest };
+                    });
+                    const focusIdx = state.findIndex(d => d.balance > 0.01);
+                    state = state.map((d, i) => {
+                        if (d.balance <= 0.01) return d;
+                        const pay = i === focusIdx ? Math.min(d.balance, d.min + avail) : Math.min(d.balance, d.min);
+                        return { ...d, balance: Math.max(0, d.balance - pay) };
+                    });
+                    state = state.map(d => {
+                        if (d.balance <= 0.01 && d.paidOffMonth === null) {
+                            avail += d.min;
+                            return { ...d, balance: 0, paidOffMonth: month };
+                        }
+                        return d;
+                    });
+                    if (month % 12 === 0) yearSnaps.push({ month, label: `Year ${month / 12}`, state: state.map(d => ({ id: d.id, balance: d.balance })) });
+                }
+                if (month % 12 !== 0 && month > 0) yearSnaps.push({ month, label: `Mo ${month}`, isFinal: true, state: state.map(d => ({ id: d.id, balance: d.balance })) });
+                return { state, totalMonths: month, totalInterest: state.reduce((s, d) => s + d.totalInterest, 0), yearSnaps };
+            };
+
+            const payoffLabel = (months) => {
+                if (!months || months >= 600) return '♾ Never';
+                const d = new Date(); d.setMonth(d.getMonth() + months);
+                return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+            };
+
+            const sortedDebts = sortDebts(strategy);
+            const simCurr = simulate(sortedDebts, extra);
+            const simMinOnly = simulate(sortDebts('avalanche'), 0);
+            const simAval = simulate(sortDebts('avalanche'), extra);
+            const simSnow = simulate(sortDebts('snowball'), extra);
+
+            const interestSaved = simMinOnly && simCurr ? Math.max(0, simMinOnly.totalInterest - simCurr.totalInterest) : 0;
+            const monthsSaved = simMinOnly && simCurr ? Math.max(0, simMinOnly.totalMonths - simCurr.totalMonths) : 0;
+
+            if (debts.length === 0) {
+                return (
+                    <div className="section" style={{textAlign: 'center', padding: '60px 20px'}}>
+                        <div style={{fontSize: '3em', marginBottom: '15px'}}>🎯</div>
+                        <h2 style={{color: '#667eea'}}>No Debts Yet</h2>
+                        <p style={{color: '#a0aec0'}}>Add debts in the Debt Tracking tab to start planning your payoff strategy.</p>
+                    </div>
+                );
+            }
 
             return (
                 <div>
-                    <div className="section">
-                        <h2>🎯 Debt Payoff Strategies</h2>
-                        <p style={{color: '#a0aec0', lineHeight: '1.6', marginBottom: '20px'}}>Compare two popular debt payoff strategies to find the best approach for your situation.</p>
-                        <div className="form-row" style={{marginBottom: '20px'}}>
-                            <div className="form-group"><label>Extra Monthly Payment</label><input type="number" step="0.01" value={extraPayment} onChange={(e) => setExtraPayment(e.target.value)} placeholder="0.00" /></div>
-                            <div className="form-group"><label>View Strategy</label><select value={selectedStrategy} onChange={(e) => setSelectedStrategy(e.target.value)}><option value="snowball">Debt Snowball</option><option value="avalanche">Debt Avalanche</option></select></div>
+                    {/* PROGRESS BANNER */}
+                    <div className="section" style={{background: 'linear-gradient(135deg, #1a1f2e 0%, #2d3748 100%)', border: '2px solid #667eea'}}>
+                        <h2 style={{color: '#667eea', marginBottom: '20px'}}>📊 Overall Progress</h2>
+                        <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(155px, 1fr))', gap: '12px', marginBottom: '20px'}}>
+                            {[
+                                { label: 'ORIGINAL DEBT', val: formatCurrency(totalOriginal), col: '#dc3545' },
+                                { label: 'PAID DOWN', val: formatCurrency(totalPaid), col: '#28a745' },
+                                { label: 'REMAINING', val: formatCurrency(totalRemaining), col: '#ffc107' },
+                                { label: 'MIN PAYMENTS/MO', val: formatCurrency(totalMin), col: '#667eea' },
+                            ].map((s, i) => (
+                                <div key={i} style={{background: '#0f1419', padding: '14px', borderRadius: '10px', textAlign: 'center'}}>
+                                    <div style={{color: '#a0aec0', fontSize: '0.75em', letterSpacing: '0.5px', marginBottom: '5px'}}>{s.label}</div>
+                                    <div style={{color: s.col, fontSize: '1.45em', fontWeight: '700'}}>{s.val}</div>
+                                </div>
+                            ))}
                         </div>
-                    </div>
-                    {debts.length === 0 ? (
-                        <div className="section"><p style={{color: '#a0aec0', textAlign: 'center', padding: '40px'}}>No debts to analyze. Add debts in the Debt Tracking tab to see payoff strategies.</p></div>
-                    ) : (
-                        <>
-                            <div className="dashboard-grid">
-                                <div className="section"><h2>❄️ Debt Snowball</h2><p style={{color: '#a0aec0', fontSize: '0.9em', marginBottom: '15px'}}>Pay off smallest balances first for psychological wins</p><div style={{fontSize: '2em', fontWeight: '700', color: '#667eea', marginBottom: '5px'}}>{snowballResult.totalMonths} months</div><div style={{color: '#a0aec0', fontSize: '0.9em'}}>Total Interest: {formatCurrency(snowballResult.totalInterest)}</div><div style={{color: '#a0aec0', fontSize: '0.9em'}}>Debt-Free: {formatMonth(snowballResult.totalMonths)}</div></div>
-                                <div className="section"><h2>⛰️ Debt Avalanche</h2><p style={{color: '#a0aec0', fontSize: '0.9em', marginBottom: '15px'}}>Pay off highest interest rates first to save money</p><div style={{fontSize: '2em', fontWeight: '700', color: '#667eea', marginBottom: '5px'}}>{avalancheResult.totalMonths} months</div><div style={{color: '#a0aec0', fontSize: '0.9em'}}>Total Interest: {formatCurrency(avalancheResult.totalInterest)}</div><div style={{color: '#a0aec0', fontSize: '0.9em'}}>Debt-Free: {formatMonth(avalancheResult.totalMonths)}</div>{avalancheResult.totalInterest < snowballResult.totalInterest && (<div style={{background: '#28a745', color: 'white', padding: '10px', borderRadius: '5px', fontSize: '0.85em', textAlign: 'center', marginTop: '10px'}}>💰 Saves {formatCurrency(snowballResult.totalInterest - avalancheResult.totalInterest)} in interest</div>)}</div>
+                        <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '0.9em'}}>
+                            <span style={{color: '#e2e8f0', fontWeight: '600'}}>Overall Progress</span>
+                            <span style={{color: '#28a745', fontWeight: '700'}}>{overallProgress.toFixed(1)}%</span>
+                        </div>
+                        <div style={{width: '100%', height: '14px', background: '#2d3748', borderRadius: '7px', overflow: 'hidden'}}>
+                            <div style={{width: `${Math.min(overallProgress, 100)}%`, height: '100%', background: 'linear-gradient(90deg, #667eea, #28a745)', borderRadius: '7px', transition: 'width 0.5s ease'}}></div>
+                        </div>
+                        {paidOffDebts.length > 0 && (
+                            <div style={{marginTop: '14px', padding: '10px 15px', background: '#28a74522', border: '1px solid #28a745', borderRadius: '8px', color: '#28a745', fontSize: '0.9em'}}>
+                                🎉 <strong>{paidOffDebts.length} debt{paidOffDebts.length > 1 ? 's' : ''} paid off!</strong>
+                                <span style={{color: '#a0aec0', marginLeft: '8px'}}>{formatCurrency(paidOffDebts.reduce((s, d) => s + (parseFloat(d.originalBalance) || 0), 0))} eliminated · {formatCurrency(paidOffDebts.reduce((s, d) => s + (parseFloat(d.minimumPayment) || 0), 0))}/mo freed</span>
                             </div>
-                            <div className="section">
-                                <h2>{selectedStrategy === 'snowball' ? '❄️ Snowball' : '⛰️ Avalanche'} Payoff Timeline</h2>
-                                <div style={{marginTop: '20px'}}>
-                                    {activeResult.timeline.map((item, index) => (
-                                        <div key={index} style={{background: '#1a1f2e', padding: '15px 20px', borderRadius: '8px', marginBottom: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderLeft: '4px solid #28a745'}}>
-                                            <div><h4 style={{color: '#e2e8f0', marginBottom: '5px'}}>{item.name}</h4><p style={{color: '#a0aec0', fontSize: '0.85em'}}>{item.category}</p></div>
-                                            <div style={{textAlign: 'right'}}><div style={{color: '#28a745', fontWeight: '700', fontSize: '1.1em'}}>Month {item.month}</div><div style={{color: '#a0aec0', fontSize: '0.85em'}}>{formatMonth(item.month)}</div></div>
-                                        </div>
-                                    ))}
+                        )}
+                    </div>
+
+                    {/* STRATEGY PLANNER */}
+                    {activeDebts.length > 0 && (
+                        <div className="section">
+                            <h2 style={{color: '#667eea', marginBottom: '20px'}}>🎯 Payoff Strategy Planner</h2>
+
+                            {/* Debt selector */}
+                            <div style={{marginBottom: '22px'}}>
+                                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px'}}>
+                                    <div style={{color: '#a0aec0', fontSize: '0.78em', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: '600'}}>Debts to Include in Plan</div>
+                                    <div style={{display: 'flex', gap: '8px'}}>
+                                        <button type="button" onClick={() => setExcludedIds(new Set())}
+                                            style={{background: 'none', border: '1px solid #2d3748', color: '#a0aec0', padding: '3px 10px', borderRadius: '5px', fontSize: '0.78em', cursor: 'pointer'}}>
+                                            All
+                                        </button>
+                                        <button type="button" onClick={() => setExcludedIds(new Set(activeDebts.map(d => d.id)))}
+                                            style={{background: 'none', border: '1px solid #2d3748', color: '#a0aec0', padding: '3px 10px', borderRadius: '5px', fontSize: '0.78em', cursor: 'pointer'}}>
+                                            None
+                                        </button>
+                                    </div>
+                                </div>
+                                <div style={{display: 'flex', flexWrap: 'wrap', gap: '8px'}}>
+                                    {activeDebts.map(d => {
+                                        const included = !excludedIds.has(d.id);
+                                        const bal = parseFloat(d.currentBalance) || 0;
+                                        const rate = parseFloat(d.interestRate) || 0;
+                                        return (
+                                            <button key={d.id} type="button" onClick={() => toggleDebt(d.id)}
+                                                style={{
+                                                    display: 'flex', alignItems: 'center', gap: '8px',
+                                                    padding: '8px 12px', borderRadius: '8px', cursor: 'pointer',
+                                                    background: included ? 'rgba(102,126,234,0.12)' : '#0f1419',
+                                                    border: `1.5px solid ${included ? '#667eea' : '#2d3748'}`,
+                                                    transition: 'all 0.15s'
+                                                }}>
+                                                <div style={{
+                                                    width: '16px', height: '16px', borderRadius: '4px', flexShrink: 0,
+                                                    background: included ? '#667eea' : 'transparent',
+                                                    border: `2px solid ${included ? '#667eea' : '#4a5568'}`,
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                                }}>
+                                                    {included && <span style={{color: '#fff', fontSize: '10px', lineHeight: 1}}>✓</span>}
+                                                </div>
+                                                <div style={{textAlign: 'left'}}>
+                                                    <div style={{color: included ? '#e2e8f0' : '#4a5568', fontSize: '0.88em', fontWeight: '600'}}>{d.name}</div>
+                                                    <div style={{color: included ? '#a0aec0' : '#2d3748', fontSize: '0.75em', marginTop: '1px'}}>
+                                                        {formatCurrency(bal)} · {rate}% APR
+                                                    </div>
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                {excludedIds.size > 0 && (
+                                    <div style={{marginTop: '10px', fontSize: '0.82em', color: '#a0aec0', padding: '8px 12px', background: '#1a1f2e', borderRadius: '6px', border: '1px solid #2d3748'}}>
+                                        {excludedIds.size} debt{excludedIds.size > 1 ? 's' : ''} excluded from plan · {formatCurrency(activeDebts.filter(d => excludedIds.has(d.id)).reduce((s, d) => s + (parseFloat(d.minimumPayment) || 0), 0))}/mo in excluded minimums
+                                    </div>
+                                )}
+                            </div>
+
+                            {planDebts.length === 0 ? (
+                                <div style={{textAlign: 'center', padding: '30px', color: '#a0aec0', background: '#1a1f2e', borderRadius: '10px'}}>
+                                    <div style={{fontSize: '1.8em', marginBottom: '8px'}}>☝️</div>
+                                    <p style={{margin: 0}}>Select at least one debt above to run the strategy simulation.</p>
+                                </div>
+                            ) : (
+                            <>
+
+                            {/* Strategy buttons */}
+                            <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '10px', marginBottom: '20px'}}>
+                                {[
+                                    { id: 'avalanche', icon: '🏔', title: 'Avalanche', sub: 'Highest interest rate first', badge: 'Saves most money' },
+                                    { id: 'snowball', icon: '⛄', title: 'Snowball', sub: 'Lowest balance first', badge: 'Best for motivation' },
+                                ].map(s => {
+                                    const isActive = strategy === s.id;
+                                    const sResult = s.id === 'avalanche' ? simAval : simSnow;
+                                    const oResult = s.id === 'avalanche' ? simSnow : simAval;
+                                    return (
+                                        <button key={s.id} type="button" onClick={() => setStrategy(s.id)}
+                                            style={{padding: '16px 18px', textAlign: 'left', cursor: 'pointer', borderRadius: '10px',
+                                                background: isActive ? 'rgba(102,126,234,0.12)' : '#1a1f2e',
+                                                border: `2px solid ${isActive ? '#667eea' : '#2d3748'}`,
+                                                transition: 'border-color 0.2s', width: '100%'}}>
+                                            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '7px'}}>
+                                                <div style={{color: '#e2e8f0', fontWeight: '700', fontSize: '1.05em'}}>{s.icon} {s.title}</div>
+                                                <div style={{background: '#28a74522', color: '#28a745', padding: '2px 8px', borderRadius: '6px', fontSize: '0.74em', fontWeight: '600'}}>{s.badge}</div>
+                                            </div>
+                                            <div style={{color: '#a0aec0', fontSize: '0.85em', marginBottom: '8px'}}>{s.sub}</div>
+                                            {sResult && oResult && (
+                                                <div style={{fontSize: '0.82em', color: '#4a5568', borderTop: '1px solid #2d3748', paddingTop: '8px'}}>
+                                                    {sResult.totalMonths < 600 ? `${sResult.totalMonths} mo` : '♾'} · {formatCurrency(sResult.totalInterest)} interest
+                                                    {s.id === 'avalanche' && sResult.totalInterest < oResult.totalInterest &&
+                                                        <span style={{color: '#28a745', marginLeft: '6px'}}>· saves {formatCurrency(oResult.totalInterest - sResult.totalInterest)}</span>}
+                                                    {s.id === 'snowball' && oResult.totalInterest < sResult.totalInterest &&
+                                                        <span style={{color: '#ffc107', marginLeft: '6px'}}>· costs {formatCurrency(sResult.totalInterest - oResult.totalInterest)} more</span>}
+                                                    {s.id === 'snowball' && sResult.totalMonths < oResult.totalMonths &&
+                                                        <span style={{color: '#28a745', marginLeft: '6px'}}>· {oResult.totalMonths - sResult.totalMonths} mo faster</span>}
+                                                </div>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Extra payment input */}
+                            <div style={{display: 'flex', gap: '15px', alignItems: 'flex-end', marginBottom: '25px', flexWrap: 'wrap'}}>
+                                <div style={{flex: 1, minWidth: '180px'}}>
+                                    <label style={{display: 'block', color: '#a0aec0', fontSize: '0.88em', marginBottom: '6px'}}>Extra monthly payment <span style={{color: '#4a5568'}}>(on top of minimums)</span></label>
+                                    <input type="number" min="0" step="10" value={extraBudget} onChange={e => setExtraBudget(e.target.value)} placeholder="0"
+                                        style={{width: '100%', padding: '10px 14px', fontSize: '1.05em'}} />
+                                </div>
+                                <div style={{background: '#1a1f2e', padding: '12px 18px', borderRadius: '8px', border: '1px solid #2d3748', flexShrink: 0}}>
+                                    <div style={{color: '#a0aec0', fontSize: '0.78em', marginBottom: '3px'}}>Total monthly outlay</div>
+                                    <div style={{color: '#667eea', fontWeight: '700', fontSize: '1.15em'}}>{formatCurrency(planMin + extra)}</div>
                                 </div>
                             </div>
-                        </>
+
+                            {simCurr && (
+                                <>
+                                    {/* Key metrics */}
+                                    <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(148px, 1fr))', gap: '12px', marginBottom: '25px'}}>
+                                        <div style={{background: '#0f1419', padding: '15px', borderRadius: '10px', textAlign: 'center', border: '1px solid #28a745'}}>
+                                            <div style={{color: '#a0aec0', fontSize: '0.74em', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '5px'}}>Debt-Free Date</div>
+                                            <div style={{color: '#28a745', fontSize: '1.2em', fontWeight: '700'}}>{payoffLabel(simCurr.totalMonths)}</div>
+                                            <div style={{color: '#4a5568', fontSize: '0.8em', marginTop: '3px'}}>{simCurr.totalMonths < 600 ? `${simCurr.totalMonths} months` : 'min payment too low'}</div>
+                                        </div>
+                                        <div style={{background: '#0f1419', padding: '15px', borderRadius: '10px', textAlign: 'center', border: '1px solid #dc3545'}}>
+                                            <div style={{color: '#a0aec0', fontSize: '0.74em', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '5px'}}>Total Interest</div>
+                                            <div style={{color: '#dc3545', fontSize: '1.2em', fontWeight: '700'}}>{formatCurrency(simCurr.totalInterest)}</div>
+                                            <div style={{color: '#4a5568', fontSize: '0.8em', marginTop: '3px'}}>over payoff period</div>
+                                        </div>
+                                        {extra > 0 && simMinOnly && (
+                                            <>
+                                                <div style={{background: '#0f1419', padding: '15px', borderRadius: '10px', textAlign: 'center', border: '1px solid #ffc107'}}>
+                                                    <div style={{color: '#a0aec0', fontSize: '0.74em', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '5px'}}>Interest Saved</div>
+                                                    <div style={{color: '#ffc107', fontSize: '1.2em', fontWeight: '700'}}>{formatCurrency(interestSaved)}</div>
+                                                    <div style={{color: '#4a5568', fontSize: '0.8em', marginTop: '3px'}}>vs minimums only</div>
+                                                </div>
+                                                <div style={{background: '#0f1419', padding: '15px', borderRadius: '10px', textAlign: 'center', border: '1px solid #667eea'}}>
+                                                    <div style={{color: '#a0aec0', fontSize: '0.74em', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '5px'}}>Time Saved</div>
+                                                    <div style={{color: '#667eea', fontSize: '1.2em', fontWeight: '700'}}>{monthsSaved} months</div>
+                                                    <div style={{color: '#4a5568', fontSize: '0.8em', marginTop: '3px'}}>vs minimums only</div>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+
+                                    {/* Payoff order */}
+                                    <div style={{color: '#a0aec0', fontSize: '0.78em', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '10px', fontWeight: '600'}}>Payoff Order & Timeline</div>
+                                    <div style={{display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '24px'}}>
+                                        {sortedDebts.map((d, idx) => {
+                                            const ds = simCurr.state.find(s => s.id === d.id);
+                                            const paidMo = ds?.paidOffMonth;
+                                            const barPct = simCurr.totalMonths > 0 && paidMo ? Math.min((paidMo / simCurr.totalMonths) * 100, 100) : 100;
+                                            const isFocus = idx === 0;
+                                            return (
+                                                <div key={d.id} style={{background: '#1a1f2e', padding: '14px 18px', borderRadius: '10px', border: `1px solid ${isFocus ? '#667eea' : '#2d3748'}`}}>
+                                                    <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px', flexWrap: 'wrap', gap: '8px'}}>
+                                                        <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
+                                                            <div style={{width: '26px', height: '26px', borderRadius: '50%', flexShrink: 0,
+                                                                background: isFocus ? '#667eea' : '#2d3748', color: isFocus ? '#fff' : '#a0aec0',
+                                                                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.82em', fontWeight: '700'}}>
+                                                                #{idx + 1}
+                                                            </div>
+                                                            <div>
+                                                                <div style={{color: '#e2e8f0', fontWeight: '600'}}>{d.name}</div>
+                                                                <div style={{color: '#a0aec0', fontSize: '0.81em', marginTop: '1px'}}>
+                                                                    {formatCurrency(d.balance)} · {d.rate}% APR · {formatCurrency(d.min)}/mo min
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div style={{textAlign: 'right', flexShrink: 0}}>
+                                                            <div style={{color: paidMo && paidMo < 600 ? '#28a745' : '#dc3545', fontWeight: '700'}}>{payoffLabel(paidMo)}</div>
+                                                            <div style={{color: '#4a5568', fontSize: '0.8em'}}>{paidMo && paidMo < 600 ? `${paidMo} mo` : 'needs more'}</div>
+                                                        </div>
+                                                    </div>
+                                                    <div style={{background: '#0f1419', height: '7px', borderRadius: '4px', overflow: 'hidden'}}>
+                                                        <div style={{width: `${barPct}%`, height: '100%', borderRadius: '4px',
+                                                            background: isFocus ? 'linear-gradient(90deg, #667eea, #764ba2)' : '#2d374899'}}></div>
+                                                    </div>
+                                                    {isFocus && (
+                                                        <div style={{marginTop: '7px', color: extra > 0 ? '#667eea' : '#a0aec0', fontSize: '0.8em', fontWeight: extra > 0 ? '600' : '400'}}>
+                                                            {extra > 0
+                                                                ? `← Focus here first: paying ${formatCurrency(d.min + extra)}/mo (${formatCurrency(d.min)} min + ${formatCurrency(extra)} extra)`
+                                                                : `← Pay this one off first. Add extra payment above to accelerate.`}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* Year-by-year balance table */}
+                                    {simCurr.yearSnaps.length > 0 && (
+                                        <>
+                                            <div style={{color: '#a0aec0', fontSize: '0.78em', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '10px', fontWeight: '600'}}>Balance Projection</div>
+                                            <div style={{overflowX: 'auto'}}>
+                                                <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '0.87em'}}>
+                                                    <thead>
+                                                        <tr style={{background: '#1a1f2e'}}>
+                                                            <th style={{padding: '9px 12px', textAlign: 'left', color: '#667eea', border: '1px solid #2d3748', whiteSpace: 'nowrap'}}>Period</th>
+                                                            {sortedDebts.map(d => (
+                                                                <th key={d.id} style={{padding: '9px 12px', textAlign: 'right', color: '#667eea', border: '1px solid #2d3748', minWidth: '100px'}}>{d.name}</th>
+                                                            ))}
+                                                            <th style={{padding: '9px 12px', textAlign: 'right', color: '#667eea', border: '1px solid #2d3748', whiteSpace: 'nowrap'}}>Total</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <tr style={{background: '#0f1419'}}>
+                                                            <td style={{padding: '7px 12px', border: '1px solid #2d3748', color: '#a0aec0', fontWeight: '600'}}>Now</td>
+                                                            {sortedDebts.map(d => (
+                                                                <td key={d.id} style={{padding: '7px 12px', border: '1px solid #2d3748', textAlign: 'right', color: '#dc3545', fontWeight: '600'}}>{formatCurrency(d.balance)}</td>
+                                                            ))}
+                                                            <td style={{padding: '7px 12px', border: '1px solid #2d3748', textAlign: 'right', color: '#dc3545', fontWeight: '700'}}>{formatCurrency(sortedDebts.reduce((s, d) => s + d.balance, 0))}</td>
+                                                        </tr>
+                                                        {simCurr.yearSnaps.map((snap, ri) => {
+                                                            const rowTotal = snap.state.reduce((s, d) => s + d.balance, 0);
+                                                            return (
+                                                                <tr key={ri} style={{background: ri % 2 === 0 ? '#0f1419' : '#111820'}}>
+                                                                    <td style={{padding: '7px 12px', border: '1px solid #2d3748', color: '#e2e8f0', fontWeight: '600', whiteSpace: 'nowrap'}}>{snap.label}</td>
+                                                                    {sortedDebts.map(d => {
+                                                                        const item = snap.state.find(s => s.id === d.id);
+                                                                        const bal = item?.balance || 0;
+                                                                        return (
+                                                                            <td key={d.id} style={{padding: '7px 12px', border: '1px solid #2d3748', textAlign: 'right', color: bal <= 0.01 ? '#28a745' : '#e2e8f0'}}>
+                                                                                {bal <= 0.01 ? '✓ Paid' : formatCurrency(bal)}
+                                                                            </td>
+                                                                        );
+                                                                    })}
+                                                                    <td style={{padding: '7px 12px', border: '1px solid #2d3748', textAlign: 'right', color: rowTotal <= 0.01 ? '#28a745' : '#ffc107', fontWeight: '700'}}>
+                                                                        {rowTotal <= 0.01 ? '🎉 DONE' : formatCurrency(rowTotal)}
+                                                                    </td>
+                                                                </tr>
+                                                            );
+                                                        })}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </>
+                                    )}
+                                </>
+                            )}
+                            </>
+                            )}
+                        </div>
+                    )}
+
+                    {/* PAYMENT HISTORY */}
+                    {activeDebts.length > 0 && (
+                        <div className="section">
+                            <h2 style={{color: '#667eea', marginBottom: '20px'}}>📈 Payment History</h2>
+                            <div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
+                                {activeDebts.map(debt => {
+                                    const log = debt.transactionLog || [];
+                                    const isExpanded = expandedDebt === debt.id;
+                                    const cur = parseFloat(debt.currentBalance) || 0;
+                                    const orig = parseFloat(debt.originalBalance) || cur;
+                                    const pct = orig > 0 ? ((orig - cur) / orig * 100) : 0;
+                                    const pctCol = pct >= 75 ? '#28a745' : pct >= 50 ? '#20c997' : pct >= 25 ? '#ffc107' : '#667eea';
+                                    return (
+                                        <div key={debt.id} style={{background: '#1a1f2e', borderRadius: '12px', border: '1px solid #2d3748', overflow: 'hidden'}}>
+                                            <div style={{padding: '15px 20px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}
+                                                onClick={() => setExpandedDebt(isExpanded ? null : debt.id)}>
+                                                <div style={{flex: 1}}>
+                                                    <div style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px', flexWrap: 'wrap'}}>
+                                                        <h3 style={{color: '#e2e8f0', margin: 0, fontSize: '1em'}}>{debt.name}</h3>
+                                                        <span style={{background: '#2d3748', color: '#a0aec0', padding: '2px 7px', borderRadius: '10px', fontSize: '0.76em'}}>{debt.category}</span>
+                                                        {log.length > 0 && <span style={{background: '#667eea22', color: '#667eea', padding: '2px 7px', borderRadius: '10px', fontSize: '0.76em'}}>{log.length} payment{log.length !== 1 ? 's' : ''}</span>}
+                                                    </div>
+                                                    <div style={{display: 'flex', gap: '14px', fontSize: '0.86em', marginBottom: '8px', flexWrap: 'wrap'}}>
+                                                        <span style={{color: '#dc3545'}}><strong>{formatCurrency(cur)}</strong> remaining</span>
+                                                        <span style={{color: '#28a745'}}><strong>{formatCurrency(orig - cur)}</strong> paid</span>
+                                                        <span style={{color: '#a0aec0'}}>{parseFloat(debt.interestRate) || 0}% APR</span>
+                                                        <span style={{color: '#a0aec0'}}>{pct.toFixed(1)}% paid off</span>
+                                                    </div>
+                                                    <div style={{width: '100%', height: '6px', background: '#2d3748', borderRadius: '3px', overflow: 'hidden'}}>
+                                                        <div style={{width: `${Math.min(pct, 100)}%`, height: '100%', background: pctCol, borderRadius: '3px'}}></div>
+                                                    </div>
+                                                </div>
+                                                <div style={{marginLeft: '14px', color: '#667eea', fontSize: '1em', flexShrink: 0}}>{isExpanded ? '▼' : '▶'}</div>
+                                            </div>
+                                            {isExpanded && (
+                                                <div style={{borderTop: '1px solid #2d3748', padding: '18px 20px', background: '#0f1419'}}>
+                                                    {log.length === 0 ? (
+                                                        <div style={{textAlign: 'center', padding: '22px', color: '#a0aec0'}}>
+                                                            <div style={{fontSize: '1.8em', marginBottom: '7px'}}>📭</div>
+                                                            <p style={{margin: 0}}>No payment history. Payments appear here when made through the Transactions or Recurring tabs with this debt linked.</p>
+                                                        </div>
+                                                    ) : (
+                                                        <>
+                                                            <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '10px', marginBottom: '16px'}}>
+                                                                {[
+                                                                    { label: 'Total Paid', val: formatCurrency(log.reduce((s, e) => s + (e.paymentAmount || 0), 0)), col: '#28a745' },
+                                                                    { label: 'Interest Paid', val: formatCurrency(log.reduce((s, e) => s + (e.interestAccrued || 0), 0)), col: '#dc3545' },
+                                                                    { label: 'Principal Paid', val: formatCurrency(log.reduce((s, e) => s + (e.principalPaid || 0), 0)), col: '#667eea' },
+                                                                    { label: 'Payments', val: log.length, col: '#ffc107' },
+                                                                ].map((stat, i) => (
+                                                                    <div key={i} style={{background: '#1a1f2e', padding: '11px', borderRadius: '8px', textAlign: 'center'}}>
+                                                                        <div style={{color: '#a0aec0', fontSize: '0.74em', textTransform: 'uppercase', marginBottom: '3px'}}>{stat.label}</div>
+                                                                        <div style={{color: stat.col, fontWeight: '700', fontSize: '1.02em'}}>{stat.val}</div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                            {log.length >= 2 && (
+                                                                <div style={{marginBottom: '16px', padding: '12px', background: '#1a1f2e', borderRadius: '8px'}}>
+                                                                    <div style={{color: '#a0aec0', fontSize: '0.8em', marginBottom: '8px'}}>Balance trend — last {Math.min(log.length, 8)} payments</div>
+                                                                    <div style={{display: 'flex', gap: '3px', alignItems: 'flex-end', height: '55px'}}>
+                                                                        {log.slice(-8).map((entry, i, arr) => {
+                                                                            const maxBal = Math.max(arr[0].balanceBefore || arr[0].balanceAfter, 1);
+                                                                            const barH = Math.max((entry.balanceAfter / maxBal) * 100, 2);
+                                                                            return (
+                                                                                <div key={i} title={`${formatDate(entry.date)}: ${formatCurrency(entry.balanceAfter)}`}
+                                                                                    style={{flex: 1, height: `${barH}%`, background: i === arr.length - 1 ? '#28a745' : '#667eea', borderRadius: '2px 2px 0 0', opacity: 0.85}} />
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                    <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '0.7em', color: '#4a5568', marginTop: '3px', borderTop: '1px solid #2d3748', paddingTop: '3px'}}>
+                                                                        <span>Older</span><span style={{color: '#28a745'}}>Latest</span>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                            <h4 style={{color: '#667eea', marginBottom: '10px', fontWeight: '600'}}>Payment Log</h4>
+                                                            <div style={{maxHeight: '260px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px'}}>
+                                                                {[...log].reverse().slice(0, 12).map((entry, idx) => (
+                                                                    <div key={idx} style={{background: '#1a1f2e', borderRadius: '7px', padding: '9px 13px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(90px, 1fr))', gap: '8px', fontSize: '0.83em', borderLeft: '3px solid #667eea'}}>
+                                                                        <div><div style={{color: '#4a5568', fontSize: '0.76em', textTransform: 'uppercase'}}>Date</div><div style={{color: '#e2e8f0', fontWeight: '600', marginTop: '2px'}}>{formatDate(entry.date)}</div></div>
+                                                                        <div><div style={{color: '#4a5568', fontSize: '0.76em', textTransform: 'uppercase'}}>Payment</div><div style={{color: '#28a745', fontWeight: '700', marginTop: '2px'}}>{formatCurrency(entry.paymentAmount)}</div></div>
+                                                                        <div><div style={{color: '#4a5568', fontSize: '0.76em', textTransform: 'uppercase'}}>Interest</div><div style={{color: '#dc3545', fontWeight: '600', marginTop: '2px'}}>{formatCurrency(entry.interestAccrued)}</div></div>
+                                                                        <div><div style={{color: '#4a5568', fontSize: '0.76em', textTransform: 'uppercase'}}>Principal</div><div style={{color: '#667eea', fontWeight: '600', marginTop: '2px'}}>{formatCurrency(entry.principalPaid)}</div></div>
+                                                                        <div><div style={{color: '#4a5568', fontSize: '0.76em', textTransform: 'uppercase'}}>Balance</div><div style={{color: '#ffc107', fontWeight: '600', marginTop: '2px'}}>{formatCurrency(entry.balanceAfter)}</div></div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                            {log.length > 12 && <p style={{color: '#a0aec0', fontSize: '0.82em', textAlign: 'center', marginTop: '8px'}}>Showing latest 12 of {log.length} payments</p>}
+                                                        </>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* VICTORY WALL */}
+                    {paidOffDebts.length > 0 && (
+                        <div className="section" style={{background: 'linear-gradient(135deg, #28a74522 0%, #20c99722 100%)', border: '2px solid #28a745'}}>
+                            <h2 style={{color: '#28a745', marginBottom: '20px'}}>🏆 Victory Wall</h2>
+                            <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '15px'}}>
+                                {paidOffDebts.map(debt => (
+                                    <div key={debt.id} style={{background: '#0f1419', padding: '20px', borderRadius: '12px', border: '2px solid #28a745', textAlign: 'center'}}>
+                                        <div style={{fontSize: '2em', marginBottom: '8px'}}>🎉</div>
+                                        <h3 style={{color: '#28a745', marginBottom: '4px', fontSize: '1em'}}>{debt.name}</h3>
+                                        <div style={{color: '#a0aec0', fontSize: '0.82em', marginBottom: '7px'}}>{debt.category}</div>
+                                        <div style={{color: '#e2e8f0', fontSize: '1.3em', fontWeight: '700', marginBottom: '5px'}}>{formatCurrency(parseFloat(debt.originalBalance) || 0)}</div>
+                                        {debt.paidOffDate && (
+                                            <div style={{background: '#28a74522', padding: '5px 10px', borderRadius: '5px', color: '#28a745', fontSize: '0.85em', fontWeight: '600', marginBottom: '5px'}}>
+                                                {new Date(debt.paidOffDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                                            </div>
+                                        )}
+                                        <div style={{color: '#ffc107', fontSize: '0.82em'}}>💸 {formatCurrency(parseFloat(debt.minimumPayment) || 0)}/mo freed</div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
                     )}
                 </div>
             );
         }
 
-        function BudgetTab({ transactions, recurringPayments, expectedMonthlyIncome, setExpectedMonthlyIncome, currentMonth, unpaidRecurring }) {
+        function BudgetTab({ transactions, recurringPayments, expectedMonthlyIncome, setExpectedMonthlyIncome, currentMonth, unpaidRecurring, categoryBudgets, setCategoryBudgets }) {
             const [tempIncome, setTempIncome] = useState(expectedMonthlyIncome);
             const __range = getFinancialMonthRange(currentMonth); const start = __range.start; const end = __range.end;
             
@@ -3172,7 +3677,7 @@
 
             const handleSaveIncome = () => {
                 setExpectedMonthlyIncome(tempIncome);
-                alert('Expected monthly income updated!');
+                showToast('Expected monthly income updated');
             };
 
             const monthLabel = `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
@@ -3271,6 +3776,24 @@
                         </div>
                     </div>
 
+                    {actualIncome > 0 && (() => {
+                        const saved = actualIncome - totalExpenses;
+                        const rate = (saved / actualIncome) * 100;
+                        const cls = rate >= 20 ? 'rate-excellent' : rate >= 10 ? 'rate-good' : rate >= 0 ? 'rate-fair' : 'rate-poor';
+                        const label = rate >= 20 ? 'Excellent' : rate >= 10 ? 'Good' : rate >= 0 ? 'Fair' : 'Negative';
+                        return (
+                            <div className="section" style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px'}}>
+                                <div>
+                                    <h2 style={{marginBottom: '5px'}}>💹 Savings Rate (This Month)</h2>
+                                    <p style={{color: '#a0aec0', fontSize: '0.9em'}}>Actual income minus total expenses ÷ income</p>
+                                </div>
+                                <span className={`rate-badge ${cls}`} style={{fontSize: '1.2em'}}>
+                                    {rate.toFixed(1)}% — {label}
+                                </span>
+                            </div>
+                        );
+                    })()}
+
                     <div className="section">
                         <h2>📊 Budget Breakdown</h2>
                         <p style={{color: '#a0aec0', marginBottom: '20px', lineHeight: '1.6'}}>
@@ -3314,6 +3837,124 @@
                             </div>
                         </div>
                     </div>
+
+                    <CategoryBudgetsSection
+                        transactions={transactions}
+                        currentMonth={currentMonth}
+                        categoryBudgets={categoryBudgets}
+                        setCategoryBudgets={setCategoryBudgets}
+                    />
+                </div>
+            );
+        }
+
+        function CategoryBudgetsSection({ transactions, currentMonth, categoryBudgets, setCategoryBudgets }) {
+            const [editing, setEditing] = useState(null);
+            const [tempValue, setTempValue] = useState('');
+            const __range = getFinancialMonthRange(currentMonth);
+            const start = __range.start; const end = __range.end;
+
+            const allCategories = [...new Set(
+                transactions.filter(t => t.type === 'expense' && t.category).map(t => t.category)
+            )].sort();
+
+            const monthlySpend = {};
+            transactions.filter(t => {
+                const d = parseLocalDate(t.date);
+                return t.type === 'expense' && d >= start && d <= end;
+            }).forEach(t => {
+                monthlySpend[t.category] = (monthlySpend[t.category] || 0) + parseFloat(t.amount);
+            });
+
+            const startEdit = (cat) => { setEditing(cat); setTempValue((categoryBudgets[cat] || '').toString()); };
+            const saveEdit = (cat) => {
+                const val = parseFloat(tempValue);
+                if (!isNaN(val) && val > 0) {
+                    setCategoryBudgets({...categoryBudgets, [cat]: val});
+                } else if (tempValue === '' || tempValue === '0') {
+                    const updated = {...categoryBudgets}; delete updated[cat]; setCategoryBudgets(updated);
+                }
+                setEditing(null);
+            };
+            const clearLimit = (cat) => { const updated = {...categoryBudgets}; delete updated[cat]; setCategoryBudgets(updated); };
+            const totalBudgeted = Object.values(categoryBudgets).reduce((s, v) => s + v, 0);
+            const budgetedCats = allCategories.filter(c => categoryBudgets[c]);
+            const unbudgetedCats = allCategories.filter(c => !categoryBudgets[c]);
+            const orderedCats = [...budgetedCats, ...unbudgetedCats];
+
+            return (
+                <div className="section">
+                    <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', flexWrap: 'wrap', gap: '10px'}}>
+                        <div>
+                            <h2>🎯 Category Spending Limits</h2>
+                            <p style={{color: '#a0aec0', fontSize: '0.9em', marginTop: '5px'}}>Set monthly caps per category. Bars on the dashboard turn yellow at 75% and red when over.</p>
+                        </div>
+                        {totalBudgeted > 0 && (
+                            <div style={{textAlign: 'right', background: '#1a1f2e', padding: '10px 16px', borderRadius: '8px', border: '1px solid #667eea'}}>
+                                <div style={{color: '#a0aec0', fontSize: '0.78em', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Total Budgeted</div>
+                                <div style={{color: '#667eea', fontWeight: '700', fontSize: '1.2em'}}>{formatCurrency(totalBudgeted)}/mo</div>
+                            </div>
+                        )}
+                    </div>
+                    {allCategories.length === 0 ? (
+                        <p style={{color: '#a0aec0', textAlign: 'center', padding: '20px'}}>No expense categories yet. Add transactions to populate this list.</p>
+                    ) : (
+                        <div style={{display: 'flex', flexDirection: 'column', gap: '10px'}}>
+                            {orderedCats.map(cat => {
+                                const budget = categoryBudgets[cat];
+                                const spent = monthlySpend[cat] || 0;
+                                const budgetPct = budget ? Math.min((spent / budget) * 100, 100) : 0;
+                                const overBudget = budget && spent > budget;
+                                const nearBudget = budget && !overBudget && (spent / budget) >= 0.75;
+                                const barColor = overBudget ? '#dc3545' : nearBudget ? '#ffc107' : '#28a745';
+                                const isEditing = editing === cat;
+                                return (
+                                    <div key={cat} style={{background: '#1a1f2e', borderRadius: '10px', padding: '14px 16px', border: `2px solid ${overBudget ? '#dc3545' : nearBudget ? '#ffc107' : '#2d3748'}`}}>
+                                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px'}}>
+                                            <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                                                <span style={{color: '#e2e8f0', fontWeight: '600'}}>{cat}</span>
+                                                {overBudget && <span style={{background: '#dc354522', color: '#dc3545', padding: '2px 8px', borderRadius: '10px', fontSize: '0.78em', fontWeight: '700'}}>OVER BUDGET</span>}
+                                                {nearBudget && <span style={{background: '#ffc10722', color: '#ffc107', padding: '2px 8px', borderRadius: '10px', fontSize: '0.78em', fontWeight: '700'}}>NEAR LIMIT</span>}
+                                            </div>
+                                            <div style={{display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap'}}>
+                                                <span style={{color: '#a0aec0', fontSize: '0.88em'}}>{formatCurrency(spent)} spent this month</span>
+                                                {isEditing ? (
+                                                    <div style={{display: 'flex', alignItems: 'center', gap: '6px'}}>
+                                                        <input
+                                                            type="number" step="0.01" value={tempValue}
+                                                            onChange={e => setTempValue(e.target.value)}
+                                                            onKeyDown={e => { if (e.key === 'Enter') saveEdit(cat); if (e.key === 'Escape') setEditing(null); }}
+                                                            placeholder="Monthly limit" autoFocus
+                                                            style={{width: '130px', padding: '6px 10px', fontSize: '0.9em'}}
+                                                        />
+                                                        <button onClick={() => saveEdit(cat)} className="success" style={{padding: '6px 12px', fontSize: '0.85em'}}>✓</button>
+                                                        <button onClick={() => setEditing(null)} className="secondary" style={{padding: '6px 12px', fontSize: '0.85em'}}>✕</button>
+                                                    </div>
+                                                ) : (
+                                                    <div style={{display: 'flex', alignItems: 'center', gap: '6px'}}>
+                                                        {budget && <span style={{color: '#667eea', fontSize: '0.88em', fontWeight: '600'}}>Limit: {formatCurrency(budget)}</span>}
+                                                        <button onClick={() => startEdit(cat)} className="secondary" style={{padding: '5px 10px', fontSize: '0.8em'}}>{budget ? 'Edit' : '+ Set Limit'}</button>
+                                                        {budget && <button onClick={() => clearLimit(cat)} className="danger" style={{padding: '5px 8px', fontSize: '0.8em'}}>✕</button>}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                        {budget && (
+                                            <div style={{marginTop: '10px'}}>
+                                                <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '5px', fontSize: '0.8em'}}>
+                                                    <span style={{color: '#a0aec0'}}>{formatCurrency(spent)} of {formatCurrency(budget)}</span>
+                                                    <span style={{color: barColor, fontWeight: '700'}}>{((spent / budget) * 100).toFixed(0)}%</span>
+                                                </div>
+                                                <div style={{width: '100%', height: '8px', background: '#2d3748', borderRadius: '4px', overflow: 'hidden'}}>
+                                                    <div style={{width: `${budgetPct}%`, height: '100%', background: barColor, transition: 'width 0.3s ease'}}></div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
             );
         }
@@ -3337,6 +3978,9 @@
             
             const [selectedYear, setSelectedYear] = useState(availableYears[0]);
             const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth()); // 0-11, or -1 for "Full Year"
+            const [compareMode, setCompareMode] = useState(false);
+            const [compareYear, setCompareYear] = useState(availableYears[0]);
+            const [compareMonth, setCompareMonth] = useState(new Date().getMonth() > 0 ? new Date().getMonth() - 1 : 11);
             
             // Generate month options for selected year
             const getAvailableMonths = () => {
@@ -3477,10 +4121,19 @@
                                         ))}
                                     </select>
                                 </div>
+                                <div>
+                                    <label style={{color: 'rgba(255,255,255,0)', display: 'block', marginBottom: '8px', fontSize: '0.9em'}}>_</label>
+                                    <button
+                                        onClick={() => setCompareMode(!compareMode)}
+                                        style={{padding: '10px 16px', fontSize: '0.95em', fontWeight: '600', borderRadius: '8px', border: '2px solid #fff', background: compareMode ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.12)', color: '#fff', cursor: 'pointer', whiteSpace: 'nowrap'}}
+                                    >
+                                        {compareMode ? '✕ Close Compare' : '⚖️ Compare Months'}
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    
+
                     {/* Summary Cards */}
                     <div className="section">
                         <h2 style={{marginBottom: '20px', fontSize: '1.5em', color: '#667eea'}}>{monthLabel} {selectedYear} Summary</h2>
@@ -3694,6 +4347,119 @@
                         </div>
                     )}
                     
+                    {/* Month Comparison */}
+                    {compareMode && (
+                        <div className="section" style={{background: '#1a1f2e', border: '2px solid #764ba2'}}>
+                            <h2 style={{color: '#764ba2', marginBottom: '20px'}}>⚖️ Month Comparison</h2>
+                            <div style={{display: 'flex', gap: '15px', marginBottom: '25px', flexWrap: 'wrap', alignItems: 'flex-end'}}>
+                                <div>
+                                    <label style={{color: '#a0aec0', display: 'block', marginBottom: '6px', fontSize: '0.85em'}}>Compare With — Year</label>
+                                    <select value={compareYear} onChange={e => setCompareYear(parseInt(e.target.value))} style={{padding: '8px 12px', borderRadius: '8px', background: '#0f1419', color: '#e2e8f0', border: '2px solid #764ba2'}}>
+                                        {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style={{color: '#a0aec0', display: 'block', marginBottom: '6px', fontSize: '0.85em'}}>Month</label>
+                                    <select value={compareMonth} onChange={e => setCompareMonth(parseInt(e.target.value))} style={{padding: '8px 12px', borderRadius: '8px', background: '#0f1419', color: '#e2e8f0', border: '2px solid #764ba2', minWidth: '140px'}}>
+                                        {Array.from({length: 12}, (_, i) => i).map(i => (
+                                            <option key={i} value={i}>{new Date(compareYear, i, 1).toLocaleDateString('en-US', {month: 'long'})}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                            {selectedMonth === -1 ? (
+                                <p style={{color: '#a0aec0', textAlign: 'center', padding: '20px'}}>Select a specific month (not Full Year) to use the comparison view.</p>
+                            ) : (() => {
+                                const cmpDate = new Date(compareYear, compareMonth, 1);
+                                const cmpRange = getFinancialMonthRange(cmpDate);
+                                const cmpTrans = transactions.filter(t => { const d = parseLocalDate(t.date); return d >= cmpRange.start && d <= cmpRange.end; });
+                                const cmpIncome = cmpTrans.filter(t => t.type === 'income').reduce((s, t) => s + parseFloat(t.amount), 0);
+                                const cmpExpenses = cmpTrans.filter(t => t.type === 'expense').reduce((s, t) => s + parseFloat(t.amount), 0);
+                                const cmpNet = cmpIncome - cmpExpenses;
+                                const baseLabel = `${monthLabel} ${selectedYear}`;
+                                const cmpLabel = new Date(compareYear, compareMonth, 1).toLocaleDateString('en-US', {month: 'short', year: 'numeric'});
+
+                                const metrics = [
+                                    {label: 'Income', base: monthIncome, cmp: cmpIncome, higherIsBetter: true},
+                                    {label: 'Expenses', base: monthExpenses, cmp: cmpExpenses, higherIsBetter: false},
+                                    {label: 'Net', base: monthNet, cmp: cmpNet, higherIsBetter: true},
+                                ];
+
+                                const baseCats = {}; monthTransactions.filter(t => t.type === 'expense').forEach(t => { baseCats[t.category] = (baseCats[t.category] || 0) + parseFloat(t.amount); });
+                                const cmpCats = {}; cmpTrans.filter(t => t.type === 'expense').forEach(t => { cmpCats[t.category] = (cmpCats[t.category] || 0) + parseFloat(t.amount); });
+                                const allCats = [...new Set([...Object.keys(baseCats), ...Object.keys(cmpCats)])].sort((a, b) => ((baseCats[b] || 0) + (cmpCats[b] || 0)) - ((baseCats[a] || 0) + (cmpCats[a] || 0)));
+
+                                return (
+                                    <>
+                                        <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '15px', marginBottom: '25px'}}>
+                                            {metrics.map(m => {
+                                                const delta = m.base - m.cmp;
+                                                const good = m.higherIsBetter ? delta >= 0 : delta <= 0;
+                                                return (
+                                                    <div key={m.label} style={{background: '#0f1419', padding: '18px', borderRadius: '10px', border: '1px solid #2d3748'}}>
+                                                        <div style={{color: '#a0aec0', fontSize: '0.8em', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '12px'}}>{m.label}</div>
+                                                        <div style={{display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: '8px', alignItems: 'center'}}>
+                                                            <div>
+                                                                <div style={{color: '#667eea', fontSize: '0.78em', marginBottom: '4px'}}>{baseLabel}</div>
+                                                                <div style={{color: '#e2e8f0', fontWeight: '700', fontSize: '1.25em'}}>{formatCurrency(m.base)}</div>
+                                                            </div>
+                                                            <div style={{textAlign: 'center', padding: '0 4px'}}>
+                                                                <div style={{color: good ? '#28a745' : '#dc3545', fontWeight: '700', fontSize: '0.85em'}}>{delta >= 0 ? '▲' : '▼'}</div>
+                                                                <div style={{color: good ? '#28a745' : '#dc3545', fontWeight: '700', fontSize: '0.9em'}}>{formatCurrency(Math.abs(delta))}</div>
+                                                            </div>
+                                                            <div style={{textAlign: 'right'}}>
+                                                                <div style={{color: '#764ba2', fontSize: '0.78em', marginBottom: '4px'}}>{cmpLabel}</div>
+                                                                <div style={{color: '#e2e8f0', fontWeight: '700', fontSize: '1.25em'}}>{formatCurrency(m.cmp)}</div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+
+                                        {allCats.length > 0 && (
+                                            <div>
+                                                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px'}}>
+                                                    <h3 style={{color: '#a0aec0', fontWeight: '600', fontSize: '0.95em', textTransform: 'uppercase', letterSpacing: '1px', margin: 0}}>Category Breakdown</h3>
+                                                    <div style={{display: 'flex', gap: '14px', fontSize: '0.8em'}}>
+                                                        <span style={{display: 'flex', alignItems: 'center', gap: '5px'}}><span style={{width: '10px', height: '10px', background: '#667eea', borderRadius: '2px', display: 'inline-block'}}></span><span style={{color: '#a0aec0'}}>{baseLabel}</span></span>
+                                                        <span style={{display: 'flex', alignItems: 'center', gap: '5px'}}><span style={{width: '10px', height: '10px', background: '#764ba2', borderRadius: '2px', display: 'inline-block'}}></span><span style={{color: '#a0aec0'}}>{cmpLabel}</span></span>
+                                                    </div>
+                                                </div>
+                                                <div style={{display: 'flex', flexDirection: 'column', gap: '8px'}}>
+                                                    {allCats.map(cat => {
+                                                        const base = baseCats[cat] || 0;
+                                                        const cmp = cmpCats[cat] || 0;
+                                                        const delta = base - cmp;
+                                                        const maxVal = Math.max(base, cmp, 1);
+                                                        return (
+                                                            <div key={cat} style={{background: '#0f1419', padding: '12px 16px', borderRadius: '8px'}}>
+                                                                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px'}}>
+                                                                    <span style={{color: '#e2e8f0', fontSize: '0.9em', fontWeight: '600'}}>{cat}</span>
+                                                                    <span style={{color: delta > 1 ? '#dc3545' : delta < -1 ? '#28a745' : '#a0aec0', fontSize: '0.85em', fontWeight: '600'}}>
+                                                                        {Math.abs(delta) < 0.01 ? 'No change' : `${delta > 0 ? '+' : ''}${formatCurrency(delta)}`}
+                                                                    </span>
+                                                                </div>
+                                                                <div style={{display: 'flex', gap: '6px', alignItems: 'center'}}>
+                                                                    <span style={{color: '#667eea', fontSize: '0.8em', minWidth: '65px', textAlign: 'right'}}>{formatCurrency(base)}</span>
+                                                                    <div style={{flex: 1, height: '10px', background: '#2d3748', borderRadius: '5px', overflow: 'hidden', position: 'relative'}}>
+                                                                        <div style={{position: 'absolute', right: '50%', width: `${(base / maxVal) * 50}%`, height: '100%', background: '#667eea', borderRadius: '5px 0 0 5px'}}></div>
+                                                                        <div style={{position: 'absolute', left: '50%', width: `${(cmp / maxVal) * 50}%`, height: '100%', background: '#764ba2', borderRadius: '0 5px 5px 0'}}></div>
+                                                                    </div>
+                                                                    <span style={{color: '#764ba2', fontSize: '0.8em', minWidth: '65px'}}>{formatCurrency(cmp)}</span>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
+                                );
+                            })()}
+                        </div>
+                    )}
+
                     {/* No Data Message */}
                     {monthTransactions.length === 0 && (
                         <div className="section" style={{background: '#1a1f2e', border: '2px solid #667eea', textAlign: 'center', padding: '60px 40px'}}>
@@ -3711,22 +4477,22 @@
         function SettingsTab({ exportData, importData, clearAllData, exportToCSV, exportAllDataToCSV }) {
             return (
                 <div>
-                    <div className="section" style={{background: 'linear-gradient(135deg, #667eea22 0%, #764ba222 100%)', border: '2px solid #667eea', padding: '25px'}}>
-                        <h2 style={{color: '#667eea', marginBottom: '15px'}}>⚡ Important: No Auto-Save</h2>
+                    <div className="section" style={{background: 'linear-gradient(135deg, #28a74522 0%, #20c99722 100%)', border: '2px solid #28a745', padding: '25px'}}>
+                        <h2 style={{color: '#28a745', marginBottom: '15px'}}>✅ Auto-Saves to Your Browser</h2>
                         <p style={{color: '#e2e8f0', fontSize: '1.05em', lineHeight: '1.8', marginBottom: '15px'}}>
-                            <strong>This app does NOT use localStorage.</strong> Your data exists only in memory during your session.
+                            Your data is <strong>automatically saved in this browser</strong> after every change. You can close and reopen the page and your data will still be here.
                         </p>
                         <div style={{background: '#0f1419', padding: '20px', borderRadius: '10px'}}>
-                            <h3 style={{color: '#667eea', marginBottom: '10px'}}>📋 Your Workflow:</h3>
+                            <h3 style={{color: '#28a745', marginBottom: '10px'}}>📋 Recommended Workflow:</h3>
                             <ol style={{color: '#a0aec0', lineHeight: '2', marginLeft: '20px'}}>
-                                <li><strong style={{color: '#e2e8f0'}}>Start:</strong> Import your JSON file</li>
-                                <li><strong style={{color: '#e2e8f0'}}>Work:</strong> Add transactions, process payments, etc.</li>
-                                <li><strong style={{color: '#e2e8f0'}}>End:</strong> Export to save your changes</li>
-                                <li><strong style={{color: '#e2e8f0'}}>Next time:</strong> Import the latest export to continue</li>
+                                <li><strong style={{color: '#e2e8f0'}}>Just use it</strong> — changes save automatically in this browser</li>
+                                <li><strong style={{color: '#e2e8f0'}}>Export JSON</strong> periodically as an off-browser backup</li>
+                                <li><strong style={{color: '#e2e8f0'}}>Import JSON</strong> to restore a backup or move to another device</li>
+                                <li><strong style={{color: '#e2e8f0'}}>Clearing browser data</strong> will erase the auto-save — keep exports!</li>
                             </ol>
                         </div>
-                        <p style={{color: '#ffc107', fontSize: '0.95em', marginTop: '15px', fontWeight: '600'}}>
-                            ⚠️ Closing/refreshing the page without exporting = data is lost!
+                        <p style={{color: '#a0aec0', fontSize: '0.9em', marginTop: '15px'}}>
+                            💡 Auto-save uses localStorage in your browser. Export JSON to back up your data or move it to another device or browser.
                         </p>
                     </div>
                     <div className="section">
@@ -3837,7 +4603,7 @@
                         </p>
                         
                         <p style={{marginTop: '30px', padding: '15px', background: '#1a1f2e', borderRadius: '8px', color: '#667eea', fontSize: '0.9em'}}>
-                            <strong>💡 Pro Tip:</strong> Export your data at the end of each session! Without exporting, your changes will be lost when you close the page.
+                            <strong>💡 Pro Tip:</strong> Data auto-saves in this browser. Export JSON regularly as a backup — especially before clearing browser data or switching devices.
                         </p>
                     </div>
                 </div>
