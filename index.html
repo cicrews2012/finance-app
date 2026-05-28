@@ -468,29 +468,10 @@
             const [dataLoaded, setDataLoaded] = useState(false);
             const [categoryBudgets, setCategoryBudgets] = useState({});
 
-            // Load from localStorage on startup
+            // No browser storage — data lives only for this session
             useEffect(() => {
-                try {
-                    const saved = localStorage.getItem('financeTracker_v2');
-                    if (saved) {
-                        const data = JSON.parse(saved);
-                        if (data.transactions) setTransactions(data.transactions.map(t => ({...t, amount: parseFloat(t.amount) || 0, id: t.id || (Date.now() + Math.random())})));
-                        if (data.recurringPayments) setRecurringPayments(data.recurringPayments.map(p => ({...p, amount: parseFloat(p.amount) || 0, dueDay: parseInt(p.dueDay || p.day) || 1, day: parseInt(p.day || p.dueDay) || 1, id: p.id || (Date.now() + Math.random())})));
-                        if (data.debts) setDebts(data.debts.map(d => ({...d, currentBalance: parseFloat(d.currentBalance || d.balance) || 0, originalBalance: parseFloat(d.originalBalance) || parseFloat(d.currentBalance || d.balance) || 0, interestRate: parseFloat(d.interestRate || d.apr) || 0, minimumPayment: parseFloat(d.minimumPayment || d.payment) || 0, id: d.id || (Date.now() + Math.random())})));
-                        if (data.paidPayments) setPaidPayments(data.paidPayments);
-                        if (data.settings?.expectedMonthlyIncome) setExpectedMonthlyIncome(data.settings.expectedMonthlyIncome);
-                        if (data.settings?.categoryBudgets) setCategoryBudgets(data.settings.categoryBudgets);
-                    }
-                } catch(e) {}
                 setDataLoaded(true);
             }, []);
-
-            // Auto-save to localStorage whenever state changes
-            useEffect(() => {
-                if (!dataLoaded) return;
-                const data = { version: '2.0', exportDate: new Date().toISOString(), transactions, recurringPayments, debts, paidPayments, settings: { expectedMonthlyIncome, categoryBudgets } };
-                localStorage.setItem('financeTracker_v2', JSON.stringify(data));
-            }, [transactions, recurringPayments, debts, paidPayments, expectedMonthlyIncome, categoryBudgets, dataLoaded]);
 
             // Auto-process recurring payments when their due date passes
             useEffect(() => {
@@ -1032,7 +1013,6 @@
                     setDebts([]);
                     setPaidPayments({});
                     setExpectedMonthlyIncome(5000);
-                    localStorage.removeItem('financeTracker_v2');
                     showToast('All data cleared', 'warning');
                 }
             };
@@ -1046,7 +1026,7 @@
                     <ToastContainer />
                     <div className="header">
                         <h1>💰 Finance Tracker</h1>
-                        <div className="version">Auto-saves to browser • Export JSON to back up or share</div>
+                        <div className="version">Export JSON to save • Import JSON to restore</div>
                     </div>
                     <div className="tab-navigation">
                         <button className={`tab-button ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>📊 Dashboard</button>
@@ -1205,7 +1185,7 @@
                                 📁 Import Data
                             </button>
                             <p style={{color: '#a0aec0', fontSize: '0.9em', marginTop: '30px', fontStyle: 'italic'}}>
-                                💡 Data auto-saves in this browser. Export JSON to back up or move to another device.
+                                💡 Data is not saved between sessions. Export JSON before closing, then Import it next time.
                             </p>
                             <p style={{color: '#667eea', fontSize: '0.95em', marginTop: '15px', fontWeight: '600'}}>
                                 📖 New user? Check the <strong>⚙️ Settings</strong> tab for first-time setup instructions!
@@ -4477,22 +4457,21 @@
         function SettingsTab({ exportData, importData, clearAllData, exportToCSV, exportAllDataToCSV }) {
             return (
                 <div>
-                    <div className="section" style={{background: 'linear-gradient(135deg, #28a74522 0%, #20c99722 100%)', border: '2px solid #28a745', padding: '25px'}}>
-                        <h2 style={{color: '#28a745', marginBottom: '15px'}}>✅ Auto-Saves to Your Browser</h2>
+                    <div className="section" style={{background: 'linear-gradient(135deg, #667eea22 0%, #764ba222 100%)', border: '2px solid #667eea', padding: '25px'}}>
+                        <h2 style={{color: '#667eea', marginBottom: '15px'}}>💾 Session-Only Data</h2>
                         <p style={{color: '#e2e8f0', fontSize: '1.05em', lineHeight: '1.8', marginBottom: '15px'}}>
-                            Your data is <strong>automatically saved in this browser</strong> after every change. You can close and reopen the page and your data will still be here.
+                            Data is <strong>not stored in your browser</strong> — it exists only for the current session. This keeps your data private and works the same across all your devices.
                         </p>
                         <div style={{background: '#0f1419', padding: '20px', borderRadius: '10px'}}>
-                            <h3 style={{color: '#28a745', marginBottom: '10px'}}>📋 Recommended Workflow:</h3>
+                            <h3 style={{color: '#667eea', marginBottom: '10px'}}>📋 Recommended Workflow:</h3>
                             <ol style={{color: '#a0aec0', lineHeight: '2', marginLeft: '20px'}}>
-                                <li><strong style={{color: '#e2e8f0'}}>Just use it</strong> — changes save automatically in this browser</li>
-                                <li><strong style={{color: '#e2e8f0'}}>Export JSON</strong> periodically as an off-browser backup</li>
-                                <li><strong style={{color: '#e2e8f0'}}>Import JSON</strong> to restore a backup or move to another device</li>
-                                <li><strong style={{color: '#e2e8f0'}}>Clearing browser data</strong> will erase the auto-save — keep exports!</li>
+                                <li><strong style={{color: '#e2e8f0'}}>Export JSON</strong> before closing the page — this is your save file</li>
+                                <li><strong style={{color: '#e2e8f0'}}>Import JSON</strong> when you open the page again to restore your data</li>
+                                <li><strong style={{color: '#e2e8f0'}}>Use the same JSON file</strong> across any device or browser</li>
                             </ol>
                         </div>
                         <p style={{color: '#a0aec0', fontSize: '0.9em', marginTop: '15px'}}>
-                            💡 Auto-save uses localStorage in your browser. Export JSON to back up your data or move it to another device or browser.
+                            💡 Data is not saved between sessions. Use Export JSON to save your data and Import JSON to reload it next time.
                         </p>
                     </div>
                     <div className="section">
@@ -4603,7 +4582,7 @@
                         </p>
                         
                         <p style={{marginTop: '30px', padding: '15px', background: '#1a1f2e', borderRadius: '8px', color: '#667eea', fontSize: '0.9em'}}>
-                            <strong>💡 Pro Tip:</strong> Data auto-saves in this browser. Export JSON regularly as a backup — especially before clearing browser data or switching devices.
+                            <strong>💡 Pro Tip:</strong> Data is not saved between sessions. Export JSON before closing the page, then Import it next time to pick up where you left off.
                         </p>
                     </div>
                 </div>
