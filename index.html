@@ -2035,18 +2035,21 @@
             
             // Generate calendar days for the financial month (28th to 27th)
             const calendarDays = [];
+            let runningTotal = 0;
             for (let i = 0; i < 30; i++) {
                 const date = new Date(startYear, startMonth, startDay + i);
                 const day = date.getDate();
                 const paymentsOnDay = recurringPayments.filter(p => parseInt(p.dueDay) === day);
-                
+                runningTotal += paymentsOnDay.reduce((sum, p) => sum + parseFloat(p.amount), 0);
+
                 calendarDays.push({
                     date: date,
                     day: day,
                     dayOfWeek: date.toLocaleDateString('en-US', { weekday: 'short' }),
                     monthName: date.toLocaleDateString('en-US', { month: 'short' }),
                     payments: paymentsOnDay,
-                    isToday: new Date().toDateString() === date.toDateString()
+                    isToday: new Date().toDateString() === date.toDateString(),
+                    cumulativeTotal: runningTotal
                 });
             }
             
@@ -2073,7 +2076,10 @@
                                 >
                                     <div style={{marginBottom: '8px', borderBottom: '1px solid #2d3748', paddingBottom: '5px'}}>
                                         <div style={{color: '#667eea', fontWeight: '600', fontSize: '0.85em'}}>{calDay.dayOfWeek}</div>
-                                        <div style={{color: '#e2e8f0', fontSize: '1.2em', fontWeight: '700'}}>{calDay.day}</div>
+                                        <div style={{display: 'flex', alignItems: 'baseline', gap: '6px'}}>
+                                            <div style={{color: '#e2e8f0', fontSize: '1.2em', fontWeight: '700'}}>{calDay.day}</div>
+                                            {calDay.cumulativeTotal > 0 && <div style={{color: '#a0aec0', fontSize: '0.7em', fontWeight: '500'}}>{formatCurrency(calDay.cumulativeTotal)}</div>}
+                                        </div>
                                         <div style={{color: '#a0aec0', fontSize: '0.75em'}}>{calDay.monthName}</div>
                                     </div>
                                     
