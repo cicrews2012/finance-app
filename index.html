@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finance Tracker v1.16.0</title>
+    <title>Finance Tracker v1.17.0</title>
     <!-- Build: 2026-05-27-05 - Debt strategy: per-debt include/exclude selector for plan -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -409,7 +409,7 @@
 <body>
     <div id="root"></div>
     <script type="text/babel">
-        const { useState, useEffect, useRef } = React;
+        const { useState, useEffect, useRef, useMemo } = React;
 
         // Global toast system
         let _globalToast = null;
@@ -467,6 +467,7 @@
             const [expectedMonthlyIncome, setExpectedMonthlyIncome] = useState(5000);
             const [dataLoaded, setDataLoaded] = useState(false);
             const [categoryBudgets, setCategoryBudgets] = useState({});
+            const [ignoredDuplicatePairs, setIgnoredDuplicatePairs] = useState(new Set());
 
             // No browser storage — data lives only for this session
             useEffect(() => {
@@ -1044,7 +1045,7 @@
                         {activeTab === 'budget' && <BudgetTab transactions={transactions} recurringPayments={recurringPayments} expectedMonthlyIncome={expectedMonthlyIncome} setExpectedMonthlyIncome={setExpectedMonthlyIncome} currentMonth={currentMonth} unpaidRecurring={unpaidRecurring} categoryBudgets={categoryBudgets} setCategoryBudgets={setCategoryBudgets} />}
                         {activeTab === 'transactions' && <TransactionsTab transactions={transactions} setTransactions={setTransactions} currentMonth={currentMonth} expenseCategories={expenseCategories} incomeCategories={incomeCategories} debts={debts} setDebts={setDebts} />}
                         {activeTab === 'recurring' && <RecurringTab recurringPayments={recurringPayments} setRecurringPayments={setRecurringPayments} debts={debts} setDebts={setDebts} transactions={transactions} setTransactions={setTransactions} paidPayments={paidPayments} setPaidPayments={setPaidPayments} currentMonth={currentMonth} />}
-                        {activeTab === 'duplicates' && <DuplicatesTab transactions={transactions} setTransactions={setTransactions} />}
+                        {activeTab === 'duplicates' && <DuplicatesTab transactions={transactions} setTransactions={setTransactions} ignoredPairs={ignoredDuplicatePairs} setIgnoredPairs={setIgnoredDuplicatePairs} />}
                         {activeTab === 'debts' && <DebtsTab debts={debts} setDebts={setDebts} recurringPayments={recurringPayments} setRecurringPayments={setRecurringPayments} />}
                         {activeTab === 'tracker' && <DebtPayoffTrackerTab debts={debts} />}
                         {activeTab === 'history' && <HistoryTab transactions={transactions} recurringPayments={recurringPayments} debts={debts} />}
@@ -1088,15 +1089,15 @@
                 .reduce((sum, p) => sum + parseFloat(p.amount), 0);
             
             const moneyLeft = expectedMonthlyIncome - recurringTotal;
-            
-            // Total Expenses - Recurring = Spent So Far
-            const spentSoFar = totals.expenses - recurringTotal;
-            
-            // Money Available = Money Left - Spent So Far - Unpaid Recurring (guaranteed to come out)
-            const moneyAvailable = moneyLeft - spentSoFar - unpaidRecurring;
 
             // Recurring paid so far = total recurring this month minus what's still outstanding
             const paidRecurringTotal = recurringTotal - unpaidRecurring;
+
+            // Non-recurring spend = total expenses minus the paid recurring already in transactions
+            const spentSoFar = Math.max(0, totals.expenses - paidRecurringTotal);
+
+            // Money Available = income - all expenses so far - unpaid recurring still to come out
+            const moneyAvailable = expectedMonthlyIncome - totals.expenses - unpaidRecurring;
             
             const getYearlyTotals = () => {
                 // Get all transactions that fall within ANY financial month of the selected year
@@ -2435,153 +2436,138 @@
             );
         }
 
-        function DuplicatesTab({ transactions, setTransactions }) {
-            const [confidenceFilter, setConfidenceFilter] = useState('all'); // 'all', 'high', 'medium', 'low'
-            const [ignoredPairs, setIgnoredPairs] = useState(new Set());
-            
-            // Find duplicate groups
-            const findDuplicates = () => {
-                const duplicateGroups = [];
+        function DuplicatesTab({ transactions, setTransactions, ignoredPairs, setIgnoredPairs }) {
+            const [confidenceFilter, setConfidenceFilter] = useState('all');
+
+            const duplicateGroups = useMemo(() => {
+                const groups = [];
                 const processed = new Set();
-                
+
                 transactions.forEach((t1, i) => {
                     if (processed.has(t1.id)) return;
-                    
+
                     const potentialDuplicates = [];
-                    
+
                     transactions.forEach((t2, j) => {
-                        if (i >= j) return; // Skip self and already compared
+                        if (i >= j) return;
                         if (processed.has(t2.id)) return;
-                        
+
                         const pairKey = [t1.id, t2.id].sort().join('-');
                         if (ignoredPairs.has(pairKey)) return;
-                        
-                        // Check if potential duplicate
+
                         const sameVendor = t1.description.toLowerCase() === t2.description.toLowerCase();
-                        const sameAmount = Math.abs(parseFloat(t1.amount) - parseFloat(t2.amount)) < 0.01;
                         const sameType = t1.type === t2.type;
-                        
                         if (!sameVendor || !sameType) return;
-                        
+
+                        const amountDiff = Math.abs(parseFloat(t1.amount) - parseFloat(t2.amount));
+                        const sameAmount = amountDiff < 0.01;
                         const date1 = parseLocalDate(t1.date);
                         const date2 = parseLocalDate(t2.date);
                         const daysDiff = Math.abs((date1 - date2) / (1000 * 60 * 60 * 24));
-                        
-                        let confidence = 'low';
+
+                        let confidence;
                         if (sameAmount && daysDiff === 0) {
                             confidence = 'high';
                         } else if (sameAmount && daysDiff <= 2) {
                             confidence = 'medium';
-                        } else if (Math.abs(parseFloat(t1.amount) - parseFloat(t2.amount)) <= 1 && daysDiff <= 3) {
+                        } else if (amountDiff <= 1 && daysDiff <= 3) {
                             confidence = 'low';
                         } else {
-                            return; // Not similar enough
+                            return;
                         }
-                        
-                        potentialDuplicates.push({
-                            transaction: t2,
-                            confidence,
-                            daysDiff,
-                            pairKey
-                        });
+
+                        potentialDuplicates.push({ transaction: t2, confidence, daysDiff, pairKey });
                     });
-                    
+
                     if (potentialDuplicates.length > 0) {
-                        duplicateGroups.push({
-                            original: t1,
-                            duplicates: potentialDuplicates
-                        });
+                        groups.push({ original: t1, duplicates: potentialDuplicates });
                         processed.add(t1.id);
                         potentialDuplicates.forEach(d => processed.add(d.transaction.id));
                     }
                 });
-                
-                return duplicateGroups;
-            };
-            
-            const duplicateGroups = findDuplicates();
-            
-            // Filter by confidence
-            const filteredGroups = duplicateGroups.filter(group => {
-                if (confidenceFilter === 'all') return true;
-                return group.duplicates.some(d => d.confidence === confidenceFilter);
-            }).map(group => ({
-                ...group,
-                duplicates: confidenceFilter === 'all' 
-                    ? group.duplicates 
-                    : group.duplicates.filter(d => d.confidence === confidenceFilter)
-            }));
-            
-            const deleteDuplicate = (id) => {
+
+                return groups;
+            }, [transactions, ignoredPairs]);
+
+            const confidenceCounts = useMemo(() => ({
+                high:   duplicateGroups.filter(g => g.duplicates.some(d => d.confidence === 'high')).length,
+                medium: duplicateGroups.filter(g => g.duplicates.some(d => d.confidence === 'medium')).length,
+                low:    duplicateGroups.filter(g => g.duplicates.some(d => d.confidence === 'low')).length,
+            }), [duplicateGroups]);
+
+            const filteredGroups = useMemo(() => {
+                if (confidenceFilter === 'all') return duplicateGroups;
+                return duplicateGroups
+                    .filter(g => g.duplicates.some(d => d.confidence === confidenceFilter))
+                    .map(g => ({ ...g, duplicates: g.duplicates.filter(d => d.confidence === confidenceFilter) }));
+            }, [duplicateGroups, confidenceFilter]);
+
+            const deleteTransaction = (id) => {
                 if (confirm('Delete this transaction?')) {
-                    setTransactions(transactions.filter(t => t.id !== id));
+                    setTransactions(prev => prev.filter(t => t.id !== id));
                 }
             };
-            
+
             const markAsNotDuplicate = (pairKey) => {
-                setIgnoredPairs(new Set([...ignoredPairs, pairKey]));
+                setIgnoredPairs(prev => new Set([...prev, pairKey]));
             };
-            
-            const getConfidenceColor = (confidence) => {
-                switch(confidence) {
-                    case 'high': return '#dc3545';
-                    case 'medium': return '#ffc107';
-                    case 'low': return '#6c757d';
-                    default: return '#a0aec0';
-                }
-            };
-            
-            const getConfidenceLabel = (confidence) => {
-                switch(confidence) {
-                    case 'high': return '⚠️ HIGH CONFIDENCE';
-                    case 'medium': return '⚡ MEDIUM CONFIDENCE';
-                    case 'low': return '💭 LOW CONFIDENCE';
-                    default: return '';
-                }
-            };
-            
+
+            const confidenceColor = { high: '#dc3545', medium: '#ffc107', low: '#6c757d' };
+            const confidenceLabel = { high: '⚠️ HIGH CONFIDENCE', medium: '⚡ MEDIUM CONFIDENCE', low: '💭 LOW CONFIDENCE' };
+
+            const TransactionRow = ({ transaction, label, pairKey, confidence, daysDiff }) => (
+                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'start', padding: '10px 0', borderTop: '1px solid #2d3748'}}>
+                    <div style={{flex: 1}}>
+                        <div style={{color: '#a0aec0', fontSize: '0.78em', fontWeight: '600', textTransform: 'uppercase', marginBottom: '3px'}}>{label}</div>
+                        <div style={{color: '#e2e8f0', fontSize: '0.95em'}}>
+                            📅 {transaction.date}
+                            {daysDiff !== undefined && (
+                                <span style={{marginLeft: '10px', color: confidenceColor[confidence], fontSize: '0.85em'}}>
+                                    {daysDiff === 0 ? 'Same day' : `${daysDiff} day${daysDiff > 1 ? 's' : ''} apart`}
+                                </span>
+                            )}
+                        </div>
+                        <div style={{color: '#a0aec0', fontSize: '0.85em', marginTop: '2px'}}>
+                            {formatCurrency(Math.abs(parseFloat(transaction.amount)))} • {transaction.category}
+                        </div>
+                        {transaction.notes && <div style={{color: '#a0aec0', fontSize: '0.82em', marginTop: '2px'}}>Note: {transaction.notes}</div>}
+                    </div>
+                    <div style={{display: 'flex', gap: '8px', marginLeft: '10px', flexShrink: 0}}>
+                        <button className="danger" onClick={() => deleteTransaction(transaction.id)} style={{padding: '6px 12px', fontSize: '0.85em', whiteSpace: 'nowrap'}}>Delete</button>
+                        {pairKey && <button className="secondary" onClick={() => markAsNotDuplicate(pairKey)} style={{padding: '6px 12px', fontSize: '0.85em', whiteSpace: 'nowrap'}}>Keep Both</button>}
+                    </div>
+                </div>
+            );
+
             return (
                 <div>
                     <div className="section">
                         <h2>🔍 Duplicate Detector</h2>
                         <p style={{color: '#a0aec0', marginBottom: '20px'}}>
-                            Found <strong style={{color: '#667eea'}}>{filteredGroups.length}</strong> potential duplicate groups
+                            Found <strong style={{color: '#667eea'}}>{filteredGroups.length}</strong> potential duplicate group{filteredGroups.length !== 1 ? 's' : ''}
                         </p>
-                        
+
                         <div style={{marginBottom: '20px'}}>
                             <label style={{display: 'block', marginBottom: '10px', color: '#e2e8f0'}}>Filter by Confidence:</label>
                             <div style={{display: 'flex', gap: '10px', flexWrap: 'wrap'}}>
-                                <button 
-                                    className={confidenceFilter === 'all' ? '' : 'secondary'}
-                                    onClick={() => setConfidenceFilter('all')}
-                                    style={{fontSize: '0.9em'}}
-                                >
-                                    All ({duplicateGroups.length})
-                                </button>
-                                <button 
-                                    className={confidenceFilter === 'high' ? '' : 'secondary'}
-                                    onClick={() => setConfidenceFilter('high')}
-                                    style={{fontSize: '0.9em', background: confidenceFilter === 'high' ? '#dc3545' : undefined}}
-                                >
-                                    ⚠️ High ({duplicateGroups.filter(g => g.duplicates.some(d => d.confidence === 'high')).length})
-                                </button>
-                                <button 
-                                    className={confidenceFilter === 'medium' ? '' : 'secondary'}
-                                    onClick={() => setConfidenceFilter('medium')}
-                                    style={{fontSize: '0.9em', background: confidenceFilter === 'medium' ? '#ffc107' : undefined}}
-                                >
-                                    ⚡ Medium ({duplicateGroups.filter(g => g.duplicates.some(d => d.confidence === 'medium')).length})
-                                </button>
-                                <button 
-                                    className={confidenceFilter === 'low' ? '' : 'secondary'}
-                                    onClick={() => setConfidenceFilter('low')}
-                                    style={{fontSize: '0.9em', background: confidenceFilter === 'low' ? '#6c757d' : undefined}}
-                                >
-                                    💭 Low ({duplicateGroups.filter(g => g.duplicates.some(d => d.confidence === 'low')).length})
-                                </button>
+                                {[
+                                    { key: 'all',    label: `All (${duplicateGroups.length})`,           bg: undefined },
+                                    { key: 'high',   label: `⚠️ High (${confidenceCounts.high})`,        bg: '#dc3545' },
+                                    { key: 'medium', label: `⚡ Medium (${confidenceCounts.medium})`,    bg: '#ffc107' },
+                                    { key: 'low',    label: `💭 Low (${confidenceCounts.low})`,          bg: '#6c757d' },
+                                ].map(({ key, label, bg }) => (
+                                    <button
+                                        key={key}
+                                        className={confidenceFilter === key ? '' : 'secondary'}
+                                        onClick={() => setConfidenceFilter(key)}
+                                        style={{fontSize: '0.9em', background: confidenceFilter === key ? bg : undefined}}
+                                    >
+                                        {label}
+                                    </button>
+                                ))}
                             </div>
                         </div>
-                        
+
                         {filteredGroups.length === 0 ? (
                             <div style={{textAlign: 'center', padding: '40px', background: '#1a1f2e', borderRadius: '10px', border: '2px solid #28a745'}}>
                                 <div style={{fontSize: '3em', marginBottom: '10px'}}>✅</div>
@@ -2592,91 +2578,28 @@
                             <div>
                                 {filteredGroups.map((group, groupIndex) => {
                                     const highestConfidence = group.duplicates.reduce((max, d) => {
-                                        const order = {high: 3, medium: 2, low: 1};
+                                        const order = { high: 3, medium: 2, low: 1 };
                                         return order[d.confidence] > order[max] ? d.confidence : max;
                                     }, 'low');
-                                    
+
                                     return (
-                                        <div 
-                                            key={groupIndex} 
-                                            style={{
-                                                background: '#1a1f2e', 
-                                                padding: '20px', 
-                                                borderRadius: '10px', 
-                                                marginBottom: '20px',
-                                                border: `2px solid ${getConfidenceColor(highestConfidence)}`
-                                            }}
-                                        >
-                                            <div style={{color: getConfidenceColor(highestConfidence), fontWeight: 'bold', marginBottom: '15px', fontSize: '0.9em'}}>
-                                                {getConfidenceLabel(highestConfidence)}
+                                        <div key={groupIndex} style={{background: '#1a1f2e', padding: '20px', borderRadius: '10px', marginBottom: '20px', border: `2px solid ${confidenceColor[highestConfidence]}`}}>
+                                            <div style={{color: confidenceColor[highestConfidence], fontWeight: 'bold', marginBottom: '12px', fontSize: '0.9em'}}>
+                                                {confidenceLabel[highestConfidence]}
                                             </div>
-                                            
-                                            <div style={{marginBottom: '15px'}}>
-                                                <h4 style={{color: '#667eea', marginBottom: '5px'}}>{group.original.description}</h4>
-                                                <p style={{color: '#a0aec0', fontSize: '0.9em'}}>
-                                                    {group.original.category} • {formatCurrency(Math.abs(parseFloat(group.original.amount)))}
-                                                </p>
-                                            </div>
-                                            
-                                            <div style={{borderLeft: '3px solid #667eea', paddingLeft: '15px', marginBottom: '10px'}}>
-                                                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px'}}>
-                                                    <div>
-                                                        <div style={{color: '#e2e8f0', fontSize: '0.95em'}}>
-                                                            📅 {group.original.date}
-                                                        </div>
-                                                        {group.original.notes && (
-                                                            <div style={{color: '#a0aec0', fontSize: '0.85em', marginTop: '3px'}}>
-                                                                Note: {group.original.notes}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                                
+                                            <h4 style={{color: '#667eea', marginBottom: '4px'}}>{group.original.description}</h4>
+
+                                            <div style={{borderLeft: '3px solid #667eea', paddingLeft: '15px', marginTop: '12px'}}>
+                                                <TransactionRow transaction={group.original} label="Original" />
                                                 {group.duplicates.map((dup, dupIndex) => (
-                                                    <div 
+                                                    <TransactionRow
                                                         key={dupIndex}
-                                                        style={{
-                                                            borderTop: '1px solid #2d3748',
-                                                            paddingTop: '10px',
-                                                            marginTop: '10px'
-                                                        }}
-                                                    >
-                                                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'start'}}>
-                                                            <div style={{flex: 1}}>
-                                                                <div style={{color: '#e2e8f0', fontSize: '0.95em'}}>
-                                                                    📅 {dup.transaction.date}
-                                                                    <span style={{
-                                                                        marginLeft: '10px',
-                                                                        color: getConfidenceColor(dup.confidence),
-                                                                        fontSize: '0.85em'
-                                                                    }}>
-                                                                        {dup.daysDiff === 0 ? 'Same day' : `${dup.daysDiff} day${dup.daysDiff > 1 ? 's' : ''} apart`}
-                                                                    </span>
-                                                                </div>
-                                                                {dup.transaction.notes && (
-                                                                    <div style={{color: '#a0aec0', fontSize: '0.85em', marginTop: '3px'}}>
-                                                                        Note: {dup.transaction.notes}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                            <div style={{display: 'flex', gap: '8px', marginLeft: '10px'}}>
-                                                                <button 
-                                                                    className="danger"
-                                                                    onClick={() => deleteDuplicate(dup.transaction.id)}
-                                                                    style={{padding: '6px 12px', fontSize: '0.85em', whiteSpace: 'nowrap'}}
-                                                                >
-                                                                    Delete
-                                                                </button>
-                                                                <button 
-                                                                    className="secondary"
-                                                                    onClick={() => markAsNotDuplicate(dup.pairKey)}
-                                                                    style={{padding: '6px 12px', fontSize: '0.85em', whiteSpace: 'nowrap'}}
-                                                                >
-                                                                    Keep Both
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    </div>
+                                                        transaction={dup.transaction}
+                                                        label="Possible duplicate"
+                                                        pairKey={dup.pairKey}
+                                                        confidence={dup.confidence}
+                                                        daysDiff={dup.daysDiff}
+                                                    />
                                                 ))}
                                             </div>
                                         </div>
@@ -2685,13 +2608,13 @@
                             </div>
                         )}
                     </div>
-                    
+
                     <div className="section" style={{background: '#1a1f2e', padding: '15px', borderRadius: '10px'}}>
                         <h4 style={{color: '#667eea', marginBottom: '10px'}}>How Duplicate Detection Works:</h4>
                         <ul style={{color: '#a0aec0', fontSize: '0.9em', lineHeight: '1.8'}}>
                             <li><strong style={{color: '#dc3545'}}>⚠️ High Confidence:</strong> Same vendor + exact amount + same date</li>
                             <li><strong style={{color: '#ffc107'}}>⚡ Medium Confidence:</strong> Same vendor + exact amount + within 2 days</li>
-                            <li><strong style={{color: '#6c757d'}}>💭 Low Confidence:</strong> Same vendor + similar amount (±$1) + within 3 days</li>
+                            <li><strong style={{color: '#6c757d'}}>💭 Low Confidence:</strong> Same vendor + amount within $1 + within 3 days</li>
                         </ul>
                         <p style={{color: '#a0aec0', fontSize: '0.85em', marginTop: '10px', fontStyle: 'italic'}}>
                             💡 Tip: Click "Keep Both" if transactions aren't actually duplicates to hide them from this list.
@@ -3654,19 +3577,18 @@
                 })
                 .reduce((sum, p) => sum + parseFloat(p.amount), 0);
 
-            // Simple calculations
             const moneyLeft = expectedMonthlyIncome - recurringTotal;
-            const spentSoFar = totalExpenses - recurringTotal;
-
-            // Recurring paid so far = total recurring this month minus what's still outstanding
-            const paidRecurringTotal = recurringTotal - unpaidRecurring;
-            
-            // Calculate with ACTUAL income received so far
             const moneyLeftActual = actualIncome - recurringTotal;
-            
-            // Remaining = Money Left - Spent So Far - Unpaid Recurring (guaranteed to come out)
-            const remainingExpected = moneyLeft - spentSoFar - unpaidRecurring;
-            const remainingActual = moneyLeftActual - spentSoFar - unpaidRecurring;
+
+            // Paid recurring = total due minus what's still outstanding
+            const paidRecurringTotal = recurringTotal - unpaidRecurring;
+
+            // Non-recurring spend = total expenses minus the paid recurring portion already in transactions
+            const spentSoFar = Math.max(0, totalExpenses - paidRecurringTotal);
+
+            // Remaining = income - all expenses so far - unpaid recurring still to come out
+            const remainingExpected = expectedMonthlyIncome - totalExpenses - unpaidRecurring;
+            const remainingActual = actualIncome - totalExpenses - unpaidRecurring;
 
             const handleSaveIncome = () => {
                 setExpectedMonthlyIncome(tempIncome);
@@ -3823,14 +3745,14 @@
                             <div style={{marginBottom: '15px'}}>
                                 <strong style={{color: '#667eea'}}>Spent So Far:</strong>
                                 <p style={{color: '#a0aec0', fontSize: '0.9em', marginTop: '5px'}}>
-                                    Total Expenses - Recurring Bills = What you've actually spent on non-recurring items.
+                                    Total Expenses minus paid recurring bills = what you've actually spent on non-recurring items.
                                 </p>
                             </div>
-                            
+
                             <div>
                                 <strong style={{color: '#667eea'}}>Remaining Available:</strong>
                                 <p style={{color: '#a0aec0', fontSize: '0.9em', marginTop: '5px'}}>
-                                    Money Left - Spent So Far - Unpaid Recurring = How much you truly have left to spend (accounting for bills still due).
+                                    Income minus all expenses so far minus unpaid recurring still due = how much you truly have left.
                                 </p>
                             </div>
                         </div>
