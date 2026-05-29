@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finance Tracker v1.18.0</title>
-    <!-- Build: 2026-05-29-01 - Dashboard cleanup, history non-recurring breakdown, budget calc fix -->
+    <title>Finance Tracker v1.21.0</title>
+    <!-- Build: 2026-05-29-04 - Mark Paid on dashboard creates transaction for manual recurring -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -457,7 +457,7 @@
 
         function FinanceTracker() {
             // Predefined categories
-            const expenseCategories = ['Food', 'Groceries', 'Subscriptions', 'Home', 'Car Payments', 'Personal', 'Pets', 'Utilities', 'Gas (cars)', 'Debt', 'Insurance', 'Kids', 'Savings', 'House cleaning', 'Entertainment', 'Healthcare', 'Transportation', 'Other'];
+            const expenseCategories = ['Food', 'Groceries', 'Coffee', 'Subscriptions', 'Home', 'Car Payments', 'Personal', 'Pets', 'Utilities', 'Gas (cars)', 'Debt', 'Insurance', 'Kids', 'Savings', 'House cleaning', 'Entertainment', 'Healthcare', 'Transportation', 'Other'];
             const incomeCategories = ['Salary', 'Freelance', 'Investment', 'Gift', 'Bonus', 'Refund', 'Other'];
             
             const [activeTab, setActiveTab] = useState('dashboard');
@@ -1043,7 +1043,7 @@
                         <button className={`tab-button ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>⚙️ Settings</button>
                     </div>
                     <div className="tab-content">
-                        {activeTab === 'dashboard' && <DashboardTab totals={totals} totalDebt={totalDebt} unpaidRecurring={unpaidRecurring} currentMonth={currentMonth} transactions={transactions} recurringPayments={recurringPayments} debts={debts} expectedMonthlyIncome={expectedMonthlyIncome} importData={importData} paidPayments={paidPayments} categoryBudgets={categoryBudgets} />}
+                        {activeTab === 'dashboard' && <DashboardTab totals={totals} totalDebt={totalDebt} unpaidRecurring={unpaidRecurring} currentMonth={currentMonth} transactions={transactions} setTransactions={setTransactions} recurringPayments={recurringPayments} debts={debts} setDebts={setDebts} expectedMonthlyIncome={expectedMonthlyIncome} importData={importData} paidPayments={paidPayments} setPaidPayments={setPaidPayments} categoryBudgets={categoryBudgets} />}
                         {activeTab === 'budget' && <BudgetTab transactions={transactions} recurringPayments={recurringPayments} expectedMonthlyIncome={expectedMonthlyIncome} setExpectedMonthlyIncome={setExpectedMonthlyIncome} currentMonth={currentMonth} unpaidRecurring={unpaidRecurring} categoryBudgets={categoryBudgets} setCategoryBudgets={setCategoryBudgets} />}
                         {activeTab === 'transactions' && <TransactionsTab transactions={transactions} setTransactions={setTransactions} currentMonth={currentMonth} expenseCategories={expenseCategories} incomeCategories={incomeCategories} debts={debts} setDebts={setDebts} />}
                         {activeTab === 'recurring' && <RecurringTab recurringPayments={recurringPayments} setRecurringPayments={setRecurringPayments} debts={debts} setDebts={setDebts} transactions={transactions} setTransactions={setTransactions} paidPayments={paidPayments} setPaidPayments={setPaidPayments} currentMonth={currentMonth} />}
@@ -1057,7 +1057,7 @@
             );
         }
 
-        function DashboardTab({ totals, totalDebt, unpaidRecurring, currentMonth, transactions, recurringPayments, debts, expectedMonthlyIncome, importData, paidPayments, categoryBudgets }) {
+        function DashboardTab({ totals, totalDebt, unpaidRecurring, currentMonth, transactions, setTransactions, recurringPayments, debts, setDebts, expectedMonthlyIncome, importData, paidPayments, setPaidPayments, categoryBudgets }) {
             const [debtsCollapsed, setDebtsCollapsed] = useState(false);
             const fileInputRef = React.useRef(null); // Move ref to top level
             const monthName = currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' });
@@ -1171,11 +1171,86 @@
                         <div className="summary-card"><h3>Unpaid Recurring</h3><div className="amount">{formatCurrency(unpaidRecurring)}</div><div className="subtitle">Still due this month</div></div>
                         <div className="summary-card" style={{background: 'linear-gradient(135deg, #28a74522 0%, #20c99722 100%)', border: '2px solid #28a745'}}><h3>Recurring Paid</h3><div className="amount" style={{color: '#28a745'}}>{formatCurrency(paidRecurringTotal)}</div><div className="subtitle">{formatCurrency(paidRecurringTotal)} of {formatCurrency(recurringTotal)} paid this month</div></div>
                     </div>
+                    {(() => {
+                        const today = new Date();
+                        const days = [];
+                        const cur = new Date(start);
+                        while (cur <= end && cur <= today) {
+                            days.push(getLocalDateString(cur));
+                            cur.setDate(cur.getDate() + 1);
+                        }
+                        if (days.length === 0) return null;
+                        const dailySpend = days.map(ds =>
+                            transactions.filter(t => t.type === 'expense' && t.date === ds).reduce((s, t) => s + parseFloat(t.amount), 0)
+                        );
+                        const maxSpend = Math.max(...dailySpend, 0.01);
+                        const totalSoFar = dailySpend.reduce((s, v) => s + v, 0);
+                        const avgPerDay = totalSoFar / days.length;
+                        const daysInMonth = Math.round((end - start) / 86400000) + 1;
+                        const projected = (totalSoFar / days.length) * daysInMonth;
+                        const todayStr = getLocalDateString(today);
+                        return (
+                            <div className="section" style={{marginBottom: '20px'}}>
+                                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '12px', flexWrap: 'wrap', gap: '8px'}}>
+                                    <h2 style={{margin: 0}}>📊 Spending This Month</h2>
+                                    <div style={{display: 'flex', gap: '20px', fontSize: '0.88em', flexWrap: 'wrap'}}>
+                                        <span style={{color: '#a0aec0'}}>Spent: <strong style={{color: '#dc3545'}}>{formatCurrency(totalSoFar)}</strong></span>
+                                        <span style={{color: '#a0aec0'}}>Avg/day: <strong style={{color: '#667eea'}}>{formatCurrency(avgPerDay)}</strong></span>
+                                        <span style={{color: '#a0aec0'}}>Projected: <strong style={{color: projected > totalSoFar ? '#ffc107' : '#28a745'}}>{formatCurrency(projected)}</strong></span>
+                                    </div>
+                                </div>
+                                <div style={{display: 'flex', alignItems: 'flex-end', gap: '2px', height: '64px', padding: '0 2px'}}>
+                                    {dailySpend.map((amount, i) => {
+                                        const pct = maxSpend > 0 ? (amount / maxSpend) : 0;
+                                        const h = Math.max(pct * 60, amount > 0 ? 3 : 0);
+                                        const isToday = days[i] === todayStr;
+                                        const isHigh = amount > avgPerDay * 1.8;
+                                        const color = isToday ? '#667eea' : isHigh ? '#dc3545' : '#28a745';
+                                        return (
+                                            <div key={i} title={`${days[i]}: ${formatCurrency(amount)}`} style={{flex: 1, height: `${h}px`, background: color, borderRadius: '2px 2px 0 0', minWidth: '3px', opacity: amount === 0 ? 0.15 : 1, transition: 'height 0.2s'}} />
+                                        );
+                                    })}
+                                </div>
+                                <div style={{height: '2px', background: '#2d3748', borderRadius: '1px', marginBottom: '4px'}} />
+                                <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '0.75em', color: '#4a5568'}}>
+                                    <span>{days[0]?.slice(5)}</span>
+                                    <span style={{color: '#667eea', fontSize: '0.9em'}}>today</span>
+                                    <span>{days[days.length - 1]?.slice(5)}</span>
+                                </div>
+                            </div>
+                        );
+                    })()}
+
                     {billsDueSoon.length > 0 && (
                         <div className="section" style={{border: '2px solid #ffc107', background: 'linear-gradient(135deg, #ffc10708 0%, #ff980008 100%)'}}>
                             <h2 style={{color: '#ffc107', marginBottom: '15px'}}>⚠️ Bills Due in the Next 7 Days</h2>
                             <div style={{display: 'flex', flexDirection: 'column', gap: '10px'}}>
-                                {billsDueSoon.map(p => (
+                                {billsDueSoon.map(p => {
+                                    const monthKey = getMonthKey(currentMonth);
+                                    const payKey = `${monthKey}-${p.id}`;
+                                    const markPaid = () => {
+                                        // Auto-pay: just mark paid — the useEffect will create the transaction when due
+                                        if (p.auto) {
+                                            setPaidPayments(prev => ({...prev, [payKey]: true}));
+                                            return;
+                                        }
+                                        // Manual: create expense transaction and update linked debt, same as Recurring "Process"
+                                        const newTransaction = { type: 'expense', amount: p.amount, description: `${p.name} (Recurring)`, category: p.category, date: getLocalDateString(), id: Date.now(), isRecurring: true };
+                                        setTransactions(prev => [...prev, newTransaction]);
+                                        setPaidPayments(prev => ({...prev, [payKey]: true}));
+                                        if (p.linkedDebt) {
+                                            setDebts(prev => prev.map(debt => {
+                                                if (debt.id !== parseInt(p.linkedDebt)) return debt;
+                                                const monthlyRate = (parseFloat(debt.interestRate) || 0) / 100 / 12;
+                                                const interest = debt.currentBalance * monthlyRate;
+                                                const principal = p.amount - interest;
+                                                const newBalance = Math.max(0, debt.currentBalance - principal);
+                                                return { ...debt, currentBalance: newBalance, transactionLog: [...(debt.transactionLog || []), { date: getLocalDateString(), paymentAmount: p.amount, interestAccrued: interest, principalPaid: principal, balanceBefore: debt.currentBalance, balanceAfter: newBalance }] };
+                                            }));
+                                        }
+                                        showToast(`Payment processed: ${p.name} — ${formatCurrency(p.amount)}`);
+                                    };
+                                    return (
                                     <div key={p.id} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#1a1f2e', padding: '14px 18px', borderRadius: '10px', borderLeft: `4px solid ${p.daysUntil === 0 ? '#dc3545' : p.daysUntil <= 2 ? '#ffc107' : '#667eea'}`, flexWrap: 'wrap', gap: '10px'}}>
                                         <div>
                                             <div style={{color: '#e2e8f0', fontWeight: '600'}}>{p.name}</div>
@@ -1187,14 +1262,16 @@
                                                 }
                                             </div>
                                         </div>
-                                        <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
+                                        <div style={{display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap'}}>
                                             <span style={{color: '#ffc107', fontWeight: '700', fontSize: '1.15em'}}>{formatCurrency(p.amount)}</span>
                                             {p.paymentUrl && (
                                                 <button onClick={() => window.open(p.paymentUrl, '_blank')} style={{padding: '6px 14px', fontSize: '0.85em', background: '#667eea'}}>Pay Now</button>
                                             )}
+                                            <button onClick={markPaid} className="success" style={{padding: '6px 14px', fontSize: '0.85em'}}>✓ Mark Paid</button>
                                         </div>
                                     </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                             <div style={{marginTop: '12px', color: '#a0aec0', fontSize: '0.88em'}}>
                                 Total due soon: <strong style={{color: '#ffc107'}}>{formatCurrency(billsDueSoon.reduce((s, p) => s + parseFloat(p.amount), 0))}</strong>
@@ -1295,6 +1372,11 @@
                 { id: 1, date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense', notes: '' }
             ]);
             
+            // Bulk select state
+            const [bulkSelectMode, setBulkSelectMode] = useState(false);
+            const [selectedIds, setSelectedIds] = useState(new Set());
+            const [bulkCategory, setBulkCategory] = useState('');
+
             // Advanced filter states
             const [filterType, setFilterType] = useState('all'); // 'all', 'income', 'expense'
             const [dateFrom, setDateFrom] = useState('');
@@ -1495,15 +1577,7 @@
 
                 setTransactions([...transactions, ...newTransactions]);
                 
-                // Reset bulk rows
-                const t0 = Date.now();
-                setBulkRows([
-                    { id: t0 + 1, date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense', notes: '' },
-                    { id: t0 + 2, date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense', notes: '' },
-                    { id: t0 + 3, date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense', notes: '' },
-                    { id: t0 + 4, date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense', notes: '' },
-                    { id: t0 + 5, date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense', notes: '' }
-                ]);
+                setBulkRows([{ id: Date.now(), date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense', notes: '' }]);
                 
                 showToast(`Added ${newTransactions.length} transaction${newTransactions.length !== 1 ? 's' : ''}`);
             };
@@ -1518,6 +1592,22 @@
             };
 
             const deleteTransaction = (id) => setTransactions(transactions.filter(t => t.id !== id));
+
+            const toggleSelect = (id) => setSelectedIds(prev => {
+                const next = new Set(prev);
+                next.has(id) ? next.delete(id) : next.add(id);
+                return next;
+            });
+            const selectAll = (ids) => setSelectedIds(prev => new Set([...prev, ...ids]));
+            const deselectAll = (ids) => setSelectedIds(prev => { const next = new Set(prev); ids.forEach(id => next.delete(id)); return next; });
+            const clearSelection = () => { setSelectedIds(new Set()); setBulkSelectMode(false); setBulkCategory(''); };
+            const applyBulkCategory = () => {
+                if (!bulkCategory || selectedIds.size === 0) return;
+                setTransactions(transactions.map(t => selectedIds.has(t.id) ? { ...t, category: bulkCategory } : t));
+                showToast(`Updated category to "${bulkCategory}" for ${selectedIds.size} transaction${selectedIds.size !== 1 ? 's' : ''}`);
+                clearSelection();
+            };
+
             const toggleMonth = (monthKey) => setExpandedMonths(prev => ({ ...prev, [monthKey]: !prev[monthKey] }));
             const getAllCategories = () => { const categories = new Set(); transactions.forEach(t => { if (t.category) categories.add(t.category); }); return ['All', ...Array.from(categories).sort()]; };
             const groupTransactionsByMonth = () => {
@@ -1757,9 +1847,15 @@
                         )}
                     </div>
                     <div className="section">
-                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px'}}>
+                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px'}}>
                             <h2>Transaction History</h2>
-                            <div style={{display: 'flex', gap: '10px'}}>
+                            <div style={{display: 'flex', gap: '10px', flexWrap: 'wrap'}}>
+                                <button
+                                    onClick={() => { setBulkSelectMode(m => !m); setSelectedIds(new Set()); setBulkCategory(''); }}
+                                    style={{background: bulkSelectMode ? '#ffc107' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: bulkSelectMode ? '#1a1f2e' : 'white', fontWeight: '700'}}
+                                >
+                                    {bulkSelectMode ? '✕ Cancel Select' : '☑ Select'}
+                                </button>
                                 <button onClick={() => exportToCSV(getFilteredTransactions())} style={{background: '#28a745'}}>
                                     📊 Export Filtered to CSV
                                 </button>
@@ -1768,6 +1864,26 @@
                                 </button>
                             </div>
                         </div>
+
+                        {bulkSelectMode && selectedIds.size > 0 && (
+                            <div style={{display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 18px', background: '#1a2040', border: '2px solid #667eea', borderRadius: '10px', marginBottom: '15px', flexWrap: 'wrap'}}>
+                                <span style={{color: '#667eea', fontWeight: '700'}}>{selectedIds.size} selected</span>
+                                <span style={{color: '#2d3748'}}>|</span>
+                                <span style={{color: '#a0aec0', fontSize: '0.9em'}}>Set category:</span>
+                                <select
+                                    value={bulkCategory}
+                                    onChange={e => setBulkCategory(e.target.value)}
+                                    style={{padding: '7px 12px', fontSize: '0.95em', flex: '1', minWidth: '160px', maxWidth: '260px'}}
+                                >
+                                    <option value="">— pick a category —</option>
+                                    {[...new Set([...expenseCategories, ...incomeCategories, ...transactions.map(t => t.category).filter(Boolean)])].sort().map(cat =>
+                                        <option key={cat} value={cat}>{cat}</option>
+                                    )}
+                                </select>
+                                <button onClick={applyBulkCategory} disabled={!bulkCategory} style={{padding: '8px 18px'}}>Apply</button>
+                                <button onClick={clearSelection} className="secondary" style={{padding: '8px 14px'}}>Clear</button>
+                            </div>
+                        )}
                         
                         <div style={{marginBottom: '20px', padding: '20px', background: '#1a1f2e', borderRadius: '10px', border: '2px solid #667eea'}}>
                             <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px'}}>
@@ -1878,19 +1994,33 @@
                         {monthlyGroups.length === 0 ? (
                             <p style={{color: '#a0aec0', textAlign: 'center', padding: '20px'}}>No transactions {selectedCategory !== 'All' ? `in category "${selectedCategory}"` : 'yet'}.</p>
                         ) : (
-                            monthlyGroups.map(([monthKey, data]) => (
+                            monthlyGroups.map(([monthKey, data]) => {
+                                const monthIds = data.transactions.map(t => t.id);
+                                const allMonthSelected = monthIds.length > 0 && monthIds.every(id => selectedIds.has(id));
+                                return (
                                 <div key={monthKey} className="collapsible-section">
-                                    <div className="collapsible-header" onClick={() => toggleMonth(monthKey)}>
-                                        <div>
-                                            <h3>{data.label}</h3>
-                                            <p style={{fontSize: '0.9em', marginTop: '5px', opacity: 0.9}}>
-                                                {data.transactions.length} transaction{data.transactions.length !== 1 ? 's' : ''} • 
-                                                Income: {formatCurrency(data.income)} • 
-                                                Expenses: {formatCurrency(data.expenses)} • 
-                                                Net: <span style={{color: '#e2e8f0', fontWeight: '600'}}>
-                                                    {formatCurrency(data.income - data.expenses)}
-                                                </span>
-                                            </p>
+                                    <div className="collapsible-header" onClick={() => toggleMonth(monthKey)} style={{userSelect: 'none'}}>
+                                        <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
+                                            {bulkSelectMode && (
+                                                <input
+                                                    type="checkbox"
+                                                    checked={allMonthSelected}
+                                                    onChange={e => { e.stopPropagation(); allMonthSelected ? deselectAll(monthIds) : selectAll(monthIds); }}
+                                                    onClick={e => e.stopPropagation()}
+                                                    style={{width: '18px', height: '18px', cursor: 'pointer', accentColor: '#667eea'}}
+                                                />
+                                            )}
+                                            <div>
+                                                <h3>{data.label}</h3>
+                                                <p style={{fontSize: '0.9em', marginTop: '5px', opacity: 0.9}}>
+                                                    {data.transactions.length} transaction{data.transactions.length !== 1 ? 's' : ''} •
+                                                    Income: {formatCurrency(data.income)} •
+                                                    Expenses: {formatCurrency(data.expenses)} •
+                                                    Net: <span style={{color: '#e2e8f0', fontWeight: '600'}}>
+                                                        {formatCurrency(data.income - data.expenses)}
+                                                    </span>
+                                                </p>
+                                            </div>
                                         </div>
                                         <div style={{fontSize: '1.5em'}}>{expandedMonths[monthKey] ? '▼' : '▶'}</div>
                                     </div>
@@ -1898,7 +2028,16 @@
                                         <div className="collapsible-content">
                                             <div className="transaction-list">
                                                 {[...data.transactions].sort((a, b) => new Date(b.date) - new Date(a.date)).map((transaction) => (
-                                                    <div key={transaction.id} className={`transaction-item ${transaction.type}`}>
+                                                    <div key={transaction.id} className={`transaction-item ${transaction.type}`}
+                                                        style={selectedIds.has(transaction.id) ? {outline: '2px solid #667eea', outlineOffset: '-2px'} : {}}>
+                                                        {bulkSelectMode && (
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={selectedIds.has(transaction.id)}
+                                                                onChange={() => toggleSelect(transaction.id)}
+                                                                style={{width: '18px', height: '18px', cursor: 'pointer', accentColor: '#667eea', flexShrink: 0, marginRight: '4px'}}
+                                                            />
+                                                        )}
                                                         <div className="item-details">
                                                             <h4>{transaction.description}</h4>
                                                             <p>
@@ -1908,8 +2047,8 @@
                                                         </div>
                                                         <div style={{display: 'flex', alignItems: 'center', gap: '15px'}}>
                                                             <div className={`item-amount ${transaction.type === 'income' ? 'positive' : 'negative'}`}>{transaction.type === 'income' ? '+' : '-'}{formatCurrency(Math.abs(parseFloat(transaction.amount) || 0))}</div>
-                                                            <button onClick={() => handleEdit(transaction)} style={{padding: '8px 16px', fontSize: '0.9em'}}>Edit</button>
-                                                            <button className="danger" onClick={() => deleteTransaction(transaction.id)} style={{padding: '8px 16px', fontSize: '0.9em'}}>Delete</button>
+                                                            {!bulkSelectMode && <button onClick={() => handleEdit(transaction)} style={{padding: '8px 16px', fontSize: '0.9em'}}>Edit</button>}
+                                                            {!bulkSelectMode && <button className="danger" onClick={() => deleteTransaction(transaction.id)} style={{padding: '8px 16px', fontSize: '0.9em'}}>Delete</button>}
                                                         </div>
                                                     </div>
                                                 ))}
@@ -1917,20 +2056,27 @@
                                         </div>
                                     )}
                                 </div>
-                            ))
+                                );
+                            })
                         )}
                     </div>
-                    {editingTransaction && <EditTransactionModal transaction={editingTransaction} onUpdate={handleUpdate} onClose={() => setEditingTransaction(null)} />}
+                    {editingTransaction && <EditTransactionModal transaction={editingTransaction} onUpdate={handleUpdate} onClose={() => setEditingTransaction(null)} expenseCategories={expenseCategories} incomeCategories={incomeCategories} allUsedCategories={[...new Set(transactions.map(t => t.category).filter(Boolean))]} />}
                 </div>
             );
         }
 
-        function EditTransactionModal({ transaction, onUpdate, onClose }) {
+        function EditTransactionModal({ transaction, onUpdate, onClose, expenseCategories, incomeCategories, allUsedCategories }) {
             const [formData, setFormData] = useState({ ...transaction });
 
             const handleSubmit = (e) => {
                 e.preventDefault();
                 onUpdate({ ...formData, amount: parseFloat(formData.amount) });
+            };
+
+            const categoryOptions = () => {
+                const base = formData.type === 'expense' ? expenseCategories : incomeCategories;
+                const extras = allUsedCategories.filter(c => !base.includes(c));
+                return [...base, ...extras.sort()];
             };
 
             return (
@@ -1945,7 +2091,13 @@
                             </div>
                             <div className="form-row">
                                 <div className="form-group"><label>Vendor</label><input type="text" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} required /></div>
-                                <div className="form-group"><label>Category</label><input type="text" value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})} /></div>
+                                <div className="form-group">
+                                    <label>Category</label>
+                                    <select value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})}>
+                                        <option value="">Select category</option>
+                                        {categoryOptions().map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                                    </select>
+                                </div>
                             </div>
                             <div className="form-group">
                                 <label>Notes (Optional)</label>
