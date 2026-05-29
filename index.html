@@ -1094,6 +1094,9 @@
             
             // Money Available = Money Left - Spent So Far - Unpaid Recurring (guaranteed to come out)
             const moneyAvailable = moneyLeft - spentSoFar - unpaidRecurring;
+
+            // Recurring paid so far = total recurring this month minus what's still outstanding
+            const paidRecurringTotal = recurringTotal - unpaidRecurring;
             
             const getYearlyTotals = () => {
                 // Get all transactions that fall within ANY financial month of the selected year
@@ -1222,6 +1225,7 @@
                         <div className="summary-card"><h3>Net Balance</h3><div className="amount">{formatCurrency(totals.net)}</div><div className="subtitle">{totals.income > 0 ? ((totals.net / totals.income) * 100).toFixed(1) : 0}% of income</div></div>
                         <div className="summary-card" style={{background: moneyAvailable >= 0 ? 'linear-gradient(135deg, #28a745 0%, #20c997 100%)' : 'linear-gradient(135deg, #dc3545 0%, #c92a2a 100%)'}}><h3>💰 Money Available</h3><div className="amount">{formatCurrency(moneyAvailable)}</div><div className="subtitle">After bills & spending<br/><span style={{fontSize: '0.85em', opacity: 0.8}}>(Based on expected income)</span></div></div>
                         <div className="summary-card"><h3>Unpaid Recurring</h3><div className="amount">{formatCurrency(unpaidRecurring)}</div><div className="subtitle">Still due this month</div></div>
+                        <div className="summary-card" style={{background: 'linear-gradient(135deg, #28a74522 0%, #20c99722 100%)', border: '2px solid #28a745'}}><h3>Recurring Paid</h3><div className="amount" style={{color: '#28a745'}}>{formatCurrency(paidRecurringTotal)}</div><div className="subtitle">{formatCurrency(paidRecurringTotal)} of {formatCurrency(recurringTotal)} paid this month</div></div>
                     </div>
                     {billsDueSoon.length > 0 && (
                         <div className="section" style={{border: '2px solid #ffc107', background: 'linear-gradient(135deg, #ffc10708 0%, #ff980008 100%)'}}>
@@ -3647,6 +3651,9 @@
             // Simple calculations
             const moneyLeft = expectedMonthlyIncome - recurringTotal;
             const spentSoFar = totalExpenses - recurringTotal;
+
+            // Recurring paid so far = total recurring this month minus what's still outstanding
+            const paidRecurringTotal = recurringTotal - unpaidRecurring;
             
             // Calculate with ACTUAL income received so far
             const moneyLeftActual = actualIncome - recurringTotal;
@@ -3732,7 +3739,12 @@
                                 <span className="budget-label">Unpaid Recurring (still due):</span>
                                 <span className="budget-value warning">{formatCurrency(unpaidRecurring)}</span>
                             </div>
-                            
+
+                            <div className="budget-row">
+                                <span className="budget-label">Recurring Paid So Far:</span>
+                                <span className="budget-value positive">{formatCurrency(paidRecurringTotal)} <span style={{color: '#a0aec0', fontSize: '0.8em', fontWeight: '400'}}>of {formatCurrency(recurringTotal)}</span></span>
+                            </div>
+
                             <div className="budget-row">
                                 <span className="budget-label">Spent So Far (non-recurring):</span>
                                 <span className="budget-value negative">-{formatCurrency(spentSoFar)}</span>
