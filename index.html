@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finance Tracker v1.17.0</title>
-    <!-- Build: 2026-05-27-05 - Debt strategy: per-debt include/exclude selector for plan -->
+    <title>Finance Tracker v1.18.0</title>
+    <!-- Build: 2026-05-29-01 - Dashboard cleanup, history non-recurring breakdown, budget calc fix -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -99,6 +99,8 @@
         .budget-value.warning { color: #ffc107; }
         .income-input-group { display: flex; gap: 15px; align-items: flex-end; margin-bottom: 30px; }
         .income-input-group .form-group { flex: 1; margin-bottom: 0; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; }
+        .stat-card { border-radius: 15px; }
 
         /* Toast notifications */
         @keyframes slideInRight { from { transform: translateX(110%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
@@ -1057,22 +1059,9 @@
 
         function DashboardTab({ totals, totalDebt, unpaidRecurring, currentMonth, transactions, recurringPayments, debts, expectedMonthlyIncome, importData, paidPayments, categoryBudgets }) {
             const [debtsCollapsed, setDebtsCollapsed] = useState(false);
-            const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
             const fileInputRef = React.useRef(null); // Move ref to top level
             const monthName = currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' });
             const __range = getFinancialMonthRange(currentMonth); const start = __range.start; const end = __range.end;
-            
-            // Get available years from transactions
-            const availableYears = [...new Set(transactions.map(t => {
-                const tDate = parseLocalDate(t.date);
-                return tDate.getFullYear();
-            }))].sort((a, b) => b - a); // Sort descending
-            
-            // Add current year if not in list
-            const currentYear = new Date().getFullYear();
-            if (!availableYears.includes(currentYear)) {
-                availableYears.unshift(currentYear);
-            }
             
             // Simple Money Available calculation
             // Income - Recurring = Money Left
@@ -1088,37 +1077,9 @@
                 })
                 .reduce((sum, p) => sum + parseFloat(p.amount), 0);
             
-            const moneyLeft = expectedMonthlyIncome - recurringTotal;
-
             // Recurring paid so far = total recurring this month minus what's still outstanding
             const paidRecurringTotal = recurringTotal - unpaidRecurring;
-
-            // Non-recurring spend = total expenses minus the paid recurring already in transactions
-            const spentSoFar = Math.max(0, totals.expenses - paidRecurringTotal);
-
-            // Money Available = income - all expenses so far - unpaid recurring still to come out
-            const moneyAvailable = expectedMonthlyIncome - totals.expenses - unpaidRecurring;
             
-            const getYearlyTotals = () => {
-                // Get all transactions that fall within ANY financial month of the selected year
-                const yearlyTransactions = transactions.filter(t => {
-                    const tDate = parseLocalDate(t.date);
-                    // Check each financial month of the selected year
-                    for (let month = 0; month < 12; month++) {
-                        const testDate = new Date(selectedYear, month, 1);
-                        const monthRange = getFinancialMonthRange(testDate);
-                        if (tDate >= monthRange.start && tDate <= monthRange.end) {
-                            return true;
-                        }
-                    }
-                    return false;
-                });
-                const income = yearlyTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + parseFloat(t.amount), 0);
-                const expenses = yearlyTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + parseFloat(t.amount), 0);
-                return { income, expenses, net: income - expenses, year: selectedYear };
-            };
-            const yearlyTotals = getYearlyTotals();
-
             const billsDueSoon = (() => {
                 const today = new Date();
                 const todayMs = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
@@ -1201,30 +1162,12 @@
 
             return (
                 <div>
-                    {availableYears.length > 0 && (
-                        <div style={{display: 'flex', justifyContent: 'flex-end', marginBottom: '20px', alignItems: 'center', gap: '10px'}}>
-                            <label style={{color: '#a0aec0', fontSize: '0.95em'}}>View Year:</label>
-                            <select 
-                                value={selectedYear} 
-                                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                                style={{padding: '8px 16px', fontSize: '1em', background: '#1a1f2e', color: '#e2e8f0', border: '2px solid #667eea', borderRadius: '8px', cursor: 'pointer'}}
-                            >
-                                {availableYears.map(year => (
-                                    <option key={year} value={year}>{year}</option>
-                                ))}
-                            </select>
-                        </div>
-                    )}
-                    <div className="yearly-overview income"><h2>📈 Total Income {yearlyTotals.year}</h2><div className="amount">{formatCurrency(yearlyTotals.income)}</div></div>
-                    <div className="yearly-overview expense"><h2>📉 Total Expenses {yearlyTotals.year}</h2><div className="amount">{formatCurrency(yearlyTotals.expenses)}</div></div>
-                    <div className="yearly-overview net"><h2>💰 Net {yearlyTotals.year}</h2><div className={`amount ${yearlyTotals.net >= 0 ? 'positive' : 'negative'}`}>{formatCurrency(yearlyTotals.net)}</div></div>
-                    <h2 style={{color: '#667eea', marginBottom: '20px', marginTop: '40px'}}>Current Month: {monthName}</h2>
+                    <h2 style={{color: '#667eea', marginBottom: '10px'}}>Current Month: {monthName}</h2>
                     <p style={{color: '#a0aec0', marginBottom: '20px'}}>Period: {start.toLocaleDateString()} - {end.toLocaleDateString()}</p>
                     <div className="summary-grid">
                         <div className="summary-card"><h3>Total Income</h3><div className="amount">{formatCurrency(totals.income)}</div></div>
                         <div className="summary-card"><h3>Total Expenses</h3><div className="amount">{formatCurrency(totals.expenses)}</div><div className="subtitle">From transactions only</div></div>
                         <div className="summary-card"><h3>Net Balance</h3><div className="amount">{formatCurrency(totals.net)}</div><div className="subtitle">{totals.income > 0 ? ((totals.net / totals.income) * 100).toFixed(1) : 0}% of income</div></div>
-                        <div className="summary-card" style={{background: moneyAvailable >= 0 ? 'linear-gradient(135deg, #28a745 0%, #20c997 100%)' : 'linear-gradient(135deg, #dc3545 0%, #c92a2a 100%)'}}><h3>💰 Money Available</h3><div className="amount">{formatCurrency(moneyAvailable)}</div><div className="subtitle">After bills & spending<br/><span style={{fontSize: '0.85em', opacity: 0.8}}>(Based on expected income)</span></div></div>
                         <div className="summary-card"><h3>Unpaid Recurring</h3><div className="amount">{formatCurrency(unpaidRecurring)}</div><div className="subtitle">Still due this month</div></div>
                         <div className="summary-card" style={{background: 'linear-gradient(135deg, #28a74522 0%, #20c99722 100%)', border: '2px solid #28a745'}}><h3>Recurring Paid</h3><div className="amount" style={{color: '#28a745'}}>{formatCurrency(paidRecurringTotal)}</div><div className="subtitle">{formatCurrency(paidRecurringTotal)} of {formatCurrency(recurringTotal)} paid this month</div></div>
                     </div>
@@ -1349,11 +1292,7 @@
             const [customCategory, setCustomCategory] = useState('');
             const [showBulkEntry, setShowBulkEntry] = useState(false);
             const [bulkRows, setBulkRows] = useState([
-                { id: 1, date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense', notes: '' },
-                { id: 2, date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense', notes: '' },
-                { id: 3, date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense', notes: '' },
-                { id: 4, date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense', notes: '' },
-                { id: 5, date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense', notes: '' }
+                { id: 1, date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense', notes: '' }
             ]);
             
             // Advanced filter states
@@ -3954,9 +3893,18 @@
             
             const monthTransactions = getMonthTransactions();
             
+            // Detect recurring expense transactions by their tag (auto-pay sets isRecurring flag; manual pay uses "(Recurring)" suffix)
+            const isRecurringExpense = (t) =>
+                t.type === 'expense' && (
+                    t.isRecurring === true ||
+                    (t.description && (t.description.endsWith('(Recurring)') || t.description.endsWith('(Auto)')))
+                );
+
             // Calculate totals for selected month
             const monthIncome = monthTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + parseFloat(t.amount), 0);
             const monthExpenses = monthTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + parseFloat(t.amount), 0);
+            const monthRecurringExpenses = monthTransactions.filter(isRecurringExpense).reduce((sum, t) => sum + parseFloat(t.amount), 0);
+            const monthNonRecurringExpenses = monthExpenses - monthRecurringExpenses;
             const monthNet = monthIncome - monthExpenses;
             
             // Get top 5 EXPENSES only
@@ -4071,6 +4019,15 @@
                                     <div className="stat-label" style={{fontSize: '1em', color: '#a0aec0'}}>Total Expenses</div>
                                 </div>
                                 <div className="stat-value negative" style={{fontSize: '2em', fontWeight: '700', color: '#e2e8f0'}}>{formatCurrency(monthExpenses)}</div>
+                                {monthRecurringExpenses > 0 && <div style={{color: '#a0aec0', fontSize: '0.82em', marginTop: '6px'}}>{formatCurrency(monthRecurringExpenses)} recurring</div>}
+                            </div>
+                            <div className="stat-card" style={{background: 'linear-gradient(135deg, #ffc10722 0%, #fd790022 100%)', border: '2px solid #ffc107', padding: '25px'}}>
+                                <div style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px'}}>
+                                    <span style={{fontSize: '1.8em'}}>🛒</span>
+                                    <div className="stat-label" style={{fontSize: '1em', color: '#a0aec0'}}>Discretionary Spend</div>
+                                </div>
+                                <div style={{fontSize: '2em', fontWeight: '700', color: '#e2e8f0'}}>{formatCurrency(monthNonRecurringExpenses)}</div>
+                                <div style={{color: '#a0aec0', fontSize: '0.82em', marginTop: '6px'}}>excl. recurring bills</div>
                             </div>
                             <div className="stat-card" style={{background: monthNet >= 0 ? 'linear-gradient(135deg, #28a74522 0%, #20c99722 100%)' : 'linear-gradient(135deg, #dc354522 0%, #ff6b6b22 100%)', border: `2px solid ${monthNet >= 0 ? '#28a745' : '#dc3545'}`, padding: '25px'}}>
                                 <div style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px'}}>
@@ -4214,14 +4171,17 @@
                                         if (monthTrans.length > 0) {
                                             const income = monthTrans.filter(t => t.type === 'income').reduce((sum, t) => sum + parseFloat(t.amount), 0);
                                             const expenses = monthTrans.filter(t => t.type === 'expense').reduce((sum, t) => sum + parseFloat(t.amount), 0);
+                                            const recurring = monthTrans.filter(isRecurringExpense).reduce((sum, t) => sum + parseFloat(t.amount), 0);
                                             const net = income - expenses;
-                                            
+
                                             monthlyData.push({
                                                 month: month,
                                                 label: new Date(selectedYear, month, 1).toLocaleDateString('en-US', { month: 'long' }),
-                                                income: income,
-                                                expenses: expenses,
-                                                net: net,
+                                                income,
+                                                expenses,
+                                                recurring,
+                                                nonRecurring: expenses - recurring,
+                                                net,
                                                 count: monthTrans.length
                                             });
                                         }
@@ -4247,8 +4207,18 @@
                                                     <span style={{color: '#28a745', fontWeight: '600'}}>{formatCurrency(data.income)}</span>
                                                 </div>
                                                 <div style={{display: 'flex', justifyContent: 'space-between'}}>
-                                                    <span style={{color: '#a0aec0'}}>Expenses:</span>
+                                                    <span style={{color: '#a0aec0'}}>Total Expenses:</span>
                                                     <span style={{color: '#dc3545', fontWeight: '600'}}>{formatCurrency(data.expenses)}</span>
+                                                </div>
+                                                {data.recurring > 0 && (
+                                                    <div style={{display: 'flex', justifyContent: 'space-between', paddingLeft: '10px'}}>
+                                                        <span style={{color: '#718096', fontSize: '0.88em'}}>↳ Recurring:</span>
+                                                        <span style={{color: '#a0aec0', fontSize: '0.88em', fontWeight: '600'}}>{formatCurrency(data.recurring)}</span>
+                                                    </div>
+                                                )}
+                                                <div style={{display: 'flex', justifyContent: 'space-between', paddingLeft: '10px'}}>
+                                                    <span style={{color: '#718096', fontSize: '0.88em'}}>↳ Discretionary:</span>
+                                                    <span style={{color: '#ffc107', fontSize: '0.88em', fontWeight: '600'}}>{formatCurrency(data.nonRecurring)}</span>
                                                 </div>
                                                 <div style={{display: 'flex', justifyContent: 'space-between', paddingTop: '8px', borderTop: '1px solid #2d3748'}}>
                                                     <span style={{color: '#e2e8f0', fontWeight: '600'}}>Net:</span>
@@ -4295,13 +4265,17 @@
                                 const cmpTrans = transactions.filter(t => { const d = parseLocalDate(t.date); return d >= cmpRange.start && d <= cmpRange.end; });
                                 const cmpIncome = cmpTrans.filter(t => t.type === 'income').reduce((s, t) => s + parseFloat(t.amount), 0);
                                 const cmpExpenses = cmpTrans.filter(t => t.type === 'expense').reduce((s, t) => s + parseFloat(t.amount), 0);
+                                const cmpRecurring = cmpTrans.filter(isRecurringExpense).reduce((s, t) => s + parseFloat(t.amount), 0);
+                                const cmpNonRecurring = cmpExpenses - cmpRecurring;
                                 const cmpNet = cmpIncome - cmpExpenses;
                                 const baseLabel = `${monthLabel} ${selectedYear}`;
                                 const cmpLabel = new Date(compareYear, compareMonth, 1).toLocaleDateString('en-US', {month: 'short', year: 'numeric'});
 
                                 const metrics = [
                                     {label: 'Income', base: monthIncome, cmp: cmpIncome, higherIsBetter: true},
-                                    {label: 'Expenses', base: monthExpenses, cmp: cmpExpenses, higherIsBetter: false},
+                                    {label: 'Total Expenses', base: monthExpenses, cmp: cmpExpenses, higherIsBetter: false},
+                                    {label: 'Recurring Bills', base: monthRecurringExpenses, cmp: cmpRecurring, higherIsBetter: false},
+                                    {label: 'Discretionary', base: monthNonRecurringExpenses, cmp: cmpNonRecurring, higherIsBetter: false},
                                     {label: 'Net', base: monthNet, cmp: cmpNet, higherIsBetter: true},
                                 ];
 
