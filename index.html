@@ -2159,6 +2159,7 @@
             const startYear = start.getFullYear();
             
             // Generate calendar days for the financial month (28th to 27th)
+            const totalAmount = recurringPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
             const calendarDays = [];
             let runningTotal = 0;
             for (let i = 0; i < 30; i++) {
@@ -2175,11 +2176,14 @@
                     payments: paymentsOnDay,
                     isToday: new Date().toDateString() === date.toDateString(),
                     cumulativeTotal: runningTotal,
+                    remainingAfterDay: totalAmount - runningTotal,
                     isSZCPayday: date.getDay() === 5,
                     isCICPayday: day === 1 || day === 16
                 });
             }
-            
+            const paidAmount = recurringPayments.reduce((sum, p) => sum + (paidPayments[`${monthKey}-${p.id}`] ? parseFloat(p.amount) : 0), 0);
+            const remainingAmount = totalAmount - paidAmount;
+
             return (
                 <div style={{background: '#1a1f2e', padding: '20px', borderRadius: '10px', border: '2px solid #667eea'}}>
                     <h3 style={{color: '#667eea', marginBottom: '20px'}}>📅 Payment Calendar - {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h3>
@@ -2207,6 +2211,7 @@
                                             <div style={{color: '#e2e8f0', fontSize: '1.2em', fontWeight: '700'}}>{calDay.day}</div>
                                             {calDay.cumulativeTotal > 0 && <div style={{color: '#a0aec0', fontSize: '0.7em', fontWeight: '500'}}>{formatCurrency(calDay.cumulativeTotal)}</div>}
                                         </div>
+                                        {calDay.cumulativeTotal > 0 && calDay.remainingAfterDay > 0 && <div style={{color: '#dc3545', fontSize: '0.7em', fontWeight: '500'}}>{formatCurrency(calDay.remainingAfterDay)} left</div>}
                                         <div style={{color: '#a0aec0', fontSize: '0.75em'}}>{calDay.monthName}</div>
                                     </div>
                                     
@@ -2288,7 +2293,20 @@
                         })}
                     </div>
                     
-                    <div style={{marginTop: '20px', padding: '15px', background: '#0f1419', borderRadius: '8px'}}>
+                    <div style={{marginTop: '15px', padding: '15px', background: '#0f1419', borderRadius: '8px', display: 'flex', gap: '15px', flexWrap: 'wrap'}}>
+                        <div style={{flex: 1, minWidth: '130px', textAlign: 'center', padding: '10px', background: '#28a74511', borderRadius: '8px', border: '1px solid #28a74544'}}>
+                            <div style={{color: '#a0aec0', fontSize: '0.78em', letterSpacing: '0.5px', marginBottom: '4px'}}>PAID SO FAR</div>
+                            <div style={{color: '#28a745', fontSize: '1.4em', fontWeight: '700'}}>{formatCurrency(paidAmount)}</div>
+                            <div style={{color: '#a0aec0', fontSize: '0.75em', marginTop: '4px'}}>of {formatCurrency(totalAmount)}</div>
+                        </div>
+                        <div style={{flex: 1, minWidth: '130px', textAlign: 'center', padding: '10px', background: '#dc354511', borderRadius: '8px', border: '1px solid #dc354544'}}>
+                            <div style={{color: '#a0aec0', fontSize: '0.78em', letterSpacing: '0.5px', marginBottom: '4px'}}>REMAINING</div>
+                            <div style={{color: '#dc3545', fontSize: '1.4em', fontWeight: '700'}}>{formatCurrency(remainingAmount)}</div>
+                            <div style={{color: '#a0aec0', fontSize: '0.75em', marginTop: '4px'}}>{totalAmount > 0 ? ((remainingAmount / totalAmount) * 100).toFixed(0) : 0}% left to pay</div>
+                        </div>
+                    </div>
+
+                    <div style={{marginTop: '10px', padding: '15px', background: '#0f1419', borderRadius: '8px'}}>
                         <h4 style={{color: '#667eea', marginBottom: '10px', fontSize: '0.95em'}}>Legend:</h4>
                         <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px', fontSize: '0.85em'}}>
                             <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
