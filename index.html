@@ -443,6 +443,28 @@
         }
 
         const formatCurrency = (amount) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
+        const isRecurringTransaction = (t) =>
+            t.isRecurring === true ||
+            (t.description && (t.description.endsWith('(Recurring)') || t.description.endsWith('(Auto)')));
+
+        const getWeeksInRange = (rangeStart, rangeEnd) => {
+            const weeks = [];
+            const first = new Date(rangeStart);
+            first.setDate(first.getDate() - first.getDay()); // back to Sunday
+            first.setHours(0,0,0,0);
+            let cur = new Date(first);
+            while (cur <= rangeEnd) {
+                const wEnd = new Date(cur); wEnd.setDate(cur.getDate() + 6); wEnd.setHours(23,59,59,999);
+                weeks.push({
+                    weekStart: new Date(cur),
+                    weekEnd: new Date(wEnd),
+                    effectiveStart: new Date(Math.max(cur.getTime(), rangeStart.getTime())),
+                    effectiveEnd:   new Date(Math.min(wEnd.getTime(), rangeEnd.getTime()))
+                });
+                cur.setDate(cur.getDate() + 7);
+            }
+            return weeks;
+        };
         const parseLocalDate = (dateStr) => { const [year, month, day] = dateStr.split('-').map(Number); return new Date(year, month - 1, day); };
         const formatDate = (dateStr) => { const date = parseLocalDate(dateStr); return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); };
         const getLocalDateString = (date = new Date()) => {
@@ -468,7 +490,7 @@
             const [currentMonth, setCurrentMonth] = useState(getCurrentFinancialMonth());
             const [expectedMonthlyIncome, setExpectedMonthlyIncome] = useState(5000);
             const [dataLoaded, setDataLoaded] = useState(false);
-            const [categoryBudgets, setCategoryBudgets] = useState({});
+            const [weeklySpendingBudget, setWeeklySpendingBudget] = useState(580);
             const [ignoredDuplicatePairs, setIgnoredDuplicatePairs] = useState(new Set());
 
             // No browser storage — data lives only for this session
@@ -635,7 +657,8 @@
                     })),
                     paidPayments: paidPayments,
                     settings: {
-                        expectedMonthlyIncome: expectedMonthlyIncome
+                        expectedMonthlyIncome: expectedMonthlyIncome,
+                        weeklySpendingBudget: weeklySpendingBudget
                     }
                 };
                 const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -997,8 +1020,9 @@
                             if (data.paidPayments && !data.recurringPayments) setPaidPayments(data.paidPayments);
                             
                             // Import settings
-                            if (data.settings && data.settings.expectedMonthlyIncome) {
-                                setExpectedMonthlyIncome(data.settings.expectedMonthlyIncome);
+                            if (data.settings) {
+                                if (data.settings.expectedMonthlyIncome) setExpectedMonthlyIncome(data.settings.expectedMonthlyIncome);
+                                if (data.settings.weeklySpendingBudget) setWeeklySpendingBudget(data.settings.weeklySpendingBudget);
                             }
                             
                             showToast('Data imported successfully!');
@@ -1043,21 +1067,21 @@
                         <button className={`tab-button ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>⚙️ Settings</button>
                     </div>
                     <div className="tab-content">
-                        {activeTab === 'dashboard' && <DashboardTab totals={totals} totalDebt={totalDebt} unpaidRecurring={unpaidRecurring} currentMonth={currentMonth} transactions={transactions} setTransactions={setTransactions} recurringPayments={recurringPayments} debts={debts} setDebts={setDebts} expectedMonthlyIncome={expectedMonthlyIncome} importData={importData} paidPayments={paidPayments} setPaidPayments={setPaidPayments} categoryBudgets={categoryBudgets} />}
-                        {activeTab === 'budget' && <BudgetTab transactions={transactions} recurringPayments={recurringPayments} expectedMonthlyIncome={expectedMonthlyIncome} setExpectedMonthlyIncome={setExpectedMonthlyIncome} currentMonth={currentMonth} unpaidRecurring={unpaidRecurring} categoryBudgets={categoryBudgets} setCategoryBudgets={setCategoryBudgets} />}
+                        {activeTab === 'dashboard' && <DashboardTab totals={totals} totalDebt={totalDebt} unpaidRecurring={unpaidRecurring} currentMonth={currentMonth} transactions={transactions} setTransactions={setTransactions} recurringPayments={recurringPayments} debts={debts} setDebts={setDebts} expectedMonthlyIncome={expectedMonthlyIncome} importData={importData} paidPayments={paidPayments} setPaidPayments={setPaidPayments} weeklySpendingBudget={weeklySpendingBudget} />}
+                        {activeTab === 'budget' && <BudgetTab transactions={transactions} recurringPayments={recurringPayments} expectedMonthlyIncome={expectedMonthlyIncome} setExpectedMonthlyIncome={setExpectedMonthlyIncome} currentMonth={currentMonth} unpaidRecurring={unpaidRecurring} weeklySpendingBudget={weeklySpendingBudget} setWeeklySpendingBudget={setWeeklySpendingBudget} />}
                         {activeTab === 'transactions' && <TransactionsTab transactions={transactions} setTransactions={setTransactions} currentMonth={currentMonth} expenseCategories={expenseCategories} incomeCategories={incomeCategories} debts={debts} setDebts={setDebts} />}
                         {activeTab === 'recurring' && <RecurringTab recurringPayments={recurringPayments} setRecurringPayments={setRecurringPayments} debts={debts} setDebts={setDebts} transactions={transactions} setTransactions={setTransactions} paidPayments={paidPayments} setPaidPayments={setPaidPayments} currentMonth={currentMonth} />}
                         {activeTab === 'duplicates' && <DuplicatesTab transactions={transactions} setTransactions={setTransactions} ignoredPairs={ignoredDuplicatePairs} setIgnoredPairs={setIgnoredDuplicatePairs} />}
                         {activeTab === 'debts' && <DebtsTab debts={debts} setDebts={setDebts} recurringPayments={recurringPayments} setRecurringPayments={setRecurringPayments} />}
                         {activeTab === 'tracker' && <DebtPayoffTrackerTab debts={debts} />}
-                        {activeTab === 'history' && <HistoryTab transactions={transactions} recurringPayments={recurringPayments} debts={debts} />}
+                        {activeTab === 'history' && <HistoryTab transactions={transactions} recurringPayments={recurringPayments} debts={debts} weeklySpendingBudget={weeklySpendingBudget} />}
                         {activeTab === 'settings' && <SettingsTab exportData={exportData} importData={importData} clearAllData={clearAllData} exportToCSV={exportToCSV} exportAllDataToCSV={exportAllDataToCSV} />}
                     </div>
                 </div>
             );
         }
 
-        function DashboardTab({ totals, totalDebt, unpaidRecurring, currentMonth, transactions, setTransactions, recurringPayments, debts, setDebts, expectedMonthlyIncome, importData, paidPayments, setPaidPayments, categoryBudgets }) {
+        function DashboardTab({ totals, totalDebt, unpaidRecurring, currentMonth, transactions, setTransactions, recurringPayments, debts, setDebts, expectedMonthlyIncome, importData, paidPayments, setPaidPayments, weeklySpendingBudget }) {
             const [debtsCollapsed, setDebtsCollapsed] = useState(false);
             const fileInputRef = React.useRef(null); // Move ref to top level
             const monthName = currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' });
@@ -1171,6 +1195,77 @@
                         <div className="summary-card"><h3>Unpaid Recurring</h3><div className="amount">{formatCurrency(unpaidRecurring)}</div><div className="subtitle">Still due this month</div></div>
                         <div className="summary-card" style={{background: 'linear-gradient(135deg, #28a74522 0%, #20c99722 100%)', border: '2px solid #28a745'}}><h3>Recurring Paid</h3><div className="amount" style={{color: '#28a745'}}>{formatCurrency(paidRecurringTotal)}</div><div className="subtitle">{formatCurrency(paidRecurringTotal)} of {formatCurrency(recurringTotal)} paid this month</div></div>
                     </div>
+                    {(() => {
+                        const today = new Date();
+                        const weekStart = new Date(today);
+                        weekStart.setDate(today.getDate() - today.getDay());
+                        weekStart.setHours(0,0,0,0);
+                        const weekEnd = new Date(weekStart);
+                        weekEnd.setDate(weekStart.getDate() + 6);
+                        weekEnd.setHours(23,59,59,999);
+
+                        const weeklyNonRecurringSpent = transactions
+                            .filter(t => {
+                                const d = parseLocalDate(t.date);
+                                return t.type === 'expense' && !isRecurringTransaction(t) && d >= weekStart && d <= weekEnd;
+                            })
+                            .reduce((sum, t) => sum + parseFloat(t.amount), 0);
+
+                        const monthlyNonRecurringSpent = transactions
+                            .filter(t => {
+                                const d = parseLocalDate(t.date);
+                                return t.type === 'expense' && !isRecurringTransaction(t) && d >= start && d <= end;
+                            })
+                            .reduce((sum, t) => sum + parseFloat(t.amount), 0);
+
+                        const monthlyBudget = weeklySpendingBudget * 4;
+                        const weeklyRemaining = weeklySpendingBudget - weeklyNonRecurringSpent;
+                        const monthlyRemaining = monthlyBudget - monthlyNonRecurringSpent;
+                        const weeklyPct = Math.min((weeklyNonRecurringSpent / weeklySpendingBudget) * 100, 100);
+                        const monthlyPct = Math.min((monthlyNonRecurringSpent / monthlyBudget) * 100, 100);
+                        const weeklyColor = weeklyPct >= 100 ? '#dc3545' : weeklyPct >= 75 ? '#ffc107' : '#28a745';
+                        const monthlyColor = monthlyPct >= 100 ? '#dc3545' : monthlyPct >= 75 ? '#ffc107' : '#28a745';
+                        const weekLabel = `${weekStart.toLocaleDateString('en-US', {month:'short',day:'numeric'})} – ${weekEnd.toLocaleDateString('en-US', {month:'short',day:'numeric'})}`;
+
+                        return (
+                            <div className="section" style={{border: `2px solid ${weeklyColor}`, background: `linear-gradient(135deg, ${weeklyColor}0a 0%, ${weeklyColor}05 100%)`, marginBottom: '20px'}}>
+                                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'18px', flexWrap:'wrap', gap:'10px'}}>
+                                    <h2 style={{margin:0}}>💸 Spending Budget</h2>
+                                    <span style={{color:'#a0aec0', fontSize:'0.85em'}}>Non-recurring only • Set in Budget tab</span>
+                                </div>
+                                <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'20px'}}>
+                                    <div style={{background:'#1a1f2e', borderRadius:'10px', padding:'18px', border:`2px solid ${weeklyColor}`}}>
+                                        <div style={{color:'#a0aec0', fontSize:'0.8em', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'8px'}}>This Week ({weekLabel})</div>
+                                        <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:'10px'}}>
+                                            <span style={{color: weeklyColor, fontWeight:'700', fontSize:'1.6em'}}>{formatCurrency(weeklyRemaining)}</span>
+                                            <span style={{color:'#a0aec0', fontSize:'0.85em'}}>remaining of {formatCurrency(weeklySpendingBudget)}</span>
+                                        </div>
+                                        <div style={{background:'#2d3748', borderRadius:'4px', height:'10px', overflow:'hidden', marginBottom:'8px'}}>
+                                            <div style={{width:`${weeklyPct}%`, height:'100%', background:weeklyColor, transition:'width 0.3s ease'}}></div>
+                                        </div>
+                                        <div style={{display:'flex', justifyContent:'space-between', fontSize:'0.82em', color:'#a0aec0'}}>
+                                            <span>Spent: <strong style={{color:'#e2e8f0'}}>{formatCurrency(weeklyNonRecurringSpent)}</strong></span>
+                                            <span style={{color: weeklyColor, fontWeight:'700'}}>{weeklyPct.toFixed(0)}%</span>
+                                        </div>
+                                    </div>
+                                    <div style={{background:'#1a1f2e', borderRadius:'10px', padding:'18px', border:`2px solid ${monthlyColor}`}}>
+                                        <div style={{color:'#a0aec0', fontSize:'0.8em', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'8px'}}>This Month (non-recurring)</div>
+                                        <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:'10px'}}>
+                                            <span style={{color: monthlyColor, fontWeight:'700', fontSize:'1.6em'}}>{formatCurrency(monthlyRemaining)}</span>
+                                            <span style={{color:'#a0aec0', fontSize:'0.85em'}}>remaining of {formatCurrency(monthlyBudget)}</span>
+                                        </div>
+                                        <div style={{background:'#2d3748', borderRadius:'4px', height:'10px', overflow:'hidden', marginBottom:'8px'}}>
+                                            <div style={{width:`${monthlyPct}%`, height:'100%', background:monthlyColor, transition:'width 0.3s ease'}}></div>
+                                        </div>
+                                        <div style={{display:'flex', justifyContent:'space-between', fontSize:'0.82em', color:'#a0aec0'}}>
+                                            <span>Spent: <strong style={{color:'#e2e8f0'}}>{formatCurrency(monthlyNonRecurringSpent)}</strong></span>
+                                            <span style={{color: monthlyColor, fontWeight:'700'}}>{monthlyPct.toFixed(0)}%</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })()}
                     {(() => {
                         const today = new Date();
                         const days = [];
@@ -1320,33 +1415,17 @@
                                     
                                     return sortedCategories.map(([category, amount]) => {
                                         const percentage = (amount / totalSpent) * 100;
-                                        const budget = categoryBudgets && categoryBudgets[category];
-                                        const budgetPct = budget ? Math.min((amount / budget) * 100, 100) : null;
-                                        const overBudget = budget && amount > budget;
-                                        const nearBudget = budget && !overBudget && (amount / budget) >= 0.75;
-                                        const barColor = budget
-                                            ? (overBudget ? '#dc3545' : nearBudget ? '#ffc107' : '#28a745')
-                                            : 'linear-gradient(90deg, #667eea, #764ba2)';
                                         return (
                                             <div key={category} style={{marginBottom: '15px'}}>
-                                                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px', flexWrap: 'wrap', gap: '4px'}}>
-                                                    <div style={{display: 'flex', alignItems: 'center', gap: '7px'}}>
-                                                        <span style={{color: '#e2e8f0', fontWeight: '600'}}>{category}</span>
-                                                        {overBudget && <span style={{background: '#dc354522', color: '#dc3545', padding: '1px 7px', borderRadius: '8px', fontSize: '0.75em', fontWeight: '700'}}>OVER</span>}
-                                                        {nearBudget && <span style={{background: '#ffc10722', color: '#ffc107', padding: '1px 7px', borderRadius: '8px', fontSize: '0.75em', fontWeight: '700'}}>75%+</span>}
-                                                    </div>
-                                                    <div style={{display: 'flex', alignItems: 'center', gap: '6px'}}>
-                                                        <span style={{color: overBudget ? '#dc3545' : '#667eea', fontWeight: '700', fontSize: '1.1em'}}>{formatCurrency(amount)}</span>
-                                                        {budget && <span style={{color: '#a0aec0', fontSize: '0.85em'}}>/ {formatCurrency(budget)}</span>}
-                                                    </div>
+                                                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px'}}>
+                                                    <span style={{color: '#e2e8f0', fontWeight: '600'}}>{category}</span>
+                                                    <span style={{color: '#667eea', fontWeight: '700', fontSize: '1.1em'}}>{formatCurrency(amount)}</span>
                                                 </div>
                                                 <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
                                                     <div style={{flex: 1, height: '12px', background: '#2d3748', borderRadius: '6px', overflow: 'hidden'}}>
-                                                        <div style={{width: `${budget ? budgetPct : percentage}%`, height: '100%', background: barColor, transition: 'width 0.3s ease'}}></div>
+                                                        <div style={{width: `${percentage}%`, height: '100%', background: 'linear-gradient(90deg, #667eea, #764ba2)', transition: 'width 0.3s ease'}}></div>
                                                     </div>
-                                                    <span style={{color: '#a0aec0', fontSize: '0.9em', minWidth: '45px', textAlign: 'right'}}>
-                                                        {budget ? `${((amount / budget) * 100).toFixed(0)}%` : `${percentage.toFixed(1)}%`}
-                                                    </span>
+                                                    <span style={{color: '#a0aec0', fontSize: '0.9em', minWidth: '45px', textAlign: 'right'}}>{percentage.toFixed(1)}%</span>
                                                 </div>
                                             </div>
                                         );
@@ -1355,6 +1434,86 @@
                             </div>
                         </div>
                     )}
+
+                    {/* Week-by-week breakdown for the current financial month */}
+                    {weeklySpendingBudget > 0 && transactions.length > 0 && (() => {
+                        const today = new Date();
+                        const weeks = getWeeksInRange(start, end);
+                        const monthlyBudgetDash = weeklySpendingBudget * 4;
+                        const monthTotalSpent = transactions
+                            .filter(t => { const d = parseLocalDate(t.date); return t.type === 'expense' && !isRecurringTransaction(t) && d >= start && d <= end; })
+                            .reduce((s, t) => s + parseFloat(t.amount), 0);
+                        const monthRemaining = monthlyBudgetDash - monthTotalSpent;
+                        const monthPct = Math.min((monthTotalSpent / monthlyBudgetDash) * 100, 100);
+                        const monthOver = monthTotalSpent > monthlyBudgetDash;
+                        const monthColor = monthOver ? '#dc3545' : monthPct >= 75 ? '#ffc107' : '#28a745';
+                        return (
+                            <div className="section" style={{marginTop: '0'}}>
+                                <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:'16px', flexWrap:'wrap', gap:'8px'}}>
+                                    <h2 style={{margin:0}}>📅 This Month — Week by Week</h2>
+                                    <span style={{color:'#a0aec0', fontSize:'0.85em'}}>Non-recurring • {formatCurrency(weeklySpendingBudget)}/wk budget</span>
+                                </div>
+                                <div style={{background:'#1a1f2e', borderRadius:'10px', padding:'14px 20px', marginBottom:'14px', border:`2px solid ${monthColor}`, display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:'12px'}}>
+                                    <div>
+                                        <div style={{color:'#a0aec0', fontSize:'0.78em', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'4px'}}>Month Total</div>
+                                        <div style={{display:'flex', alignItems:'baseline', gap:'8px'}}>
+                                            <span style={{color:monthColor, fontWeight:'700', fontSize:'1.4em'}}>{formatCurrency(monthTotalSpent)}</span>
+                                            <span style={{color:'#a0aec0', fontSize:'0.85em'}}>of {formatCurrency(monthlyBudgetDash)}</span>
+                                        </div>
+                                    </div>
+                                    <div style={{textAlign:'right'}}>
+                                        <div style={{color:'#a0aec0', fontSize:'0.78em', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'4px'}}>Remaining</div>
+                                        <div style={{color:monthColor, fontWeight:'700', fontSize:'1.4em'}}>{formatCurrency(monthRemaining)}</div>
+                                    </div>
+                                    <div style={{width:'100%'}}>
+                                        <div style={{background:'#2d3748', borderRadius:'4px', height:'8px', overflow:'hidden', marginBottom:'4px'}}>
+                                            <div style={{width:`${monthPct}%`, height:'100%', background:monthColor, transition:'width 0.3s ease'}}></div>
+                                        </div>
+                                        <div style={{display:'flex', justifyContent:'space-between', fontSize:'0.78em', color:'#a0aec0'}}>
+                                            <span>{monthPct.toFixed(0)}% used</span>
+                                            {monthOver ? <span style={{color:'#dc3545', fontWeight:'700'}}>OVER BUDGET</span> : <span style={{color:monthColor, fontWeight:'600'}}>{formatCurrency(monthRemaining)} left</span>}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div style={{display:'flex', flexDirection:'column', gap:'10px'}}>
+                                    {weeks.map((wk, i) => {
+                                        const spent = transactions
+                                            .filter(t => { const d = parseLocalDate(t.date); return t.type === 'expense' && !isRecurringTransaction(t) && d >= wk.effectiveStart && d <= wk.effectiveEnd; })
+                                            .reduce((s, t) => s + parseFloat(t.amount), 0);
+                                        const isCurrentWeek = today >= wk.weekStart && today <= wk.weekEnd;
+                                        const isFuture = wk.weekStart > today;
+                                        const isPast = wk.weekEnd < today;
+                                        const over = spent > weeklySpendingBudget;
+                                        const pct = Math.min((spent / weeklySpendingBudget) * 100, 100);
+                                        const color = over ? '#dc3545' : pct >= 75 ? '#ffc107' : '#28a745';
+                                        const remaining = weeklySpendingBudget - spent;
+                                        const wLabel = `${wk.effectiveStart.toLocaleDateString('en-US',{month:'short',day:'numeric'})} – ${wk.effectiveEnd.toLocaleDateString('en-US',{month:'short',day:'numeric'})}`;
+                                        return (
+                                            <div key={i} style={{background:'#1a1f2e', borderRadius:'10px', padding:'14px 18px', border:`2px solid ${isCurrentWeek ? '#667eea' : over && isPast ? '#dc354540' : '#2d3748'}`}}>
+                                                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'8px', flexWrap:'wrap', gap:'6px'}}>
+                                                    <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
+                                                        <span style={{color:'#e2e8f0', fontWeight:'600', fontSize:'0.95em'}}>Week {i+1}</span>
+                                                        <span style={{color:'#a0aec0', fontSize:'0.85em'}}>{wLabel}</span>
+                                                        {isCurrentWeek && <span style={{background:'#667eea22', color:'#667eea', padding:'2px 8px', borderRadius:'8px', fontSize:'0.75em', fontWeight:'700'}}>CURRENT</span>}
+                                                        {isFuture && <span style={{background:'#2d374888', color:'#718096', padding:'2px 8px', borderRadius:'8px', fontSize:'0.75em', fontWeight:'700'}}>UPCOMING</span>}
+                                                        {isPast && over && <span style={{background:'#dc354522', color:'#dc3545', padding:'2px 8px', borderRadius:'8px', fontSize:'0.75em', fontWeight:'700'}}>OVER by {formatCurrency(Math.abs(remaining))}</span>}
+                                                        {isPast && !over && <span style={{background:'#28a74522', color:'#28a745', padding:'2px 8px', borderRadius:'8px', fontSize:'0.75em', fontWeight:'700'}}>✓ {formatCurrency(remaining)} under</span>}
+                                                    </div>
+                                                    <div style={{display:'flex', alignItems:'baseline', gap:'8px'}}>
+                                                        <span style={{color: isFuture ? '#4a5568' : color, fontWeight:'700', fontSize:'1.1em'}}>{formatCurrency(spent)}</span>
+                                                        <span style={{color:'#a0aec0', fontSize:'0.82em'}}>/ {formatCurrency(weeklySpendingBudget)}</span>
+                                                    </div>
+                                                </div>
+                                                <div style={{background:'#2d3748', borderRadius:'4px', height:'8px', overflow:'hidden'}}>
+                                                    <div style={{width:`${pct}%`, height:'100%', background: isFuture ? '#2d3748' : color, transition:'width 0.3s ease'}}></div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        );
+                    })()}
                 </div>
             );
         }
@@ -1379,6 +1538,7 @@
 
             // Advanced filter states
             const [filterType, setFilterType] = useState('all'); // 'all', 'income', 'expense'
+            const [filterRecurring, setFilterRecurring] = useState('all'); // 'all', 'recurring', 'non-recurring'
             const [dateFrom, setDateFrom] = useState('');
             const [dateTo, setDateTo] = useState('');
             const [amountMin, setAmountMin] = useState('');
@@ -1489,7 +1649,11 @@
                 return transactions.filter(t => {
                     // Type filter
                     if (filterType !== 'all' && t.type !== filterType) return false;
-                    
+
+                    // Recurring filter
+                    if (filterRecurring === 'recurring' && !isRecurringTransaction(t)) return false;
+                    if (filterRecurring === 'non-recurring' && isRecurringTransaction(t)) return false;
+
                     // Category filter
                     if (selectedCategory !== 'All' && t.category !== selectedCategory) return false;
                     
@@ -1518,6 +1682,7 @@
             
             const clearFilters = () => {
                 setFilterType('all');
+                setFilterRecurring('all');
                 setSelectedCategory('All');
                 setSearchPlace('');
                 setDateFrom('');
@@ -1908,7 +2073,16 @@
                                         <option value="expense">Expense Only</option>
                                     </select>
                                 </div>
-                                
+
+                                <div>
+                                    <label style={{display: 'block', marginBottom: '5px'}}>Recurring</label>
+                                    <select value={filterRecurring} onChange={(e) => setFilterRecurring(e.target.value)}>
+                                        <option value="all">All Transactions</option>
+                                        <option value="recurring">Recurring Only</option>
+                                        <option value="non-recurring">Non-Recurring Only</option>
+                                    </select>
+                                </div>
+
                                 <div>
                                     <label style={{display: 'block', marginBottom: '5px'}}>Category</label>
                                     <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}>
@@ -2387,7 +2561,7 @@
             
             const processPayment = (payment) => {
                 const paymentKey = `${monthKey}-${payment.id}`;
-                const newTransaction = { type: 'expense', amount: payment.amount, description: `${payment.name} (Recurring)`, category: payment.category, date: getLocalDateString(), id: Date.now() };
+                const newTransaction = { type: 'expense', amount: payment.amount, description: `${payment.name} (Recurring)`, category: payment.category, date: getLocalDateString(), id: Date.now(), isRecurring: true };
                 setTransactions([...transactions, newTransaction]);
                 setPaidPayments({...paidPayments, [paymentKey]: true});
                 
@@ -3702,8 +3876,9 @@
             );
         }
 
-        function BudgetTab({ transactions, recurringPayments, expectedMonthlyIncome, setExpectedMonthlyIncome, currentMonth, unpaidRecurring, categoryBudgets, setCategoryBudgets }) {
+        function BudgetTab({ transactions, recurringPayments, expectedMonthlyIncome, setExpectedMonthlyIncome, currentMonth, unpaidRecurring, weeklySpendingBudget, setWeeklySpendingBudget }) {
             const [tempIncome, setTempIncome] = useState(expectedMonthlyIncome);
+            const [tempWeekly, setTempWeekly] = useState(weeklySpendingBudget);
             const __range = getFinancialMonthRange(currentMonth); const start = __range.start; const end = __range.end;
             
             // Get transactions for current month
@@ -3872,172 +4047,95 @@
                         );
                     })()}
 
-                    <div className="section">
-                        <h2>📊 Budget Breakdown</h2>
-                        <p style={{color: '#a0aec0', marginBottom: '20px', lineHeight: '1.6'}}>
-                            Simple budget tracking: Income - Recurring Bills = Money Left, then subtract what you've spent on non-recurring items.
-                        </p>
-                        
-                        <div style={{background: '#1a1f2e', padding: '20px', borderRadius: '10px'}}>
-                            <div style={{marginBottom: '15px'}}>
-                                <strong style={{color: '#667eea'}}>Expected Income:</strong>
-                                <p style={{color: '#a0aec0', fontSize: '0.9em', marginTop: '5px'}}>
-                                    The amount you expect to earn this month. Set this in the Income Settings above.
-                                </p>
-                            </div>
-                            
-                            <div style={{marginBottom: '15px'}}>
-                                <strong style={{color: '#667eea'}}>Recurring Bills:</strong>
-                                <p style={{color: '#a0aec0', fontSize: '0.9em', marginTop: '5px'}}>
-                                    Total of all recurring payments due this month (from Recurring tab).
-                                </p>
-                            </div>
-                            
-                            <div style={{marginBottom: '15px'}}>
-                                <strong style={{color: '#667eea'}}>Money Left:</strong>
-                                <p style={{color: '#a0aec0', fontSize: '0.9em', marginTop: '5px'}}>
-                                    Expected Income - Recurring Bills = Your budget for discretionary spending.
-                                </p>
-                            </div>
-                            
-                            <div style={{marginBottom: '15px'}}>
-                                <strong style={{color: '#667eea'}}>Spent So Far:</strong>
-                                <p style={{color: '#a0aec0', fontSize: '0.9em', marginTop: '5px'}}>
-                                    Total Expenses minus paid recurring bills = what you've actually spent on non-recurring items.
-                                </p>
-                            </div>
+                    {(() => {
+                        const today = new Date();
+                        const weekStart = new Date(today);
+                        weekStart.setDate(today.getDate() - today.getDay());
+                        weekStart.setHours(0,0,0,0);
+                        const weekEnd = new Date(weekStart);
+                        weekEnd.setDate(weekStart.getDate() + 6);
+                        weekEnd.setHours(23,59,59,999);
 
-                            <div>
-                                <strong style={{color: '#667eea'}}>Remaining Available:</strong>
-                                <p style={{color: '#a0aec0', fontSize: '0.9em', marginTop: '5px'}}>
-                                    Income minus all expenses so far minus unpaid recurring still due = how much you truly have left.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
+                        const weeklyNonRecurringSpent = transactions
+                            .filter(t => { const d = parseLocalDate(t.date); return t.type === 'expense' && !isRecurringTransaction(t) && d >= weekStart && d <= weekEnd; })
+                            .reduce((sum, t) => sum + parseFloat(t.amount), 0);
 
-                    <CategoryBudgetsSection
-                        transactions={transactions}
-                        currentMonth={currentMonth}
-                        categoryBudgets={categoryBudgets}
-                        setCategoryBudgets={setCategoryBudgets}
-                    />
-                </div>
-            );
-        }
+                        const monthlyNonRecurringSpent = transactions
+                            .filter(t => { const d = parseLocalDate(t.date); return t.type === 'expense' && !isRecurringTransaction(t) && d >= start && d <= end; })
+                            .reduce((sum, t) => sum + parseFloat(t.amount), 0);
 
-        function CategoryBudgetsSection({ transactions, currentMonth, categoryBudgets, setCategoryBudgets }) {
-            const [editing, setEditing] = useState(null);
-            const [tempValue, setTempValue] = useState('');
-            const __range = getFinancialMonthRange(currentMonth);
-            const start = __range.start; const end = __range.end;
+                        const monthlyBudget = weeklySpendingBudget * 4;
+                        const weeklyRemaining = weeklySpendingBudget - weeklyNonRecurringSpent;
+                        const monthlyRemaining = monthlyBudget - monthlyNonRecurringSpent;
+                        const weeklyPct = Math.min((weeklyNonRecurringSpent / weeklySpendingBudget) * 100, 100);
+                        const monthlyPct = Math.min((monthlyNonRecurringSpent / monthlyBudget) * 100, 100);
+                        const weeklyColor = weeklyPct >= 100 ? '#dc3545' : weeklyPct >= 75 ? '#ffc107' : '#28a745';
+                        const monthlyColor = monthlyPct >= 100 ? '#dc3545' : monthlyPct >= 75 ? '#ffc107' : '#28a745';
+                        const weekLabel = `${weekStart.toLocaleDateString('en-US',{month:'short',day:'numeric'})} – ${weekEnd.toLocaleDateString('en-US',{month:'short',day:'numeric'})}`;
 
-            const allCategories = [...new Set(
-                transactions.filter(t => t.type === 'expense' && t.category).map(t => t.category)
-            )].sort();
-
-            const monthlySpend = {};
-            transactions.filter(t => {
-                const d = parseLocalDate(t.date);
-                return t.type === 'expense' && d >= start && d <= end;
-            }).forEach(t => {
-                monthlySpend[t.category] = (monthlySpend[t.category] || 0) + parseFloat(t.amount);
-            });
-
-            const startEdit = (cat) => { setEditing(cat); setTempValue((categoryBudgets[cat] || '').toString()); };
-            const saveEdit = (cat) => {
-                const val = parseFloat(tempValue);
-                if (!isNaN(val) && val > 0) {
-                    setCategoryBudgets({...categoryBudgets, [cat]: val});
-                } else if (tempValue === '' || tempValue === '0') {
-                    const updated = {...categoryBudgets}; delete updated[cat]; setCategoryBudgets(updated);
-                }
-                setEditing(null);
-            };
-            const clearLimit = (cat) => { const updated = {...categoryBudgets}; delete updated[cat]; setCategoryBudgets(updated); };
-            const totalBudgeted = Object.values(categoryBudgets).reduce((s, v) => s + v, 0);
-            const budgetedCats = allCategories.filter(c => categoryBudgets[c]);
-            const unbudgetedCats = allCategories.filter(c => !categoryBudgets[c]);
-            const orderedCats = [...budgetedCats, ...unbudgetedCats];
-
-            return (
-                <div className="section">
-                    <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', flexWrap: 'wrap', gap: '10px'}}>
-                        <div>
-                            <h2>🎯 Category Spending Limits</h2>
-                            <p style={{color: '#a0aec0', fontSize: '0.9em', marginTop: '5px'}}>Set monthly caps per category. Bars on the dashboard turn yellow at 75% and red when over.</p>
-                        </div>
-                        {totalBudgeted > 0 && (
-                            <div style={{textAlign: 'right', background: '#1a1f2e', padding: '10px 16px', borderRadius: '8px', border: '1px solid #667eea'}}>
-                                <div style={{color: '#a0aec0', fontSize: '0.78em', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Total Budgeted</div>
-                                <div style={{color: '#667eea', fontWeight: '700', fontSize: '1.2em'}}>{formatCurrency(totalBudgeted)}/mo</div>
-                            </div>
-                        )}
-                    </div>
-                    {allCategories.length === 0 ? (
-                        <p style={{color: '#a0aec0', textAlign: 'center', padding: '20px'}}>No expense categories yet. Add transactions to populate this list.</p>
-                    ) : (
-                        <div style={{display: 'flex', flexDirection: 'column', gap: '10px'}}>
-                            {orderedCats.map(cat => {
-                                const budget = categoryBudgets[cat];
-                                const spent = monthlySpend[cat] || 0;
-                                const budgetPct = budget ? Math.min((spent / budget) * 100, 100) : 0;
-                                const overBudget = budget && spent > budget;
-                                const nearBudget = budget && !overBudget && (spent / budget) >= 0.75;
-                                const barColor = overBudget ? '#dc3545' : nearBudget ? '#ffc107' : '#28a745';
-                                const isEditing = editing === cat;
-                                return (
-                                    <div key={cat} style={{background: '#1a1f2e', borderRadius: '10px', padding: '14px 16px', border: `2px solid ${overBudget ? '#dc3545' : nearBudget ? '#ffc107' : '#2d3748'}`}}>
-                                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px'}}>
-                                            <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
-                                                <span style={{color: '#e2e8f0', fontWeight: '600'}}>{cat}</span>
-                                                {overBudget && <span style={{background: '#dc354522', color: '#dc3545', padding: '2px 8px', borderRadius: '10px', fontSize: '0.78em', fontWeight: '700'}}>OVER BUDGET</span>}
-                                                {nearBudget && <span style={{background: '#ffc10722', color: '#ffc107', padding: '2px 8px', borderRadius: '10px', fontSize: '0.78em', fontWeight: '700'}}>NEAR LIMIT</span>}
-                                            </div>
-                                            <div style={{display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap'}}>
-                                                <span style={{color: '#a0aec0', fontSize: '0.88em'}}>{formatCurrency(spent)} spent this month</span>
-                                                {isEditing ? (
-                                                    <div style={{display: 'flex', alignItems: 'center', gap: '6px'}}>
-                                                        <input
-                                                            type="number" step="0.01" value={tempValue}
-                                                            onChange={e => setTempValue(e.target.value)}
-                                                            onKeyDown={e => { if (e.key === 'Enter') saveEdit(cat); if (e.key === 'Escape') setEditing(null); }}
-                                                            placeholder="Monthly limit" autoFocus
-                                                            style={{width: '130px', padding: '6px 10px', fontSize: '0.9em'}}
-                                                        />
-                                                        <button onClick={() => saveEdit(cat)} className="success" style={{padding: '6px 12px', fontSize: '0.85em'}}>✓</button>
-                                                        <button onClick={() => setEditing(null)} className="secondary" style={{padding: '6px 12px', fontSize: '0.85em'}}>✕</button>
-                                                    </div>
-                                                ) : (
-                                                    <div style={{display: 'flex', alignItems: 'center', gap: '6px'}}>
-                                                        {budget && <span style={{color: '#667eea', fontSize: '0.88em', fontWeight: '600'}}>Limit: {formatCurrency(budget)}</span>}
-                                                        <button onClick={() => startEdit(cat)} className="secondary" style={{padding: '5px 10px', fontSize: '0.8em'}}>{budget ? 'Edit' : '+ Set Limit'}</button>
-                                                        {budget && <button onClick={() => clearLimit(cat)} className="danger" style={{padding: '5px 8px', fontSize: '0.8em'}}>✕</button>}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                        {budget && (
-                                            <div style={{marginTop: '10px'}}>
-                                                <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '5px', fontSize: '0.8em'}}>
-                                                    <span style={{color: '#a0aec0'}}>{formatCurrency(spent)} of {formatCurrency(budget)}</span>
-                                                    <span style={{color: barColor, fontWeight: '700'}}>{((spent / budget) * 100).toFixed(0)}%</span>
-                                                </div>
-                                                <div style={{width: '100%', height: '8px', background: '#2d3748', borderRadius: '4px', overflow: 'hidden'}}>
-                                                    <div style={{width: `${budgetPct}%`, height: '100%', background: barColor, transition: 'width 0.3s ease'}}></div>
-                                                </div>
-                                            </div>
-                                        )}
+                        return (
+                            <div className="section">
+                                <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:'20px', flexWrap:'wrap', gap:'10px'}}>
+                                    <div>
+                                        <h2>💸 Spending Budget</h2>
+                                        <p style={{color:'#a0aec0', fontSize:'0.9em', marginTop:'5px'}}>Tracks non-recurring expenses only (groceries, dining, shopping, etc.). Recurring bills are excluded.</p>
                                     </div>
-                                );
-                            })}
-                        </div>
-                    )}
+                                    <div style={{display:'flex', gap:'10px', alignItems:'flex-end'}}>
+                                        <div>
+                                            <label style={{fontSize:'0.8em', color:'#a0aec0', marginBottom:'4px', display:'block'}}>Weekly Budget ($)</label>
+                                            <input
+                                                type="number" min="0" step="10" value={tempWeekly}
+                                                onChange={e => setTempWeekly(Number(e.target.value))}
+                                                style={{width:'130px', padding:'8px 12px'}}
+                                            />
+                                        </div>
+                                        <button onClick={() => { setWeeklySpendingBudget(tempWeekly); showToast('Spending budget updated'); }} style={{padding:'8px 18px'}}>💾 Save</button>
+                                    </div>
+                                </div>
+
+                                <div style={{background:'#1a1f2e', borderRadius:'10px', padding:'14px 18px', marginBottom:'16px', border:'1px solid #2d3748', display:'flex', gap:'30px', flexWrap:'wrap'}}>
+                                    <div><div style={{color:'#a0aec0', fontSize:'0.78em', textTransform:'uppercase', letterSpacing:'0.5px'}}>Weekly Budget</div><div style={{color:'#667eea', fontWeight:'700', fontSize:'1.2em'}}>{formatCurrency(weeklySpendingBudget)}/wk</div></div>
+                                    <div><div style={{color:'#a0aec0', fontSize:'0.78em', textTransform:'uppercase', letterSpacing:'0.5px'}}>Monthly Equivalent (×4)</div><div style={{color:'#667eea', fontWeight:'700', fontSize:'1.2em'}}>{formatCurrency(weeklySpendingBudget * 4)}/mo</div></div>
+                                </div>
+
+                                <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'16px'}}>
+                                    <div style={{background:'#1a1f2e', borderRadius:'10px', padding:'18px', border:`2px solid ${weeklyColor}`}}>
+                                        <div style={{color:'#a0aec0', fontSize:'0.8em', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'8px'}}>This Week ({weekLabel})</div>
+                                        <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:'10px', flexWrap:'wrap', gap:'6px'}}>
+                                            <span style={{color:weeklyColor, fontWeight:'700', fontSize:'1.8em'}}>{formatCurrency(weeklyRemaining)}</span>
+                                            <span style={{color:'#a0aec0', fontSize:'0.85em'}}>remaining of {formatCurrency(weeklySpendingBudget)}</span>
+                                        </div>
+                                        <div style={{background:'#2d3748', borderRadius:'4px', height:'12px', overflow:'hidden', marginBottom:'8px'}}>
+                                            <div style={{width:`${weeklyPct}%`, height:'100%', background:weeklyColor, transition:'width 0.3s ease'}}></div>
+                                        </div>
+                                        <div style={{display:'flex', justifyContent:'space-between', fontSize:'0.85em', color:'#a0aec0'}}>
+                                            <span>Spent: <strong style={{color:'#e2e8f0'}}>{formatCurrency(weeklyNonRecurringSpent)}</strong></span>
+                                            <span style={{color:weeklyColor, fontWeight:'700'}}>{weeklyPct.toFixed(0)}% used</span>
+                                        </div>
+                                    </div>
+                                    <div style={{background:'#1a1f2e', borderRadius:'10px', padding:'18px', border:`2px solid ${monthlyColor}`}}>
+                                        <div style={{color:'#a0aec0', fontSize:'0.8em', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'8px'}}>This Month ({monthLabel})</div>
+                                        <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:'10px', flexWrap:'wrap', gap:'6px'}}>
+                                            <span style={{color:monthlyColor, fontWeight:'700', fontSize:'1.8em'}}>{formatCurrency(monthlyRemaining)}</span>
+                                            <span style={{color:'#a0aec0', fontSize:'0.85em'}}>remaining of {formatCurrency(monthlyBudget)}</span>
+                                        </div>
+                                        <div style={{background:'#2d3748', borderRadius:'4px', height:'12px', overflow:'hidden', marginBottom:'8px'}}>
+                                            <div style={{width:`${monthlyPct}%`, height:'100%', background:monthlyColor, transition:'width 0.3s ease'}}></div>
+                                        </div>
+                                        <div style={{display:'flex', justifyContent:'space-between', fontSize:'0.85em', color:'#a0aec0'}}>
+                                            <span>Spent: <strong style={{color:'#e2e8f0'}}>{formatCurrency(monthlyNonRecurringSpent)}</strong></span>
+                                            <span style={{color:monthlyColor, fontWeight:'700'}}>{monthlyPct.toFixed(0)}% used</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })()}
                 </div>
             );
         }
 
-        function HistoryTab({ transactions, recurringPayments, debts }) {
+        function HistoryTab({ transactions, recurringPayments, debts, weeklySpendingBudget }) {
             // Calculate ALL-TIME totals
             const allTimeIncome = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + parseFloat(t.amount), 0);
             const allTimeExpenses = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + parseFloat(t.amount), 0);
@@ -4572,6 +4670,142 @@
                             })()}
                         </div>
                     )}
+
+                    {/* Spending Budget History — weekly for a single month, monthly for Full Year */}
+                    {weeklySpendingBudget > 0 && (() => {
+                        const today = new Date();
+                        const monthlyBudget = weeklySpendingBudget * 4;
+
+                        if (selectedMonth === -1) {
+                            // Full Year: show each month vs monthly budget
+                            const monthRows = [];
+                            for (let m = 0; m < 12; m++) {
+                                const mDate = new Date(selectedYear, m, 1);
+                                if (mDate > today) continue;
+                                const mRange = getFinancialMonthRange(mDate);
+                                const mTrans = transactions.filter(t => { const d = parseLocalDate(t.date); return d >= mRange.start && d <= mRange.end; });
+                                if (mTrans.length === 0) continue;
+                                const spent = mTrans.filter(t => t.type === 'expense' && !isRecurringTransaction(t)).reduce((s, t) => s + parseFloat(t.amount), 0);
+                                const isCurrentMonth = today >= mRange.start && today <= mRange.end;
+                                monthRows.push({ label: new Date(selectedYear, m, 1).toLocaleDateString('en-US', {month: 'long'}), spent, isCurrentMonth, mRange });
+                            }
+                            if (monthRows.length === 0) return null;
+                            return (
+                                <div className="section" style={{background: '#1a1f2e', border: '2px solid #667eea'}}>
+                                    <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:'20px', flexWrap:'wrap', gap:'8px'}}>
+                                        <h2 style={{color:'#667eea', margin:0}}>💸 Spending Budget — Monthly History</h2>
+                                        <span style={{color:'#a0aec0', fontSize:'0.85em'}}>Budget: {formatCurrency(monthlyBudget)}/mo (non-recurring only)</span>
+                                    </div>
+                                    <div style={{display:'flex', flexDirection:'column', gap:'10px'}}>
+                                        {monthRows.map((row, i) => {
+                                            const pct = Math.min((row.spent / monthlyBudget) * 100, 100);
+                                            const over = row.spent > monthlyBudget;
+                                            const color = over ? '#dc3545' : pct >= 75 ? '#ffc107' : '#28a745';
+                                            const remaining = monthlyBudget - row.spent;
+                                            return (
+                                                <div key={i} style={{background:'#0f1419', borderRadius:'10px', padding:'14px 18px', border:`2px solid ${row.isCurrentMonth ? '#667eea' : over ? '#dc354540' : '#2d3748'}`}}>
+                                                    <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'8px', flexWrap:'wrap', gap:'6px'}}>
+                                                        <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
+                                                            <span style={{color:'#e2e8f0', fontWeight:'600'}}>{row.label}</span>
+                                                            {row.isCurrentMonth && <span style={{background:'#667eea22', color:'#667eea', padding:'2px 8px', borderRadius:'8px', fontSize:'0.75em', fontWeight:'700'}}>IN PROGRESS</span>}
+                                                            {!row.isCurrentMonth && over && <span style={{background:'#dc354522', color:'#dc3545', padding:'2px 8px', borderRadius:'8px', fontSize:'0.75em', fontWeight:'700'}}>OVER by {formatCurrency(Math.abs(remaining))}</span>}
+                                                            {!row.isCurrentMonth && !over && <span style={{background:'#28a74522', color:'#28a745', padding:'2px 8px', borderRadius:'8px', fontSize:'0.75em', fontWeight:'700'}}>✓ {formatCurrency(remaining)} under</span>}
+                                                        </div>
+                                                        <div style={{display:'flex', alignItems:'baseline', gap:'8px'}}>
+                                                            <span style={{color:color, fontWeight:'700', fontSize:'1.1em'}}>{formatCurrency(row.spent)}</span>
+                                                            <span style={{color:'#a0aec0', fontSize:'0.82em'}}>/ {formatCurrency(monthlyBudget)}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div style={{background:'#2d3748', borderRadius:'4px', height:'8px', overflow:'hidden'}}>
+                                                        <div style={{width:`${pct}%`, height:'100%', background:color, transition:'width 0.3s ease'}}></div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            );
+                        } else {
+                            // Single month: show weekly breakdown
+                            const selDate = new Date(selectedYear, selectedMonth, 1);
+                            const mRange = getFinancialMonthRange(selDate);
+                            const weeks = getWeeksInRange(mRange.start, mRange.end);
+                            const histMonthBudget = weeklySpendingBudget * 4;
+                            const histMonthSpent = transactions
+                                .filter(t => { const d = parseLocalDate(t.date); return t.type === 'expense' && !isRecurringTransaction(t) && d >= mRange.start && d <= mRange.end; })
+                                .reduce((s, t) => s + parseFloat(t.amount), 0);
+                            const histMonthRemaining = histMonthBudget - histMonthSpent;
+                            const histMonthPct = Math.min((histMonthSpent / histMonthBudget) * 100, 100);
+                            const histMonthOver = histMonthSpent > histMonthBudget;
+                            const histMonthColor = histMonthOver ? '#dc3545' : histMonthPct >= 75 ? '#ffc107' : '#28a745';
+                            const isCurrentSelMonth = today >= mRange.start && today <= mRange.end;
+                            return (
+                                <div className="section" style={{background: '#1a1f2e', border: '2px solid #667eea'}}>
+                                    <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:'16px', flexWrap:'wrap', gap:'8px'}}>
+                                        <h2 style={{color:'#667eea', margin:0}}>💸 Spending Budget — Week by Week</h2>
+                                        <span style={{color:'#a0aec0', fontSize:'0.85em'}}>Budget: {formatCurrency(weeklySpendingBudget)}/wk (non-recurring only)</span>
+                                    </div>
+                                    <div style={{background:'#0f1419', borderRadius:'10px', padding:'14px 20px', marginBottom:'14px', border:`2px solid ${histMonthColor}`, display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:'12px'}}>
+                                        <div>
+                                            <div style={{color:'#a0aec0', fontSize:'0.78em', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'4px'}}>Month Total</div>
+                                            <div style={{display:'flex', alignItems:'baseline', gap:'8px'}}>
+                                                <span style={{color:histMonthColor, fontWeight:'700', fontSize:'1.4em'}}>{formatCurrency(histMonthSpent)}</span>
+                                                <span style={{color:'#a0aec0', fontSize:'0.85em'}}>of {formatCurrency(histMonthBudget)}</span>
+                                            </div>
+                                        </div>
+                                        <div style={{textAlign:'right'}}>
+                                            <div style={{color:'#a0aec0', fontSize:'0.78em', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'4px'}}>{isCurrentSelMonth ? 'Remaining' : histMonthOver ? 'Overspent' : 'Saved'}</div>
+                                            <div style={{color:histMonthColor, fontWeight:'700', fontSize:'1.4em'}}>{formatCurrency(Math.abs(histMonthRemaining))}</div>
+                                        </div>
+                                        <div style={{width:'100%'}}>
+                                            <div style={{background:'#2d3748', borderRadius:'4px', height:'8px', overflow:'hidden', marginBottom:'4px'}}>
+                                                <div style={{width:`${histMonthPct}%`, height:'100%', background:histMonthColor, transition:'width 0.3s ease'}}></div>
+                                            </div>
+                                            <div style={{display:'flex', justifyContent:'space-between', fontSize:'0.78em', color:'#a0aec0'}}>
+                                                <span>{histMonthPct.toFixed(0)}% used</span>
+                                                {histMonthOver ? <span style={{color:'#dc3545', fontWeight:'700'}}>OVER BUDGET</span> : <span style={{color:histMonthColor, fontWeight:'600'}}>{isCurrentSelMonth ? `${formatCurrency(histMonthRemaining)} left` : `${formatCurrency(histMonthRemaining)} under budget`}</span>}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div style={{display:'flex', flexDirection:'column', gap:'10px'}}>
+                                        {weeks.map((wk, i) => {
+                                            const spent = transactions
+                                                .filter(t => { const d = parseLocalDate(t.date); return t.type === 'expense' && !isRecurringTransaction(t) && d >= wk.effectiveStart && d <= wk.effectiveEnd; })
+                                                .reduce((s, t) => s + parseFloat(t.amount), 0);
+                                            const isCurrentWeek = today >= wk.weekStart && today <= wk.weekEnd;
+                                            const isFuture = wk.weekStart > today;
+                                            const isPast = wk.weekEnd < today;
+                                            const over = spent > weeklySpendingBudget;
+                                            const pct = Math.min((spent / weeklySpendingBudget) * 100, 100);
+                                            const color = over ? '#dc3545' : pct >= 75 ? '#ffc107' : '#28a745';
+                                            const remaining = weeklySpendingBudget - spent;
+                                            const wLabel = `${wk.effectiveStart.toLocaleDateString('en-US',{month:'short',day:'numeric'})} – ${wk.effectiveEnd.toLocaleDateString('en-US',{month:'short',day:'numeric'})}`;
+                                            return (
+                                                <div key={i} style={{background:'#0f1419', borderRadius:'10px', padding:'14px 18px', border:`2px solid ${isCurrentWeek ? '#667eea' : over && isPast ? '#dc354540' : '#2d3748'}`}}>
+                                                    <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'8px', flexWrap:'wrap', gap:'6px'}}>
+                                                        <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
+                                                            <span style={{color:'#e2e8f0', fontWeight:'600', fontSize:'0.95em'}}>Week {i+1} &nbsp;<span style={{color:'#a0aec0', fontWeight:'400', fontSize:'0.88em'}}>{wLabel}</span></span>
+                                                            {isCurrentWeek && <span style={{background:'#667eea22', color:'#667eea', padding:'2px 8px', borderRadius:'8px', fontSize:'0.75em', fontWeight:'700'}}>IN PROGRESS</span>}
+                                                            {isFuture && <span style={{background:'#2d374888', color:'#718096', padding:'2px 8px', borderRadius:'8px', fontSize:'0.75em', fontWeight:'700'}}>UPCOMING</span>}
+                                                            {isPast && over && <span style={{background:'#dc354522', color:'#dc3545', padding:'2px 8px', borderRadius:'8px', fontSize:'0.75em', fontWeight:'700'}}>OVER by {formatCurrency(Math.abs(remaining))}</span>}
+                                                            {isPast && !over && <span style={{background:'#28a74522', color:'#28a745', padding:'2px 8px', borderRadius:'8px', fontSize:'0.75em', fontWeight:'700'}}>✓ {formatCurrency(remaining)} under</span>}
+                                                        </div>
+                                                        <div style={{display:'flex', alignItems:'baseline', gap:'8px'}}>
+                                                            <span style={{color: isFuture ? '#4a5568' : color, fontWeight:'700', fontSize:'1.1em'}}>{formatCurrency(spent)}</span>
+                                                            <span style={{color:'#a0aec0', fontSize:'0.82em'}}>/ {formatCurrency(weeklySpendingBudget)}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div style={{background:'#2d3748', borderRadius:'4px', height:'8px', overflow:'hidden'}}>
+                                                        <div style={{width:`${pct}%`, height:'100%', background: isFuture ? '#2d3748' : color, transition:'width 0.3s ease'}}></div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            );
+                        }
+                    })()}
 
                     {/* No Data Message */}
                     {monthTransactions.length === 0 && (
