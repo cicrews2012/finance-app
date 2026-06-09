@@ -1083,6 +1083,7 @@
 
         function DashboardTab({ totals, totalDebt, unpaidRecurring, currentMonth, transactions, setTransactions, recurringPayments, debts, setDebts, expectedMonthlyIncome, importData, paidPayments, setPaidPayments, weeklySpendingBudget }) {
             const [debtsCollapsed, setDebtsCollapsed] = useState(false);
+            const [weekTxModal, setWeekTxModal] = useState(null);
             const fileInputRef = React.useRef(null); // Move ref to top level
             const monthName = currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' });
             const __range = getFinancialMonthRange(currentMonth); const start = __range.start; const end = __range.end;
@@ -1489,7 +1490,7 @@
                                         const remaining = weeklySpendingBudget - spent;
                                         const wLabel = `${wk.effectiveStart.toLocaleDateString('en-US',{month:'short',day:'numeric'})} – ${wk.effectiveEnd.toLocaleDateString('en-US',{month:'short',day:'numeric'})}`;
                                         return (
-                                            <div key={i} style={{background:'#1a1f2e', borderRadius:'10px', padding:'14px 18px', border:`2px solid ${isCurrentWeek ? '#667eea' : over && isPast ? '#dc354540' : '#2d3748'}`}}>
+                                            <div key={i} onClick={() => !isFuture && setWeekTxModal({ effectiveStart: wk.effectiveStart, effectiveEnd: wk.effectiveEnd, wLabel, weekNum: i+1 })} style={{background:'#1a1f2e', borderRadius:'10px', padding:'14px 18px', border:`2px solid ${isCurrentWeek ? '#667eea' : over && isPast ? '#dc354540' : '#2d3748'}`, cursor: isFuture ? 'default' : 'pointer'}}>
                                                 <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'8px', flexWrap:'wrap', gap:'6px'}}>
                                                     <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
                                                         <span style={{color:'#e2e8f0', fontWeight:'600', fontSize:'0.95em'}}>Week {i+1}</span>
@@ -1502,6 +1503,7 @@
                                                     <div style={{display:'flex', alignItems:'baseline', gap:'8px'}}>
                                                         <span style={{color: isFuture ? '#4a5568' : color, fontWeight:'700', fontSize:'1.1em'}}>{formatCurrency(spent)}</span>
                                                         <span style={{color:'#a0aec0', fontSize:'0.82em'}}>/ {formatCurrency(weeklySpendingBudget)}</span>
+                                                        {!isFuture && <span style={{color:'#4a5568', fontSize:'0.75em'}}>👁 view</span>}
                                                     </div>
                                                 </div>
                                                 <div style={{background:'#2d3748', borderRadius:'4px', height:'8px', overflow:'hidden'}}>
@@ -1514,6 +1516,44 @@
                             </div>
                         );
                     })()}
+                    {weekTxModal && (
+                        <div className="modal-overlay" onClick={() => setWeekTxModal(null)}>
+                            <div className="modal" onClick={e => e.stopPropagation()} style={{maxWidth:'700px'}}>
+                                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px'}}>
+                                    <h2 style={{margin:0}}>Week {weekTxModal.weekNum} — {weekTxModal.wLabel}</h2>
+                                    <button onClick={() => setWeekTxModal(null)} className="secondary" style={{padding:'6px 14px'}}>✕ Close</button>
+                                </div>
+                                <p style={{color:'#a0aec0', fontSize:'0.88em', marginBottom:'16px'}}>Non-recurring, in-budget expenses only</p>
+                                {(() => {
+                                    const txs = transactions.filter(t => {
+                                        const d = parseLocalDate(t.date);
+                                        return t.type === 'expense' && !isRecurringTransaction(t) && !t.excludeFromBudget && d >= weekTxModal.effectiveStart && d <= weekTxModal.effectiveEnd;
+                                    }).sort((a, b) => new Date(b.date) - new Date(a.date));
+                                    if (txs.length === 0) return <p style={{color:'#a0aec0', textAlign:'center', padding:'20px 0'}}>No transactions this week.</p>;
+                                    const total = txs.reduce((s, t) => s + parseFloat(t.amount), 0);
+                                    return (
+                                        <div>
+                                            <div style={{marginBottom:'12px', padding:'10px 14px', background:'#0f1419', borderRadius:'8px', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                                                <span style={{color:'#a0aec0', fontWeight:'600'}}>{txs.length} transaction{txs.length !== 1 ? 's' : ''}</span>
+                                                <span style={{color:'#dc3545', fontWeight:'700', fontSize:'1.1em'}}>{formatCurrency(total)}</span>
+                                            </div>
+                                            <div style={{display:'flex', flexDirection:'column', gap:'8px'}}>
+                                                {txs.map(t => (
+                                                    <div key={t.id} style={{background:'#0f1419', borderRadius:'8px', padding:'12px 14px', borderLeft:'3px solid #dc3545', display:'flex', justifyContent:'space-between', alignItems:'center', gap:'10px', flexWrap:'wrap'}}>
+                                                        <div>
+                                                            <div style={{color:'#e2e8f0', fontWeight:'600'}}>{t.description}</div>
+                                                            <div style={{color:'#a0aec0', fontSize:'0.85em', marginTop:'2px'}}>{t.category} • {t.date}{t.notes ? ` • ${t.notes}` : ''}</div>
+                                                        </div>
+                                                        <div style={{color:'#dc3545', fontWeight:'700'}}>-{formatCurrency(parseFloat(t.amount))}</div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
         }
