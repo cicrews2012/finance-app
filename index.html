@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finance Tracker v1.21.0</title>
-    <!-- Build: 2026-05-29-04 - Mark Paid on dashboard creates transaction for manual recurring -->
+    <title>Finance Tracker v1.22.0</title>
+    <!-- Build: 2026-06-09-01 - Bulk entry default with debt linking; dashboard week drill-down; removed daily spend chart -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -4778,7 +4778,7 @@
                     <div className="section">
                         <h2>How to Use Finance Tracker</h2>
                         <p style={{marginBottom: '20px', lineHeight: '1.6', color: '#a0aec0'}}>Complete guide for new and existing users.</p>
-                        
+
                         <div style={{background: 'linear-gradient(135deg, #28a74522 0%, #20c99722 100%)', border: '2px solid #28a745', padding: '20px', borderRadius: '10px', marginBottom: '30px'}}>
                             <h3 style={{color: '#28a745', marginBottom: '15px'}}>🎯 First-Time Setup (Recommended Order)</h3>
                             <ol style={{color: '#e2e8f0', lineHeight: '2', marginLeft: '20px'}}>
@@ -4790,18 +4790,34 @@
                                         <li>Enable "Auto-pay" checkbox for bills that should create transactions automatically</li>
                                     </ul>
                                 </li>
-                                <li><strong>Add Transactions:</strong> Go to <strong style={{color: '#667eea'}}>💳 Transactions</strong> tab → Start adding your income and expenses</li>
+                                <li><strong>Add Transactions:</strong> Go to <strong style={{color: '#667eea'}}>💳 Transactions</strong> tab → Enter expenses and income in the bulk entry table</li>
                                 <li><strong>Check Your Budget:</strong> Return to <strong style={{color: '#667eea'}}>📊 Dashboard</strong> to see your financial overview</li>
                             </ol>
                         </div>
-                        
-                        <h3 style={{marginTop: '20px', marginBottom: '10px', color: '#667eea'}}>💵 Budget Tab - Money Available</h3>
+
+                        <h3 style={{marginTop: '20px', marginBottom: '10px', color: '#667eea'}}>💳 Adding Transactions (Bulk Entry)</h3>
+                        <p style={{marginBottom: '10px', lineHeight: '1.6', color: '#a0aec0'}}>
+                            <strong>How it works:</strong> The Transactions tab opens directly to a spreadsheet-style table — fill in as many rows as you need and save them all at once.<br/>
+                            <strong>Auto-row:</strong> Typing a vendor name on the last row automatically adds a new empty row below it. New rows inherit the date, type, and category from the row above.<br/>
+                            <strong>Linked Debt column:</strong> If you have active debts, a "💳 Linked Debt" column appears. Select a debt on any expense row to apply that payment toward principal reduction with automatic interest calculation.<br/>
+                            <strong>Skip Budget:</strong> Check this on any row to exclude that transaction from weekly/monthly budget totals (useful for debt payments or one-time transfers).
+                        </p>
+
+                        <h3 style={{marginTop: '20px', marginBottom: '10px', color: '#667eea'}}>📅 Dashboard — Week by Week Drill-Down</h3>
+                        <p style={{marginBottom: '10px', lineHeight: '1.6', color: '#a0aec0'}}>
+                            <strong>Where:</strong> Dashboard → "This Month — Week by Week" section.<br/>
+                            <strong>How it works:</strong> Click any past or current week row to open a popup showing every transaction that counted toward that week's spending.<br/>
+                            <strong>What's included:</strong> Only non-recurring, in-budget expenses — the same transactions that count against your weekly budget.<br/>
+                            <strong>Future weeks</strong> are not clickable (no data yet).
+                        </p>
+
+                        <h3 style={{marginTop: '20px', marginBottom: '10px', color: '#667eea'}}>💵 Budget Tab — Money Available</h3>
                         <p style={{marginBottom: '10px', lineHeight: '1.6', color: '#a0aec0'}}>
                             <strong>What it shows:</strong> Expected vs Actual income comparison, and how much discretionary money you have left.<br/>
                             <strong>Key metrics:</strong> Shows "Remaining (if expected income comes)" and "Remaining (with current income)" so you can plan accordingly.<br/>
-                            <strong>Updates:</strong> Set your expected monthly income here - it's used across the app for budget calculations.
+                            <strong>Updates:</strong> Set your expected monthly income and weekly spending budget here — both are used across the app.
                         </p>
-                        
+
                         <h3 style={{marginTop: '20px', marginBottom: '10px', color: '#667eea'}}>🔄 Auto-Pay Recurring Payments</h3>
                         <p style={{marginBottom: '10px', lineHeight: '1.6', color: '#a0aec0'}}>
                             <strong>What it does:</strong> Automatically creates transactions when the due date passes.<br/>
@@ -4809,46 +4825,37 @@
                             <strong>How it works:</strong> On the due date, a transaction is created automatically and the payment is marked as paid.<br/>
                             <strong>Best for:</strong> Bills that auto-pay from your account (Netflix, utilities, car payment, etc.)
                         </p>
-                        
-                        <h3 style={{marginTop: '20px', marginBottom: '10px', color: '#667eea'}}>💳 Linking Payments to Debts</h3>
+
+                        <h3 style={{marginTop: '20px', marginBottom: '10px', color: '#667eea'}}>🔗 Linking Payments to Debts</h3>
                         <p style={{marginBottom: '10px', lineHeight: '1.6', color: '#a0aec0'}}>
-                            <strong>What it does:</strong> Automatically updates debt balance and tracks interest/principal breakdown.<br/>
-                            <strong>How to link:</strong> When adding/editing a recurring payment, select a debt from the "Link to Debt" dropdown.<br/>
-                            <strong>What you get:</strong> Automatic balance updates + transaction history showing exactly how each payment reduces your debt.<br/>
-                            <strong>Important:</strong> Add your debts FIRST before creating linked recurring payments.
+                            <strong>Two ways to link:</strong> Via the Recurring tab (for automatic monthly payments) or directly in the Transactions bulk entry table (for one-off payments).<br/>
+                            <strong>What it does:</strong> Automatically updates the debt's current balance and logs the interest/principal breakdown for each payment.<br/>
+                            <strong>Important:</strong> Add your debts first before creating linked payments.
                         </p>
-                        
-                        <h3 style={{marginTop: '20px', marginBottom: '10px', color: '#667eea'}}>🔍 Search Transactions by Place</h3>
+
+                        <h3 style={{marginTop: '20px', marginBottom: '10px', color: '#667eea'}}>🔍 Search & Filter Transactions</h3>
                         <p style={{marginBottom: '10px', lineHeight: '1.6', color: '#a0aec0'}}>
-                            <strong>Where:</strong> Go to <strong style={{color: '#667eea'}}>💳 Transactions</strong> tab → Use the search box at the top of Transaction History.<br/>
-                            <strong>How it works:</strong> Type any place name (e.g., "7 Brew", "Kroger", "Amazon") to see all matching transactions.<br/>
-                            <strong>Shows:</strong> Total spent at that place this month + all-time total.<br/>
-                            <strong>Smart matching:</strong> Automatically handles variations like "7brew" vs "7 Brew" or "walmart" vs "Wal-Mart"
+                            <strong>Where:</strong> <strong style={{color: '#667eea'}}>💳 Transactions</strong> tab → Search & Filter section below the entry table.<br/>
+                            <strong>Search by vendor:</strong> Type any name (e.g., "Kroger", "Amazon") to filter matching transactions.<br/>
+                            <strong>Advanced filters:</strong> Filter by type, recurring status, date range, and amount range.<br/>
+                            <strong>Bulk re-categorize:</strong> Use "☑ Select" mode to update the category on multiple transactions at once.
                         </p>
-                        
-                        <h3 style={{marginTop: '20px', marginBottom: '10px', color: '#667eea'}}>📊 Debt Transaction Logs</h3>
-                        <p style={{marginBottom: '10px', lineHeight: '1.6', color: '#a0aec0'}}>
-                            <strong>Where to find:</strong> Go to <strong style={{color: '#667eea'}}>📉 Debt Tracking</strong> tab → Click on a debt to expand → Scroll to "Transaction History".<br/>
-                            <strong>What it shows:</strong> Date, payment amount, interest charged, principal paid, and balance before/after.<br/>
-                            <strong>Note:</strong> Only shows for debts with linked recurring payments that have been processed.
-                        </p>
-                        
-                        <h3 style={{marginTop: '20px', marginBottom: '10px', color: '#667eea'}}>📅 Financial Month (28th-27th Cycle)</h3>
+
+                        <h3 style={{marginTop: '20px', marginBottom: '10px', color: '#667eea'}}>📅 Financial Month (28th–27th Cycle)</h3>
                         <p style={{marginBottom: '10px', lineHeight: '1.6', color: '#a0aec0'}}>
                             <strong>How it works:</strong> Financial months run from the 28th of one month through the 27th of the next.<br/>
-                            <strong>Example:</strong> December 2025 = Nov 28 through Dec 27.<br/>
+                            <strong>Example:</strong> "June 2026" = May 28 through Jun 27.<br/>
                             <strong>Why:</strong> Aligns with common payday cycles where bills are due early in the calendar month.<br/>
                             <strong>All calculations:</strong> Dashboard stats, Budget tab, and recurring payments all use this cycle.
                         </p>
-                        
+
                         <h3 style={{marginTop: '20px', marginBottom: '10px', color: '#667eea'}}>💾 Export & Import</h3>
                         <p style={{marginBottom: '10px', lineHeight: '1.6', color: '#a0aec0'}}>
                             <strong>Export:</strong> Creates a backup JSON file with all your data (transactions, debts, recurring payments, settings).<br/>
-                            <strong>Import:</strong> Restores data from a backup file - can be done from Dashboard welcome screen or Settings tab.<br/>
-                            <strong>Use case:</strong> Backup your data regularly, or move data between devices/browsers.<br/>
-                            <strong>Workflow:</strong> Import → Make changes → Export to save. No auto-save!
+                            <strong>Import:</strong> Restores data from a backup file — available from the Dashboard welcome screen or here in Settings.<br/>
+                            <strong>Workflow:</strong> Import → Make changes → Export to save. There is no auto-save.
                         </p>
-                        
+
                         <p style={{marginTop: '30px', padding: '15px', background: '#1a1f2e', borderRadius: '8px', color: '#667eea', fontSize: '0.9em'}}>
                             <strong>💡 Pro Tip:</strong> Data is not saved between sessions. Export JSON before closing the page, then Import it next time to pick up where you left off.
                         </p>
