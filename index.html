@@ -1267,55 +1267,6 @@
                             </div>
                         );
                     })()}
-                    {(() => {
-                        const today = new Date();
-                        const days = [];
-                        const cur = new Date(start);
-                        while (cur <= end && cur <= today) {
-                            days.push(getLocalDateString(cur));
-                            cur.setDate(cur.getDate() + 1);
-                        }
-                        if (days.length === 0) return null;
-                        const dailySpend = days.map(ds =>
-                            transactions.filter(t => t.type === 'expense' && t.date === ds).reduce((s, t) => s + parseFloat(t.amount), 0)
-                        );
-                        const maxSpend = Math.max(...dailySpend, 0.01);
-                        const totalSoFar = dailySpend.reduce((s, v) => s + v, 0);
-                        const avgPerDay = totalSoFar / days.length;
-                        const daysInMonth = Math.round((end - start) / 86400000) + 1;
-                        const projected = (totalSoFar / days.length) * daysInMonth;
-                        const todayStr = getLocalDateString(today);
-                        return (
-                            <div className="section" style={{marginBottom: '20px'}}>
-                                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '12px', flexWrap: 'wrap', gap: '8px'}}>
-                                    <h2 style={{margin: 0}}>📊 Spending This Month</h2>
-                                    <div style={{display: 'flex', gap: '20px', fontSize: '0.88em', flexWrap: 'wrap'}}>
-                                        <span style={{color: '#a0aec0'}}>Spent: <strong style={{color: '#dc3545'}}>{formatCurrency(totalSoFar)}</strong></span>
-                                        <span style={{color: '#a0aec0'}}>Avg/day: <strong style={{color: '#667eea'}}>{formatCurrency(avgPerDay)}</strong></span>
-                                        <span style={{color: '#a0aec0'}}>Projected: <strong style={{color: projected > totalSoFar ? '#ffc107' : '#28a745'}}>{formatCurrency(projected)}</strong></span>
-                                    </div>
-                                </div>
-                                <div style={{display: 'flex', alignItems: 'flex-end', gap: '2px', height: '64px', padding: '0 2px'}}>
-                                    {dailySpend.map((amount, i) => {
-                                        const pct = maxSpend > 0 ? (amount / maxSpend) : 0;
-                                        const h = Math.max(pct * 60, amount > 0 ? 3 : 0);
-                                        const isToday = days[i] === todayStr;
-                                        const isHigh = amount > avgPerDay * 1.8;
-                                        const color = isToday ? '#667eea' : isHigh ? '#dc3545' : '#28a745';
-                                        return (
-                                            <div key={i} title={`${days[i]}: ${formatCurrency(amount)}`} style={{flex: 1, height: `${h}px`, background: color, borderRadius: '2px 2px 0 0', minWidth: '3px', opacity: amount === 0 ? 0.15 : 1, transition: 'height 0.2s'}} />
-                                        );
-                                    })}
-                                </div>
-                                <div style={{height: '2px', background: '#2d3748', borderRadius: '1px', marginBottom: '4px'}} />
-                                <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '0.75em', color: '#4a5568'}}>
-                                    <span>{days[0]?.slice(5)}</span>
-                                    <span style={{color: '#667eea', fontSize: '0.9em'}}>today</span>
-                                    <span>{days[days.length - 1]?.slice(5)}</span>
-                                </div>
-                            </div>
-                        );
-                    })()}
 
                     {billsDueSoon.length > 0 && (
                         <div className="section" style={{border: '2px solid #ffc107', background: 'linear-gradient(135deg, #ffc10708 0%, #ff980008 100%)'}}>
@@ -1559,16 +1510,12 @@
         }
 
         function TransactionsTab({ transactions, setTransactions, currentMonth, expenseCategories, incomeCategories, debts, setDebts }) {
-            const [formData, setFormData] = useState({ type: 'expense', amount: '', description: '', category: '', date: getLocalDateString(), linkedDebt: '', notes: '', excludeFromBudget: false });
             const [expandedMonths, setExpandedMonths] = useState({});
             const [selectedCategory, setSelectedCategory] = useState('All');
             const [searchPlace, setSearchPlace] = useState('');
             const [editingTransaction, setEditingTransaction] = useState(null);
-            const [showCustomCategory, setShowCustomCategory] = useState(false);
-            const [customCategory, setCustomCategory] = useState('');
-            const [showBulkEntry, setShowBulkEntry] = useState(false);
             const [bulkRows, setBulkRows] = useState([
-                { id: 1, date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense', notes: '', excludeFromBudget: false }
+                { id: 1, date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense', notes: '', excludeFromBudget: false, linkedDebt: '' }
             ]);
             
             // Bulk select state
@@ -1585,73 +1532,6 @@
             const [amountMax, setAmountMax] = useState('');
             const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
-            const handleSubmit = (e) => {
-                e.preventDefault();
-                if (formData.amount && formData.description) {
-                    const finalCategory = showCustomCategory ? customCategory : formData.category;
-                    if (!finalCategory) {
-                        alert('Please select or enter a category');
-                        return;
-                    }
-                    
-                    const newTransaction = { 
-                        ...formData, 
-                        category: finalCategory, 
-                        amount: parseFloat(formData.amount), 
-                        id: Date.now() 
-                    };
-                    
-                    setTransactions([...transactions, newTransaction]);
-                    
-                    // If linked to debt, update debt balance with interest calculation
-                    if (formData.linkedDebt && formData.type === 'expense') {
-                        const debtIndex = debts.findIndex(d => d.id === parseInt(formData.linkedDebt));
-                        if (debtIndex !== -1) {
-                            const debt = debts[debtIndex];
-                            const paymentAmount = parseFloat(formData.amount);
-                            
-                            // Calculate interest accrued since last payment
-                            const lastPaymentDate = debt.transactionLog && debt.transactionLog.length > 0
-                                ? new Date(debt.transactionLog[debt.transactionLog.length - 1].date)
-                                : new Date(debt.lastUpdated || formData.date);
-                            
-                            const currentDate = parseLocalDate(formData.date);
-                            const daysSinceLastPayment = Math.max(1, Math.floor((currentDate - lastPaymentDate) / (1000 * 60 * 60 * 24)));
-                            
-                            const annualRate = parseFloat(debt.interestRate) || 0;
-                            const dailyRate = annualRate / 100 / 365;
-                            const interestAccrued = debt.currentBalance * dailyRate * daysSinceLastPayment;
-                            
-                            const principalPaid = Math.max(0, paymentAmount - interestAccrued);
-                            const newBalance = Math.max(0, debt.currentBalance - principalPaid);
-                            
-                            const transactionLog = debt.transactionLog || [];
-                            const logEntry = {
-                                date: formData.date,
-                                paymentAmount: paymentAmount,
-                                interestAccrued: interestAccrued,
-                                principalPaid: principalPaid,
-                                balanceBefore: debt.currentBalance,
-                                balanceAfter: newBalance,
-                                daysSinceLastPayment: daysSinceLastPayment
-                            };
-                            
-                            const updatedDebts = [...debts];
-                            updatedDebts[debtIndex] = {
-                                ...debt,
-                                currentBalance: newBalance,
-                                lastUpdated: formData.date,
-                                transactionLog: [...transactionLog, logEntry]
-                            };
-                            setDebts(updatedDebts);
-                        }
-                    }
-                    
-                    setFormData({ type: 'expense', amount: '', description: '', category: '', date: getLocalDateString(), linkedDebt: '', notes: '', excludeFromBudget: false });
-                    setShowCustomCategory(false);
-                    setCustomCategory('');
-                }
-            };
 
             // CSV Export Function
             const exportToCSV = (transactionsToExport) => {
@@ -1741,7 +1621,8 @@
                     category: last.category,
                     type: last.type,
                     notes: '',
-                    excludeFromBudget: false
+                    excludeFromBudget: false,
+                    linkedDebt: ''
                 }]);
             };
 
@@ -1757,7 +1638,7 @@
                     const lastRow = prev[prev.length - 1];
                     if (lastRow.id === id && field === 'description' && !lastRow.description && value) {
                         const fromRow = updated[updated.length - 1];
-                        updated.push({ id: Date.now(), date: fromRow.date, description: '', amount: '', category: fromRow.category, type: fromRow.type, notes: '', excludeFromBudget: false });
+                        updated.push({ id: Date.now(), date: fromRow.date, description: '', amount: '', category: fromRow.category, type: fromRow.type, notes: '', excludeFromBudget: false, linkedDebt: '' });
                     }
                     return updated;
                 });
@@ -1766,7 +1647,7 @@
             const handleBulkSubmit = (e) => {
                 e.preventDefault();
                 const validRows = bulkRows.filter(row => row.description && row.amount && row.category);
-                
+
                 if (validRows.length === 0) {
                     alert('Please fill out at least one complete transaction (description, amount, and category).');
                     return;
@@ -1778,14 +1659,45 @@
                     description: row.description,
                     category: row.category,
                     date: row.date,
+                    notes: row.notes || '',
                     excludeFromBudget: row.excludeFromBudget || false,
+                    linkedDebt: row.linkedDebt || '',
                     id: Date.now() + Math.random()
                 }));
 
                 setTransactions([...transactions, ...newTransactions]);
-                
-                setBulkRows([{ id: Date.now(), date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense', notes: '', excludeFromBudget: false }]);
-                
+
+                // Process debt updates for rows linked to a debt
+                const debtMap = {};
+                validRows.forEach(row => {
+                    if (row.linkedDebt && row.type === 'expense') {
+                        const debtId = parseInt(row.linkedDebt);
+                        const base = debtMap[debtId] || debts.find(d => d.id === debtId);
+                        if (!base) return;
+                        const paymentAmount = parseFloat(row.amount);
+                        const lastPaymentDate = base.transactionLog && base.transactionLog.length > 0
+                            ? new Date(base.transactionLog[base.transactionLog.length - 1].date)
+                            : new Date(base.lastUpdated || row.date);
+                        const currentDate = parseLocalDate(row.date);
+                        const daysSinceLastPayment = Math.max(1, Math.floor((currentDate - lastPaymentDate) / (1000 * 60 * 60 * 24)));
+                        const dailyRate = (parseFloat(base.interestRate) || 0) / 100 / 365;
+                        const interestAccrued = base.currentBalance * dailyRate * daysSinceLastPayment;
+                        const principalPaid = Math.max(0, paymentAmount - interestAccrued);
+                        const newBalance = Math.max(0, base.currentBalance - principalPaid);
+                        debtMap[debtId] = {
+                            ...base,
+                            currentBalance: newBalance,
+                            lastUpdated: row.date,
+                            transactionLog: [...(base.transactionLog || []), { date: row.date, paymentAmount, interestAccrued, principalPaid, balanceBefore: base.currentBalance, balanceAfter: newBalance, daysSinceLastPayment }]
+                        };
+                    }
+                });
+                if (Object.keys(debtMap).length > 0) {
+                    setDebts(debts.map(d => debtMap[d.id] || d));
+                }
+
+                setBulkRows([{ id: Date.now(), date: getLocalDateString(), description: '', amount: '', category: '', type: 'expense', notes: '', excludeFromBudget: false, linkedDebt: '' }]);
+
                 showToast(`Added ${newTransactions.length} transaction${newTransactions.length !== 1 ? 's' : ''}`);
             };
 
@@ -1842,19 +1754,8 @@
             return (
                 <div>
                     <div className="section">
-                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px'}}>
-                            <h2>{showBulkEntry ? 'Add Multiple Transactions' : 'Add New Transaction'}</h2>
-                            <button 
-                                type="button"
-                                onClick={() => setShowBulkEntry(!showBulkEntry)}
-                                style={{background: showBulkEntry ? '#6c757d' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'}}
-                            >
-                                {showBulkEntry ? '← Single Entry' : '📝 Bulk Entry'}
-                            </button>
-                        </div>
-                        
-                        {showBulkEntry ? (
-                            <form onSubmit={handleBulkSubmit}>
+                        <h2 style={{marginBottom: '20px'}}>Add Transactions</h2>
+                        <form onSubmit={handleBulkSubmit}>
                                 <p style={{color: '#a0aec0', fontSize: '0.88em', marginBottom: '12px', marginTop: '-8px'}}>Tip: typing a vendor on the last row auto-adds a new row. New rows inherit the date, type, and category from the row above.</p>
                                 <div style={{overflowX: 'auto'}}>
                                     <table style={{width: '100%', borderCollapse: 'collapse', marginBottom: '12px', fontSize: '0.93em'}}>
@@ -1866,6 +1767,7 @@
                                                 <th style={{padding: '8px 10px', textAlign: 'left', color: '#667eea', border: '1px solid #2d3748'}}>Amount</th>
                                                 <th style={{padding: '8px 10px', textAlign: 'left', color: '#667eea', border: '1px solid #2d3748'}}>Category</th>
                                                 <th style={{padding: '8px 10px', textAlign: 'left', color: '#667eea', border: '1px solid #2d3748'}}>Notes</th>
+                                                {debts.filter(d => !d.paidOff).length > 0 && <th style={{padding: '8px 10px', textAlign: 'left', color: '#667eea', border: '1px solid #2d3748', whiteSpace: 'nowrap'}}>💳 Linked Debt</th>}
                                                 <th style={{padding: '8px 10px', textAlign: 'center', color: '#667eea', border: '1px solid #2d3748', whiteSpace: 'nowrap'}} title="Check to exclude this transaction from weekly/monthly budget totals">Skip Budget</th>
                                                 <th style={{padding: '8px 10px', textAlign: 'center', color: '#667eea', border: '1px solid #2d3748', width: '50px'}}></th>
                                             </tr>
@@ -1934,6 +1836,22 @@
                                                             style={{width: '100%', padding: '5px'}}
                                                         />
                                                     </td>
+                                                    {debts.filter(d => !d.paidOff).length > 0 && (
+                                                        <td style={{padding: '5px 6px', border: '1px solid #2d3748'}}>
+                                                            {row.type === 'expense' ? (
+                                                                <select
+                                                                    value={row.linkedDebt || ''}
+                                                                    onChange={(e) => updateBulkRow(row.id, 'linkedDebt', e.target.value)}
+                                                                    style={{width: '100%', padding: '5px'}}
+                                                                >
+                                                                    <option value="">None</option>
+                                                                    {debts.filter(d => !d.paidOff).map(debt => (
+                                                                        <option key={debt.id} value={debt.id}>{debt.name}</option>
+                                                                    ))}
+                                                                </select>
+                                                            ) : <span style={{color:'#4a5568', display:'block', textAlign:'center'}}>—</span>}
+                                                        </td>
+                                                    )}
                                                     <td style={{padding: '5px 6px', border: '1px solid #2d3748', textAlign: 'center'}}>
                                                         <input
                                                             type="checkbox"
@@ -1981,99 +1899,6 @@
                                     </button>
                                 </div>
                             </form>
-                        ) : (
-                            <form onSubmit={handleSubmit}>
-                            <div className="form-row">
-                                <div className="form-group"><label>Type</label><select value={formData.type} onChange={(e) => setFormData({...formData, type: e.target.value})}><option value="income">Income</option><option value="expense">Expense</option></select></div>
-                                <div className="form-group"><label>Amount</label><input type="number" step="0.01" value={formData.amount} onChange={(e) => setFormData({...formData, amount: e.target.value})} placeholder="0.00" required /></div>
-                                <div className="form-group"><label>Date</label><input type="date" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} required /></div>
-                            </div>
-                            <div className="form-row">
-                                <div className="form-group"><label>Vendor</label><input type="text" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} placeholder="e.g., Amazon, Kroger, Shell" required /></div>
-                                <div className="form-group">
-                                    <label>Category</label>
-                                    <select 
-                                        value={showCustomCategory ? 'custom' : formData.category} 
-                                        onChange={(e) => {
-                                            if (e.target.value === 'custom') {
-                                                setShowCustomCategory(true);
-                                                setFormData({...formData, category: ''});
-                                            } else {
-                                                setShowCustomCategory(false);
-                                                setCustomCategory('');
-                                                setFormData({...formData, category: e.target.value});
-                                            }
-                                        }} 
-                                        required={!showCustomCategory}
-                                    >
-                                        <option value="">Select category</option>
-                                        {(formData.type === 'expense' ? expenseCategories : incomeCategories).map(cat => 
-                                            <option key={cat} value={cat}>{cat}</option>
-                                        )}
-                                        <option value="custom">+ Custom Category</option>
-                                    </select>
-                                </div>
-                                {showCustomCategory && (
-                                    <div className="form-group">
-                                        <label>Custom Category</label>
-                                        <input 
-                                            type="text" 
-                                            value={customCategory} 
-                                            onChange={(e) => setCustomCategory(e.target.value)} 
-                                            placeholder="Enter category name" 
-                                            required 
-                                        />
-                                    </div>
-                                )}
-                            </div>
-                            <div className="form-group">
-                                <label>Notes (Optional)</label>
-                                <input 
-                                    type="text" 
-                                    value={formData.notes || ''} 
-                                    onChange={(e) => setFormData({...formData, notes: e.target.value})} 
-                                    placeholder="e.g., birthday gift, office supplies, etc."
-                                />
-                                <small style={{color: '#a0aec0', fontSize: '0.85em', marginTop: '5px', display: 'block'}}>
-                                    Add details while keeping description for filtering/searching
-                                </small>
-                            </div>
-                            {formData.type === 'expense' && debts.filter(d => !d.paidOff).length > 0 && (
-                                <div className="form-row">
-                                    <div className="form-group">
-                                        <label>💳 Apply to Debt (Optional)</label>
-                                        <select
-                                            value={formData.linkedDebt}
-                                            onChange={(e) => setFormData({...formData, linkedDebt: e.target.value})}
-                                        >
-                                            <option value="">None - Regular expense</option>
-                                            {debts.filter(d => !d.paidOff).map(debt => (
-                                                <option key={debt.id} value={debt.id}>
-                                                    {debt.name} (Balance: {formatCurrency(debt.currentBalance)})
-                                                </option>
-                                            ))}
-                                        </select>
-                                        <p style={{color: '#a0aec0', fontSize: '0.85em', marginTop: '5px'}}>
-                                            Select a debt to apply this payment toward principal reduction
-                                        </p>
-                                    </div>
-                                </div>
-                            )}
-                            <div className="form-group" style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px'}}>
-                                <input
-                                    type="checkbox"
-                                    id="excludeFromBudget"
-                                    checked={formData.excludeFromBudget || false}
-                                    onChange={(e) => setFormData({...formData, excludeFromBudget: e.target.checked})}
-                                    style={{width: '18px', height: '18px', cursor: 'pointer', accentColor: '#ffc107', flexShrink: 0}}
-                                />
-                                <label htmlFor="excludeFromBudget" style={{cursor: 'pointer', color: '#a0aec0', marginBottom: 0, fontWeight: '600', fontSize: '0.9em'}}>
-                                    Exclude from budget — debt payment or extra payment that shouldn't count against spending limits
-                                </label>
-                            </div>
-                            <button type="submit">Add Transaction</button>
-                        </form>
-                        )}
                     </div>
                     <div className="section">
                         <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px'}}>
