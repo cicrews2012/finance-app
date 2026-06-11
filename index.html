@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finance Tracker v1.22.0</title>
-    <!-- Build: 2026-06-09-01 - Bulk entry default with debt linking; dashboard week drill-down; removed daily spend chart -->
+    <title>Finance Tracker v1.30.0</title>
+    <!-- Build: 2026-06-11-04 - Extra debt payment UI: input, planner card, weekly calc, apply-as-budget button -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -477,7 +477,66 @@
         const getFinancialMonthRange = (date) => { const month = date.getMonth(); const year = date.getFullYear(); const start = new Date(year, month - 1, 28); const end = new Date(year, month, 27, 23, 59, 59); return { start, end }; };
         const getMonthKey = (date) => { const d = new Date(date); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
 
-        function FinanceTracker() {
+        const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+        const getPaymentDatesInMonth = (payment, currentMonth) => {
+            const { start, end } = getFinancialMonthRange(currentMonth);
+            const freq = payment.frequency || 'monthly';
+            if (freq === 'monthly') {
+                const dueDay = parseInt(payment.dueDay) || 1;
+                let paymentDate;
+                if (dueDay >= 28) {
+                    paymentDate = new Date(start.getFullYear(), start.getMonth(), dueDay);
+                } else {
+                    paymentDate = new Date(start.getFullYear(), start.getMonth() + 1, dueDay);
+                }
+                return [paymentDate];
+            }
+            if (freq === 'weekly') {
+                const targetDow = parseInt(payment.dayOfWeek) || 1;
+                let d = new Date(start);
+                while (d.getDay() !== targetDow) d.setDate(d.getDate() + 1);
+                const dates = [];
+                while (d <= end) { dates.push(new Date(d)); d.setDate(d.getDate() + 7); }
+                return dates;
+            }
+            // biweekly: anchor date determines the exact 2-week phase
+            if (payment.anchorDate) {
+                const anchor = parseLocalDate(payment.anchorDate);
+                const msPerDay = 86400000;
+                const diffToStart = Math.round((start.getTime() - anchor.getTime()) / msPerDay);
+                const mod = ((diffToStart % 14) + 14) % 14; // days past last occurrence before start
+                const dates = [];
+                let d = new Date(start.getTime() + mod * msPerDay);
+                while (d <= end) { dates.push(new Date(d)); d = new Date(d.getTime() + 14 * msPerDay); }
+                return dates;
+            }
+            // fallback for old biweekly entries without anchorDate
+            const targetDow = parseInt(payment.dayOfWeek) || 1;
+            let d = new Date(start);
+            while (d.getDay() !== targetDow) d.setDate(d.getDate() + 1);
+            const dates = [];
+            while (d <= end) { dates.push(new Date(d)); d.setDate(d.getDate() + 14); }
+            return dates;
+        };
+
+        // Returns the amount for a specific occurrence (handles alternating biweekly amounts)
+        const getOccurrenceAmount = (payment, date) => {
+            if ((payment.frequency || 'monthly') !== 'biweekly' || !payment.altAmount || !payment.anchorDate) {
+                return parseFloat(payment.amount);
+            }
+            const anchor = parseLocalDate(payment.anchorDate);
+            const idx = Math.round((date.getTime() - anchor.getTime()) / (14 * 86400000));
+            const isEven = (((idx % 2) + 2) % 2) === 0;
+            return isEven ? parseFloat(payment.amount) : parseFloat(payment.altAmount);
+        };
+
+        const getMonthlyEquivalentAmount = (payment, currentMonth) => {
+            const dates = getPaymentDatesInMonth(payment, currentMonth);
+            return dates.reduce((sum, d) => sum + getOccurrenceAmount(payment, d), 0);
+        };
+
+function FinanceTracker() {
             // Predefined categories
             const expenseCategories = ['Food', 'Groceries', 'Coffee', 'Subscriptions', 'Home', 'Car Payments', 'Personal', 'Pets', 'Utilities', 'Gas (cars)', 'Debt', 'Insurance', 'Kids', 'Savings', 'House cleaning', 'Entertainment', 'Healthcare', 'Transportation', 'Other'];
             const incomeCategories = ['Salary', 'Freelance', 'Investment', 'Gift', 'Bonus', 'Refund', 'Other'];
@@ -491,6 +550,7 @@
             const [expectedMonthlyIncome, setExpectedMonthlyIncome] = useState(5000);
             const [dataLoaded, setDataLoaded] = useState(false);
             const [weeklySpendingBudget, setWeeklySpendingBudget] = useState(580);
+            const [extraDebtPayment, setExtraDebtPayment] = useState(0);
             const [ignoredDuplicatePairs, setIgnoredDuplicatePairs] = useState(new Set());
 
             // No browser storage — data lives only for this session
@@ -603,23 +663,38 @@
             const getUnpaidRecurring = () => {
                 const monthKey = getMonthKey(currentMonth);
                 const today = new Date();
-                const __range = getFinancialMonthRange(currentMonth); const start = __range.start;
-                
-                return recurringPayments.filter(p => {
-                    const isManuallyPaid = paidPayments[`${monthKey}-${p.id}`];
-                    if (isManuallyPaid) return false;
-                    
-                    if (p.auto) {
-                        let paymentDate;
-                        if (p.dueDay >= 28) {
-                            paymentDate = new Date(start.getFullYear(), start.getMonth(), p.dueDay);
-                        } else {
-                            paymentDate = new Date(start.getFullYear(), start.getMonth() + 1, p.dueDay);
+                today.setHours(0, 0, 0, 0);
+                const { start } = getFinancialMonthRange(currentMonth);
+
+                return recurringPayments.reduce((sum, p) => {
+                    const freq = p.frequency || 'monthly';
+
+                    if (freq === 'monthly') {
+                        const isManuallyPaid = paidPayments[`${monthKey}-${p.id}`];
+                        if (isManuallyPaid) return sum;
+                        if (p.auto) {
+                            let paymentDate;
+                            if (p.dueDay >= 28) {
+                                paymentDate = new Date(start.getFullYear(), start.getMonth(), p.dueDay);
+                            } else {
+                                paymentDate = new Date(start.getFullYear(), start.getMonth() + 1, p.dueDay);
+                            }
+                            return today < paymentDate ? sum + parseFloat(p.amount) : sum;
                         }
-                        return today < paymentDate;
+                        return sum + parseFloat(p.amount);
                     }
-                    return true;
-                }).reduce((sum, p) => sum + parseFloat(p.amount), 0);
+
+                    // weekly/biweekly: sum only occurrences that are still unpaid (not paid, not skipped)
+                    const dates = getPaymentDatesInMonth(p, currentMonth);
+                    const unpaidTotal = dates.reduce((s, d) => {
+                        const key = `${monthKey}-${p.id}-${getLocalDateString(d)}`;
+                        const status = paidPayments[key] || 'unpaid';
+                        if (status !== 'unpaid') return s;
+                        if (p.auto && today >= d) return s;
+                        return s + getOccurrenceAmount(p, d);
+                    }, 0);
+                    return sum + unpaidTotal;
+                }, 0);
             };
 
             const exportData = () => {
@@ -658,7 +733,8 @@
                     paidPayments: paidPayments,
                     settings: {
                         expectedMonthlyIncome: expectedMonthlyIncome,
-                        weeklySpendingBudget: weeklySpendingBudget
+                        weeklySpendingBudget: weeklySpendingBudget,
+                        extraDebtPayment: extraDebtPayment
                     }
                 };
                 const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -903,8 +979,8 @@
                 const totalMonthlyDebtPayments = debts.filter(d => !d.paidOff).reduce((sum, d) => 
                     sum + parseFloat(d.minimumPayment || 0), 0);
                 
-                const totalMonthlyRecurring = recurringPayments.reduce((sum, p) => 
-                    sum + parseFloat(p.amount), 0);
+                const totalMonthlyRecurring = recurringPayments.reduce((sum, p) =>
+                    sum + getMonthlyEquivalentAmount(p, currentMonth), 0);
                 
                 const paidOffDebtsCount = debts.filter(d => d.paidOff).length;
                 const totalDebtEliminated = debts.filter(d => d.paidOff).reduce((sum, d) => 
@@ -962,8 +1038,12 @@
                                     category: p.category || '', 
                                     dueDay: parseInt(p.dueDay || p.day) || 1, // Accept both formats
                                     day: parseInt(p.day || p.dueDay) || 1, // Preserve prod format
-                                    linkedDebt: p.linkedDebt || '', 
-                                    auto: p.auto || false, 
+                                    frequency: p.frequency || 'monthly',
+                                    dayOfWeek: p.dayOfWeek !== undefined ? parseInt(p.dayOfWeek) : 1,
+                                    anchorDate: p.anchorDate || undefined,
+                                    altAmount: p.altAmount !== undefined ? parseFloat(p.altAmount) : undefined,
+                                    linkedDebt: p.linkedDebt || '',
+                                    auto: p.auto || false,
                                     varies: p.varies || false, // Preserve prod field
                                     id: p.id || (Date.now() + Math.random())
                                 })); 
@@ -976,15 +1056,22 @@
                                 const newPaidPayments = {...(data.paidPayments || {})};
                                 
                                 // Additionally mark auto-pay items as paid if due date has passed
+                                const todayNorm = new Date(today.getFullYear(), today.getMonth(), today.getDate());
                                 validPayments.forEach(p => {
                                     if (p.auto) {
-                                        let paymentDate;
-                                        if (p.dueDay >= 28) {
-                                            paymentDate = new Date(start.getFullYear(), start.getMonth(), p.dueDay);
+                                        const freq = p.frequency || 'monthly';
+                                        let checkDate;
+                                        if (freq === 'monthly') {
+                                            if (p.dueDay >= 28) {
+                                                checkDate = new Date(start.getFullYear(), start.getMonth(), p.dueDay);
+                                            } else {
+                                                checkDate = new Date(start.getFullYear(), start.getMonth() + 1, p.dueDay);
+                                            }
                                         } else {
-                                            paymentDate = new Date(start.getFullYear(), start.getMonth() + 1, p.dueDay);
+                                            const dates = getPaymentDatesInMonth(p, currentMonth);
+                                            checkDate = dates.length > 0 ? dates[dates.length - 1] : null;
                                         }
-                                        if (today >= paymentDate) {
+                                        if (checkDate && todayNorm >= checkDate) {
                                             newPaidPayments[`${monthKey}-${p.id}`] = true;
                                         }
                                     }
@@ -1023,6 +1110,7 @@
                             if (data.settings) {
                                 if (data.settings.expectedMonthlyIncome) setExpectedMonthlyIncome(data.settings.expectedMonthlyIncome);
                                 if (data.settings.weeklySpendingBudget) setWeeklySpendingBudget(data.settings.weeklySpendingBudget);
+                                if (data.settings.extraDebtPayment) setExtraDebtPayment(data.settings.extraDebtPayment);
                             }
                             
                             showToast('Data imported successfully!');
@@ -1068,7 +1156,7 @@
                     </div>
                     <div className="tab-content">
                         {activeTab === 'dashboard' && <DashboardTab totals={totals} totalDebt={totalDebt} unpaidRecurring={unpaidRecurring} currentMonth={currentMonth} transactions={transactions} setTransactions={setTransactions} recurringPayments={recurringPayments} debts={debts} setDebts={setDebts} expectedMonthlyIncome={expectedMonthlyIncome} importData={importData} paidPayments={paidPayments} setPaidPayments={setPaidPayments} weeklySpendingBudget={weeklySpendingBudget} />}
-                        {activeTab === 'budget' && <BudgetTab transactions={transactions} recurringPayments={recurringPayments} expectedMonthlyIncome={expectedMonthlyIncome} setExpectedMonthlyIncome={setExpectedMonthlyIncome} currentMonth={currentMonth} unpaidRecurring={unpaidRecurring} weeklySpendingBudget={weeklySpendingBudget} setWeeklySpendingBudget={setWeeklySpendingBudget} />}
+                        {activeTab === 'budget' && <BudgetTab transactions={transactions} recurringPayments={recurringPayments} expectedMonthlyIncome={expectedMonthlyIncome} setExpectedMonthlyIncome={setExpectedMonthlyIncome} currentMonth={currentMonth} unpaidRecurring={unpaidRecurring} weeklySpendingBudget={weeklySpendingBudget} setWeeklySpendingBudget={setWeeklySpendingBudget} extraDebtPayment={extraDebtPayment} setExtraDebtPayment={setExtraDebtPayment} />}
                         {activeTab === 'transactions' && <TransactionsTab transactions={transactions} setTransactions={setTransactions} currentMonth={currentMonth} expenseCategories={expenseCategories} incomeCategories={incomeCategories} debts={debts} setDebts={setDebts} />}
                         {activeTab === 'recurring' && <RecurringTab recurringPayments={recurringPayments} setRecurringPayments={setRecurringPayments} debts={debts} setDebts={setDebts} transactions={transactions} setTransactions={setTransactions} paidPayments={paidPayments} setPaidPayments={setPaidPayments} currentMonth={currentMonth} />}
                         {activeTab === 'duplicates' && <DuplicatesTab transactions={transactions} setTransactions={setTransactions} ignoredPairs={ignoredDuplicatePairs} setIgnoredPairs={setIgnoredDuplicatePairs} />}
@@ -1090,17 +1178,20 @@
             
             // Simple Money Available calculation
             // Income - Recurring = Money Left
-            const recurringTotal = recurringPayments
-                .filter(p => {
+            const recurringTotal = recurringPayments.reduce((sum, p) => {
+                const freq = p.frequency || 'monthly';
+                if (freq === 'monthly') {
+                    const dueDay = parseInt(p.dueDay) || 1;
                     let paymentDate;
-                    if (p.dueDay >= 28) {
-                        paymentDate = new Date(start.getFullYear(), start.getMonth(), p.dueDay);
+                    if (dueDay >= 28) {
+                        paymentDate = new Date(start.getFullYear(), start.getMonth(), dueDay);
                     } else {
-                        paymentDate = new Date(start.getFullYear(), start.getMonth() + 1, p.dueDay);
+                        paymentDate = new Date(start.getFullYear(), start.getMonth() + 1, dueDay);
                     }
-                    return paymentDate >= start && paymentDate <= end;
-                })
-                .reduce((sum, p) => sum + parseFloat(p.amount), 0);
+                    return (paymentDate >= start && paymentDate <= end) ? sum + parseFloat(p.amount) : sum;
+                }
+                return sum + getMonthlyEquivalentAmount(p, currentMonth);
+            }, 0);
             
             // Recurring paid so far = total recurring this month minus what's still outstanding
             const paidRecurringTotal = recurringTotal - unpaidRecurring;
@@ -1109,20 +1200,38 @@
                 const today = new Date();
                 const todayMs = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
                 const monthKey = getMonthKey(currentMonth);
-                const __range = getFinancialMonthRange(currentMonth);
-                const rangeStart = __range.start;
-                return recurringPayments.map(payment => {
-                    let paymentDate;
-                    if (payment.dueDay >= 28) {
-                        paymentDate = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), payment.dueDay);
-                    } else {
-                        paymentDate = new Date(rangeStart.getFullYear(), rangeStart.getMonth() + 1, payment.dueDay);
-                    }
-                    const daysUntil = Math.round((paymentDate.getTime() - todayMs) / 86400000);
+                const results = [];
+                recurringPayments.forEach(payment => {
                     const isPaid = paidPayments && paidPayments[`${monthKey}-${payment.id}`];
-                    return { ...payment, paymentDate, daysUntil, isPaid };
-                }).filter(p => !p.isPaid && p.daysUntil >= 0 && p.daysUntil <= 7)
-                  .sort((a, b) => a.daysUntil - b.daysUntil);
+                    if (isPaid) return;
+                    const freq = payment.frequency || 'monthly';
+                    let nextDate;
+                    if (freq === 'monthly') {
+                        const rangeStart = getFinancialMonthRange(currentMonth).start;
+                        if (payment.dueDay >= 28) {
+                            nextDate = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), payment.dueDay);
+                        } else {
+                            nextDate = new Date(rangeStart.getFullYear(), rangeStart.getMonth() + 1, payment.dueDay);
+                        }
+                    } else {
+                        const monthKey = getMonthKey(currentMonth);
+                        const dates = getPaymentDatesInMonth(payment, currentMonth);
+                        const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                        // find next occurrence that isn't skipped or paid
+                        nextDate = dates.find(d => {
+                            if (d < todayDate) return false;
+                            const k = `${monthKey}-${payment.id}-${getLocalDateString(d)}`;
+                            const status = paidPayments[k] || 'unpaid';
+                            return status === 'unpaid';
+                        }) || null;
+                    }
+                    if (!nextDate) return;
+                    const daysUntil = Math.round((nextDate.getTime() - todayMs) / 86400000);
+                    if (daysUntil >= 0 && daysUntil <= 7) {
+                        results.push({ ...payment, paymentDate: nextDate, daysUntil, isPaid });
+                    }
+                });
+                return results.sort((a, b) => a.daysUntil - b.daysUntil);
             })();
 
             // Show welcome message if no data loaded
@@ -1346,47 +1455,6 @@
                             </div>
                         </div>
                     )}
-                    {transactions.filter(t => {
-                        const tDate = parseLocalDate(t.date);
-                        return tDate >= start && tDate <= end && t.type === 'expense';
-                    }).length > 0 && (
-                        <div className="section">
-                            <h2>💳 Spending by Category This Month</h2>
-                            <div style={{marginTop: '20px'}}>
-                                {(() => {
-                                    const categoryTotals = {};
-                                    transactions.filter(t => {
-                                        const tDate = parseLocalDate(t.date);
-                                        return tDate >= start && tDate <= end && t.type === 'expense';
-                                    }).forEach(t => {
-                                        categoryTotals[t.category] = (categoryTotals[t.category] || 0) + parseFloat(t.amount);
-                                    });
-                                    
-                                    const totalSpent = Object.values(categoryTotals).reduce((sum, val) => sum + val, 0);
-                                    const sortedCategories = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]).slice(0, 8);
-                                    
-                                    return sortedCategories.map(([category, amount]) => {
-                                        const percentage = (amount / totalSpent) * 100;
-                                        return (
-                                            <div key={category} style={{marginBottom: '15px'}}>
-                                                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px'}}>
-                                                    <span style={{color: '#e2e8f0', fontWeight: '600'}}>{category}</span>
-                                                    <span style={{color: '#667eea', fontWeight: '700', fontSize: '1.1em'}}>{formatCurrency(amount)}</span>
-                                                </div>
-                                                <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
-                                                    <div style={{flex: 1, height: '12px', background: '#2d3748', borderRadius: '6px', overflow: 'hidden'}}>
-                                                        <div style={{width: `${percentage}%`, height: '100%', background: 'linear-gradient(90deg, #667eea, #764ba2)', transition: 'width 0.3s ease'}}></div>
-                                                    </div>
-                                                    <span style={{color: '#a0aec0', fontSize: '0.9em', minWidth: '45px', textAlign: 'right'}}>{percentage.toFixed(1)}%</span>
-                                                </div>
-                                            </div>
-                                        );
-                                    });
-                                })()}
-                            </div>
-                        </div>
-                    )}
-
                     {/* Week-by-week breakdown for the current financial month */}
                     {weeklySpendingBudget > 0 && transactions.length > 0 && (() => {
                         const today = new Date();
@@ -1447,6 +1515,8 @@
                                                         <span style={{color:'#e2e8f0', fontWeight:'600', fontSize:'0.95em'}}>Week {i+1}</span>
                                                         <span style={{color:'#a0aec0', fontSize:'0.85em'}}>{wLabel}</span>
                                                         {isCurrentWeek && <span style={{background:'#667eea22', color:'#667eea', padding:'2px 8px', borderRadius:'8px', fontSize:'0.75em', fontWeight:'700'}}>CURRENT</span>}
+                                                        {isCurrentWeek && !over && <span style={{background:`${color}22`, color, padding:'2px 8px', borderRadius:'8px', fontSize:'0.75em', fontWeight:'700'}}>{formatCurrency(remaining)} remaining</span>}
+                                                        {isCurrentWeek && over && <span style={{background:'#dc354522', color:'#dc3545', padding:'2px 8px', borderRadius:'8px', fontSize:'0.75em', fontWeight:'700'}}>OVER by {formatCurrency(Math.abs(remaining))}</span>}
                                                         {isFuture && <span style={{background:'#2d374888', color:'#718096', padding:'2px 8px', borderRadius:'8px', fontSize:'0.75em', fontWeight:'700'}}>UPCOMING</span>}
                                                         {isPast && over && <span style={{background:'#dc354522', color:'#dc3545', padding:'2px 8px', borderRadius:'8px', fontSize:'0.75em', fontWeight:'700'}}>OVER by {formatCurrency(Math.abs(remaining))}</span>}
                                                         {isPast && !over && <span style={{background:'#28a74522', color:'#28a745', padding:'2px 8px', borderRadius:'8px', fontSize:'0.75em', fontWeight:'700'}}>✓ {formatCurrency(remaining)} under</span>}
@@ -2234,13 +2304,30 @@
             const startYear = start.getFullYear();
             
             // Generate calendar days for the financial month (28th to 27th)
-            const totalAmount = recurringPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
+            const totalAmount = recurringPayments.reduce((sum, p) => sum + getMonthlyEquivalentAmount(p, currentMonth), 0);
             const calendarDays = [];
             let runningTotal = 0;
             for (let i = 0; i < 30; i++) {
                 const date = new Date(startYear, startMonth, startDay + i);
                 const day = date.getDate();
-                const paymentsOnDay = recurringPayments.filter(p => parseInt(p.dueDay) === day);
+                const paymentsOnDay = recurringPayments.filter(p => {
+                    const freq = p.frequency || 'monthly';
+                    if (freq === 'monthly') return parseInt(p.dueDay) === day;
+                    if (date.getDay() !== parseInt(p.dayOfWeek)) return false;
+                    if (freq === 'weekly') return true;
+                    // biweekly: check 14-day interval from first occurrence in month
+                    if (p.anchorDate) {
+                        const anchor = parseLocalDate(p.anchorDate);
+                        const diff = Math.round((date.getTime() - anchor.getTime()) / 86400000);
+                        return diff % 14 === 0;
+                    }
+                    // fallback: old entries without anchorDate
+                    let firstOcc = new Date(start);
+                    const targetDow = parseInt(p.dayOfWeek);
+                    while (firstOcc.getDay() !== targetDow) firstOcc.setDate(firstOcc.getDate() + 1);
+                    const daysDiff = Math.round((date.getTime() - firstOcc.getTime()) / 86400000);
+                    return daysDiff >= 0 && daysDiff % 14 === 0;
+                });
                 runningTotal += paymentsOnDay.reduce((sum, p) => sum + parseFloat(p.amount), 0);
 
                 calendarDays.push({
@@ -2256,7 +2343,17 @@
                     isCICPayday: day === 1 || day === 16
                 });
             }
-            const paidAmount = recurringPayments.reduce((sum, p) => sum + (paidPayments[`${monthKey}-${p.id}`] ? parseFloat(p.amount) : 0), 0);
+            const paidAmount = recurringPayments.reduce((sum, p) => {
+                const freq = p.frequency || 'monthly';
+                if (freq === 'monthly') {
+                    return sum + (paidPayments[`${monthKey}-${p.id}`] ? parseFloat(p.amount) : 0);
+                }
+                const dates = getPaymentDatesInMonth(p, currentMonth);
+                return sum + dates.reduce((s, d) => {
+                    const key = `${monthKey}-${p.id}-${getLocalDateString(d)}`;
+                    return s + (paidPayments[key] === 'paid' ? parseFloat(p.amount) : 0);
+                }, 0);
+            }, 0);
             const remainingAmount = totalAmount - paidAmount;
 
             return (
@@ -2265,15 +2362,22 @@
                     <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '10px'}}>
                         {calendarDays.map((calDay, idx) => {
                             const hasPayments = calDay.payments.length > 0;
-                            const allPaid = hasPayments && calDay.payments.every(p => paidPayments[`${monthKey}-${p.id}`]);
-                            const somePaid = hasPayments && !allPaid && calDay.payments.some(p => paidPayments[`${monthKey}-${p.id}`]);
+                            const getCalOccStatus = (p) => {
+                                const freq = p.frequency || 'monthly';
+                                if (freq === 'monthly') return paidPayments[`${monthKey}-${p.id}`] ? 'paid' : 'unpaid';
+                                const key = `${monthKey}-${p.id}-${getLocalDateString(calDay.date)}`;
+                                return paidPayments[key] || 'unpaid';
+                            };
+                            const allPaid = hasPayments && calDay.payments.every(p => getCalOccStatus(p) === 'paid');
+                            const allDone = hasPayments && calDay.payments.every(p => { const s = getCalOccStatus(p); return s === 'paid' || s === 'skipped'; });
+                            const somePaid = hasPayments && !allDone && calDay.payments.some(p => getCalOccStatus(p) === 'paid');
                             
                             return (
                                 <div 
                                     key={idx}
                                     style={{
                                         background: calDay.isToday ? '#667eea22' : '#0f1419',
-                                        border: `2px solid ${calDay.isToday ? '#667eea' : (hasPayments ? (allPaid ? '#28a745' : (somePaid ? '#ffc107' : '#dc3545')) : '#2d3748')}`,
+                                        border: `2px solid ${calDay.isToday ? '#667eea' : (hasPayments ? (allDone ? '#28a745' : (somePaid ? '#ffc107' : '#dc3545')) : '#2d3748')}`,
                                         borderRadius: '8px',
                                         padding: '10px',
                                         minHeight: '100px',
@@ -2309,32 +2413,38 @@
                                     ) : (
                                         <div style={{display: 'flex', flexDirection: 'column', gap: '5px'}}>
                                             {calDay.payments.map(payment => {
-                                                const isPaid = paidPayments[`${monthKey}-${payment.id}`];
+                                                const occStatus = getCalOccStatus(payment);
+                                                const isPaid = occStatus === 'paid';
+                                                const isSkipped = occStatus === 'skipped';
                                                 const linkedDebt = payment.linkedDebt ? debts.find(d => d.id === parseInt(payment.linkedDebt)) : null;
-                                                
+                                                const bgColor = isSkipped ? '#2d374844' : isPaid ? '#28a74522' : '#dc354522';
+                                                const borderColor = isSkipped ? '#4a5568' : isPaid ? '#28a745' : '#dc3545';
+                                                const freq = payment.frequency || 'monthly';
+
                                                 return (
-                                                    <div 
+                                                    <div
                                                         key={payment.id}
                                                         style={{
-                                                            background: isPaid ? '#28a74522' : '#dc354522',
-                                                            border: `1px solid ${isPaid ? '#28a745' : '#dc3545'}`,
+                                                            background: bgColor,
+                                                            border: `1px solid ${borderColor}`,
                                                             borderRadius: '5px',
                                                             padding: '6px',
                                                             fontSize: '0.75em',
-                                                            cursor: 'pointer',
-                                                            transition: 'all 0.2s'
+                                                            cursor: isSkipped ? 'default' : 'pointer',
+                                                            transition: 'all 0.2s',
+                                                            opacity: isSkipped ? 0.5 : 1
                                                         }}
-                                                        onClick={() => togglePaidStatus(payment.id)}
-                                                        title={`Click to mark as ${isPaid ? 'unpaid' : 'paid'}`}
+                                                        onClick={() => !isSkipped && togglePaidStatus(payment.id, freq !== 'monthly' ? calDay.date : undefined)}
+                                                        title={isSkipped ? 'Skipped' : `Click to mark as ${isPaid ? 'unpaid' : 'paid'}`}
                                                     >
                                                         <div style={{display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '3px'}}>
-                                                            <span>{isPaid ? '✅' : '⭕'}</span>
-                                                            <span style={{color: '#e2e8f0', fontWeight: '600', fontSize: '0.95em'}}>
+                                                            <span>{isSkipped ? '⏭' : isPaid ? '✅' : '⭕'}</span>
+                                                            <span style={{color: '#e2e8f0', fontWeight: '600', fontSize: '0.95em', textDecoration: isSkipped ? 'line-through' : 'none'}}>
                                                                 {payment.name.length > 15 ? payment.name.substring(0, 15) + '...' : payment.name}
                                                             </span>
                                                         </div>
-                                                        <div style={{color: isPaid ? '#28a745' : '#dc3545', fontWeight: '700'}}>
-                                                            {formatCurrency(payment.amount)}
+                                                        <div style={{color: isSkipped ? '#4a5568' : isPaid ? '#28a745' : '#dc3545', fontWeight: '700'}}>
+                                                            {formatCurrency(getOccurrenceAmount(payment, calDay.date))}
                                                         </div>
                                                         {linkedDebt && (
                                                             <div style={{color: '#a0aec0', fontSize: '0.85em', marginTop: '2px'}}>
@@ -2407,7 +2517,7 @@
         }
 
         function RecurringTab({ recurringPayments, setRecurringPayments, debts, setDebts, transactions, setTransactions, paidPayments, setPaidPayments, currentMonth }) {
-            const [formData, setFormData] = useState({ name: '', amount: '', category: '', dueDay: '1', linkedDebt: '', auto: false, paymentUrl: '' });
+            const [formData, setFormData] = useState({ name: '', amount: '', category: '', frequency: 'monthly', dueDay: '1', dayOfWeek: '1', anchorDate: getLocalDateString(), altAmount: '', linkedDebt: '', auto: false, paymentUrl: '' });
             const [editingPayment, setEditingPayment] = useState(null);
             const [viewMode, setViewMode] = useState('list'); // 'list' or 'calendar'
             const monthKey = getMonthKey(currentMonth);
@@ -2416,37 +2526,52 @@
             const shouldAutoPayBePaid = (payment) => {
                 if (!payment.auto) return false;
                 const today = new Date();
-                const currentDay = today.getDate();
-                const __range = getFinancialMonthRange(currentMonth); const start = __range.start;
-                
-                // Create a date for the payment due day in the financial month
-                let paymentDate;
-                if (payment.dueDay >= 28) {
-                    // Days 28-31 are at the START of the financial month (previous calendar month)
-                    paymentDate = new Date(start.getFullYear(), start.getMonth(), payment.dueDay);
-                } else {
-                    // Days 1-27 are in the NEXT calendar month after start
-                    paymentDate = new Date(start.getFullYear(), start.getMonth() + 1, payment.dueDay);
+                today.setHours(0, 0, 0, 0);
+                const freq = payment.frequency || 'monthly';
+                if (freq === 'monthly') {
+                    const __range = getFinancialMonthRange(currentMonth); const start = __range.start;
+                    let paymentDate;
+                    if (payment.dueDay >= 28) {
+                        paymentDate = new Date(start.getFullYear(), start.getMonth(), payment.dueDay);
+                    } else {
+                        paymentDate = new Date(start.getFullYear(), start.getMonth() + 1, payment.dueDay);
+                    }
+                    return today >= paymentDate;
                 }
-                
-                // Payment is paid if today >= payment date
-                return today >= paymentDate;
+                const dates = getPaymentDatesInMonth(payment, currentMonth);
+                if (dates.length === 0) return false;
+                const lastDate = new Date(dates[dates.length - 1]);
+                lastDate.setHours(0, 0, 0, 0);
+                return today >= lastDate;
             };
 
-            const handleSubmit = (e) => { 
-                e.preventDefault(); 
-                if (formData.name && formData.amount) { 
-                    const newPayment = { ...formData, amount: parseFloat(formData.amount), dueDay: parseInt(formData.dueDay), id: Date.now() };
-                    setRecurringPayments([...recurringPayments, newPayment]); 
-                    
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (formData.name && formData.amount) {
+                    const freq = formData.frequency || 'monthly';
+                    const anchorDow = freq === 'biweekly' && formData.anchorDate
+                        ? parseLocalDate(formData.anchorDate).getDay()
+                        : undefined;
+                    const newPayment = {
+                        ...formData,
+                        amount: parseFloat(formData.amount),
+                        frequency: freq,
+                        dueDay: freq === 'monthly' ? parseInt(formData.dueDay) : 1,
+                        dayOfWeek: freq === 'weekly' ? parseInt(formData.dayOfWeek) : (freq === 'biweekly' ? anchorDow : undefined),
+                        anchorDate: freq === 'biweekly' ? formData.anchorDate : undefined,
+                        altAmount: freq === 'biweekly' && formData.altAmount ? parseFloat(formData.altAmount) : undefined,
+                        id: Date.now()
+                    };
+                    setRecurringPayments([...recurringPayments, newPayment]);
+
                     // Auto-pay: mark as paid if due date has already passed this month
                     if (formData.auto && shouldAutoPayBePaid(newPayment)) {
                         const paymentKey = `${monthKey}-${newPayment.id}`;
                         setPaidPayments({...paidPayments, [paymentKey]: true});
                     }
-                    
-                    setFormData({ name: '', amount: '', category: '', dueDay: '1', linkedDebt: '', auto: false }); 
-                } 
+
+                    setFormData({ name: '', amount: '', category: '', frequency: 'monthly', dueDay: '1', dayOfWeek: '1', anchorDate: getLocalDateString(), altAmount: '', linkedDebt: '', auto: false, paymentUrl: '' });
+                }
             };
 
             const deletePayment = (id) => setRecurringPayments(recurringPayments.filter(p => p.id !== id));
@@ -2460,49 +2585,50 @@
                 setEditingPayment(null);
             };
             
-            const processPayment = (payment) => {
-                const paymentKey = `${monthKey}-${payment.id}`;
-                const newTransaction = { type: 'expense', amount: payment.amount, description: `${payment.name} (Recurring)`, category: payment.category, date: getLocalDateString(), id: Date.now(), isRecurring: true };
+            const processPayment = (payment, occurrenceDate) => {
+                const freq = payment.frequency || 'monthly';
+                const txDate = occurrenceDate ? getLocalDateString(occurrenceDate) : getLocalDateString();
+                const paymentKey = (freq !== 'monthly' && occurrenceDate)
+                    ? `${monthKey}-${payment.id}-${getLocalDateString(occurrenceDate)}`
+                    : `${monthKey}-${payment.id}`;
+                const txAmount = occurrenceDate ? getOccurrenceAmount(payment, occurrenceDate) : parseFloat(payment.amount);
+                const newTransaction = { type: 'expense', amount: txAmount, description: `${payment.name} (Recurring)`, category: payment.category, date: txDate, id: Date.now(), isRecurring: true };
                 setTransactions([...transactions, newTransaction]);
-                setPaidPayments({...paidPayments, [paymentKey]: true});
-                
+                setPaidPayments(prev => ({...prev, [paymentKey]: freq !== 'monthly' && occurrenceDate ? 'paid' : true}));
+
                 if (payment.linkedDebt) {
                     setDebts(debts.map(debt => {
                         if (debt.id === parseInt(payment.linkedDebt)) {
                             const interestRate = parseFloat(debt.interestRate) || 0;
                             const monthlyInterestRate = interestRate / 100 / 12;
                             const interestAccrued = debt.currentBalance * monthlyInterestRate;
-                            const principalPaid = payment.amount - interestAccrued;
+                            const principalPaid = txAmount - interestAccrued;
                             const newBalance = Math.max(0, debt.currentBalance - principalPaid);
-                            
                             const transactionLog = debt.transactionLog || [];
-                            const logEntry = {
-                                date: getLocalDateString(),
-                                paymentAmount: payment.amount,
-                                interestAccrued: interestAccrued,
-                                principalPaid: principalPaid,
-                                balanceBefore: debt.currentBalance,
-                                balanceAfter: newBalance
-                            };
-                            
-                            return {
-                                ...debt, 
-                                currentBalance: newBalance,
-                                transactionLog: [...transactionLog, logEntry]
-                            }; 
-                        } 
-                        return debt; 
-                    })); 
+                            const logEntry = { date: txDate, paymentAmount: txAmount, interestAccrued, principalPaid, balanceBefore: debt.currentBalance, balanceAfter: newBalance };
+                            return { ...debt, currentBalance: newBalance, transactionLog: [...transactionLog, logEntry] };
+                        }
+                        return debt;
+                    }));
                 }
-                showToast(`Payment processed: ${payment.name} — ${formatCurrency(payment.amount)}`);
+                showToast(`Payment processed: ${payment.name} — ${formatCurrency(txAmount)}`);
             };
 
-            const togglePaidStatus = (paymentId) => {
-                const paymentKey = `${monthKey}-${paymentId}`;
-                setPaidPayments(prevPaid => ({
-                    ...prevPaid, 
-                    [paymentKey]: !prevPaid[paymentKey]
-                }));
+            const togglePaidStatus = (paymentId, occurrenceDate) => {
+                const payment = recurringPayments.find(p => p.id === paymentId);
+                const freq = payment ? (payment.frequency || 'monthly') : 'monthly';
+                if (freq !== 'monthly' && occurrenceDate) {
+                    const occKey = `${monthKey}-${paymentId}-${getLocalDateString(occurrenceDate)}`;
+                    setPaidPayments(prev => {
+                        const current = prev[occKey] || 'unpaid';
+                        const next = {...prev};
+                        if (current === 'paid') { delete next[occKey]; } else { next[occKey] = 'paid'; }
+                        return next;
+                    });
+                } else {
+                    const paymentKey = `${monthKey}-${paymentId}`;
+                    setPaidPayments(prev => ({...prev, [paymentKey]: !prev[paymentKey]}));
+                }
             };
 
             return (
@@ -2516,7 +2642,19 @@
                             </div>
                             <div className="form-row">
                                 <div className="form-group"><label>Category</label><input type="text" value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})} placeholder="e.g., Housing, Entertainment" /></div>
-                                <div className="form-group"><label>Due Day (1-31)</label><input type="number" min="1" max="31" value={formData.dueDay} onChange={(e) => setFormData({...formData, dueDay: e.target.value})} required /></div>
+                                <div className="form-group"><label>Frequency</label><select value={formData.frequency} onChange={(e) => setFormData({...formData, frequency: e.target.value})}><option value="monthly">Monthly</option><option value="weekly">Weekly</option><option value="biweekly">Bi-weekly</option></select></div>
+                                {(formData.frequency || 'monthly') === 'monthly' && (
+                                    <div className="form-group"><label>Due Day (1-31)</label><input type="number" min="1" max="31" value={formData.dueDay} onChange={(e) => setFormData({...formData, dueDay: e.target.value})} required /></div>
+                                )}
+                                {formData.frequency === 'weekly' && (
+                                    <div className="form-group"><label>Day of Week</label><select value={formData.dayOfWeek} onChange={(e) => setFormData({...formData, dayOfWeek: e.target.value})}><option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option></select></div>
+                                )}
+                                {formData.frequency === 'biweekly' && (
+                                    <div className="form-group"><label>Start Date <span style={{color:'#a0aec0',fontWeight:'400'}}>(any date it occurs)</span></label><input type="date" value={formData.anchorDate} onChange={(e) => setFormData({...formData, anchorDate: e.target.value})} required /></div>
+                                )}
+                                {formData.frequency === 'biweekly' && (
+                                    <div className="form-group"><label>Alternate Amount <span style={{color:'#a0aec0',fontWeight:'400'}}>(optional — every other occurrence)</span></label><input type="number" step="0.01" min="0" value={formData.altAmount} onChange={(e) => setFormData({...formData, altAmount: e.target.value})} placeholder="Leave blank if same each time" /></div>
+                                )}
                                 <div className="form-group"><label>Link to Debt (Optional)</label><select value={formData.linkedDebt} onChange={(e) => setFormData({...formData, linkedDebt: e.target.value})}><option value="">None</option>{debts.map(debt => (<option key={debt.id} value={debt.id}>{debt.name}</option>))}</select></div>
                             </div>
                             <div className="form-group">
@@ -2543,7 +2681,7 @@
                             <div>
                                 <h2>Recurring Payments ({recurringPayments.length})</h2>
                                 <p style={{color: '#a0aec0', fontSize: '1.1em'}}>
-                                    Total Monthly: <strong style={{color: '#667eea'}}>{formatCurrency(recurringPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0))}</strong>
+                                        Total Monthly: <strong style={{color: '#667eea'}}>{formatCurrency(recurringPayments.reduce((sum, p) => sum + getMonthlyEquivalentAmount(p, currentMonth), 0))}</strong>
                                 </p>
                             </div>
                             <div style={{display: 'flex', gap: '10px'}}>
@@ -2578,37 +2716,100 @@
                             {recurringPayments.length === 0 ? (
                                 <p style={{color: '#a0aec0', textAlign: 'center', padding: '20px'}}>No recurring payments yet.</p>
                             ) : (
-                                [...recurringPayments].sort((a, b) => a.dueDay - b.dueDay).map((payment) => {
+                                [...recurringPayments].sort((a, b) => {
+                                    const fa = a.frequency || 'monthly'; const fb = b.frequency || 'monthly';
+                                    if (fa === 'monthly' && fb !== 'monthly') return -1;
+                                    if (fa !== 'monthly' && fb === 'monthly') return 1;
+                                    if (fa === 'monthly') return (a.dueDay || 0) - (b.dueDay || 0);
+                                    return (parseInt(a.dayOfWeek) || 0) - (parseInt(b.dayOfWeek) || 0);
+                                }).map((payment) => {
                                     const linkedDebt = payment.linkedDebt ? debts.find(d => d.id === parseInt(payment.linkedDebt)) : null;
-                                    const isManuallyPaid = paidPayments[`${monthKey}-${payment.id}`];
-                                    const isAutoPaid = payment.auto && shouldAutoPayBePaid(payment);
-                                    const isPaid = isManuallyPaid || isAutoPaid;
-                                    
+                                    const freq = payment.frequency || 'monthly';
+                                    const occurrenceDates = freq !== 'monthly' ? getPaymentDatesInMonth(payment, currentMonth) : [];
+
+                                    let isPaid, scheduleLabel, summaryLabel;
+                                    if (freq === 'monthly') {
+                                        const isManuallyPaid = paidPayments[`${monthKey}-${payment.id}`];
+                                        const isAutoPaid = payment.auto && shouldAutoPayBePaid(payment);
+                                        isPaid = isManuallyPaid || isAutoPaid;
+                                        scheduleLabel = `Due: Day ${payment.dueDay}`;
+                                        summaryLabel = null;
+                                    } else {
+                                        const dow = freq === 'biweekly' && payment.anchorDate
+                                            ? parseLocalDate(payment.anchorDate).getDay()
+                                            : (parseInt(payment.dayOfWeek) || 1);
+                                        const dayName = DAY_NAMES[dow];
+                                        const anchorStr = freq === 'biweekly' && payment.anchorDate
+                                            ? ` (starting ${parseLocalDate(payment.anchorDate).toLocaleDateString('en-US', {month:'short', day:'numeric'})})`
+                                            : '';
+                                        const altStr = freq === 'biweekly' && payment.altAmount
+                                            ? ` — ${formatCurrency(payment.amount)}/${formatCurrency(payment.altAmount)} alternating`
+                                            : '';
+                                        scheduleLabel = freq === 'weekly' ? `Every ${dayName}` : `Every other ${dayName}${anchorStr}${altStr}`;
+                                        const paidCount = occurrenceDates.filter(d => (paidPayments[`${monthKey}-${payment.id}-${getLocalDateString(d)}`] || 'unpaid') === 'paid').length;
+                                        const skippedCount = occurrenceDates.filter(d => (paidPayments[`${monthKey}-${payment.id}-${getLocalDateString(d)}`] || 'unpaid') === 'skipped').length;
+                                        const activeCount = occurrenceDates.length - skippedCount;
+                                        isPaid = activeCount > 0 ? paidCount === activeCount : occurrenceDates.length === skippedCount;
+                                        summaryLabel = `${paidCount}/${activeCount} paid this month${skippedCount > 0 ? ` • ${skippedCount} skipped` : ''} = ${formatCurrency(getMonthlyEquivalentAmount(payment, currentMonth))}`;
+                                    }
+
+                                    const today0 = new Date(); today0.setHours(0,0,0,0);
+
                                     return (
                                         <div key={payment.id} className={`payment-item ${isPaid ? 'paid' : 'unpaid'}`}>
-                                            <div className="item-details">
-                                                <h4>
-                                                    {payment.name}
-                                                    {isPaid && <span className="paid-badge">✓ Paid</span>}
-                                                    {payment.auto ? <span className="auto-badge">AUTO</span> : <span className="manual-badge">MANUAL</span>}
-                                                </h4>
-                                                <p>{payment.category} • Due: Day {payment.dueDay}{linkedDebt && ` • Linked to: ${linkedDebt.name}`}</p>
+                                            <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', width:'100%', flexWrap:'wrap', gap:'10px'}}>
+                                                <div className="item-details" style={{flex:1, minWidth:'200px'}}>
+                                                    <h4>
+                                                        {payment.name}
+                                                        {isPaid && freq === 'monthly' && <span className="paid-badge">✓ Paid</span>}
+                                                        {payment.auto ? <span className="auto-badge">AUTO</span> : <span className="manual-badge">MANUAL</span>}
+                                                        {freq === 'weekly' && <span style={{background:'#667eea22',color:'#667eea',padding:'2px 7px',borderRadius:'5px',fontSize:'0.75em',fontWeight:'700',marginLeft:'5px'}}>WEEKLY</span>}
+                                                        {freq === 'biweekly' && <span style={{background:'#667eea22',color:'#667eea',padding:'2px 7px',borderRadius:'5px',fontSize:'0.75em',fontWeight:'700',marginLeft:'5px'}}>BI-WEEKLY</span>}
+                                                    </h4>
+                                                    <p>{payment.category} • {scheduleLabel}{summaryLabel && ` • ${summaryLabel}`}{linkedDebt && ` • Linked to: ${linkedDebt.name}`}</p>
+                                                </div>
+                                                <div style={{display:'flex', alignItems:'center', gap:'10px', flexShrink:0}}>
+                                                    {freq === 'monthly' && <div className="item-amount negative">{formatCurrency(payment.amount)}</div>}
+                                                    {freq !== 'monthly' && <div className="item-amount negative" style={{textAlign:'right'}}><div>{payment.altAmount ? `${formatCurrency(payment.amount)}/${formatCurrency(payment.altAmount)}` : `${formatCurrency(payment.amount)}/ea`}</div><div style={{fontSize:'0.8em',color:'#a0aec0'}}>{formatCurrency(getMonthlyEquivalentAmount(payment, currentMonth))}/mo</div></div>}
+                                                    {payment.paymentUrl && <button onClick={() => window.open(payment.paymentUrl, '_blank')} style={{padding:'8px 16px',fontSize:'0.9em',background:'#667eea',color:'white',border:'2px solid #667eea'}}>🔗 Payment Link</button>}
+                                                    {freq === 'monthly' && !isPaid && !payment.auto && <button onClick={() => processPayment(payment)} style={{padding:'8px 16px',fontSize:'0.9em'}}>Process</button>}
+                                                    {freq === 'monthly' && !payment.auto && <button className={isPaid ? 'secondary' : 'success'} onClick={() => togglePaidStatus(payment.id)} style={{padding:'8px 16px',fontSize:'0.9em'}}>{isPaid ? 'Mark Unpaid' : 'Mark Paid'}</button>}
+                                                    <button onClick={() => handleEdit(payment)} style={{padding:'8px 16px',fontSize:'0.9em'}}>Edit</button>
+                                                    <button className="danger" onClick={() => deletePayment(payment.id)} style={{padding:'8px 16px',fontSize:'0.9em'}}>Delete</button>
+                                                </div>
                                             </div>
-                                            <div style={{display: 'flex', alignItems: 'center', gap: '15px'}}>
-                                                <div className="item-amount negative">{formatCurrency(payment.amount)}</div>
-                                                {payment.paymentUrl && (
-                                                    <button 
-                                                        onClick={() => window.open(payment.paymentUrl, '_blank')} 
-                                                        style={{padding: '8px 16px', fontSize: '0.9em', background: '#667eea', color: 'white', border: '2px solid #667eea'}}
-                                                    >
-                                                        🔗 Payment Link
-                                                    </button>
-                                                )}
-                                                {!isPaid && !payment.auto && <button onClick={() => processPayment(payment)} style={{padding: '8px 16px', fontSize: '0.9em'}}>Process</button>}
-                                                {!payment.auto && <button className={isPaid ? 'secondary' : 'success'} onClick={() => togglePaidStatus(payment.id)} style={{padding: '8px 16px', fontSize: '0.9em'}}>{isPaid ? 'Mark Unpaid' : 'Mark Paid'}</button>}
-                                                <button onClick={() => handleEdit(payment)} style={{padding: '8px 16px', fontSize: '0.9em'}}>Edit</button>
-                                                <button className="danger" onClick={() => deletePayment(payment.id)} style={{padding: '8px 16px', fontSize: '0.9em'}}>Delete</button>
-                                            </div>
+
+                                            {freq !== 'monthly' && (
+                                                <div style={{marginTop:'12px', borderTop:'1px solid #2d3748', paddingTop:'12px', display:'flex', flexDirection:'column', gap:'6px'}}>
+                                                    {occurrenceDates.map(d => {
+                                                        const dateStr = getLocalDateString(d);
+                                                        const occKey = `${monthKey}-${payment.id}-${dateStr}`;
+                                                        const status = paidPayments[occKey] || 'unpaid';
+                                                        const isPast = d < today0;
+                                                        const borderColor = status === 'paid' ? '#28a745' : status === 'skipped' ? '#4a5568' : (isPast ? '#dc3545' : '#2d3748');
+                                                        const bgColor = status === 'paid' ? '#0d2618' : status === 'skipped' ? '#1a1f2e' : '#0f1419';
+                                                        return (
+                                                            <div key={dateStr} style={{display:'flex', justifyContent:'space-between', alignItems:'center', background:bgColor, border:`1px solid ${borderColor}`, borderRadius:'7px', padding:'8px 12px', flexWrap:'wrap', gap:'8px'}}>
+                                                                <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+                                                                    <span style={{color: status === 'skipped' ? '#4a5568' : '#e2e8f0', fontSize:'0.88em', fontWeight:'600', textDecoration: status === 'skipped' ? 'line-through' : 'none'}}>
+                                                                        {d.toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'})}
+                                                                    </span>
+                                                                    <span style={{color:'#a0aec0', fontSize:'0.85em'}}>{formatCurrency(getOccurrenceAmount(payment, d))}</span>
+                                                                    {status === 'paid' && <span style={{color:'#28a745', fontSize:'0.75em', fontWeight:'700'}}>✓ PAID</span>}
+                                                                    {status === 'skipped' && <span style={{color:'#a0aec0', fontSize:'0.75em', fontWeight:'700'}}>SKIPPED</span>}
+                                                                    {status === 'unpaid' && isPast && <span style={{color:'#dc3545', fontSize:'0.75em', fontWeight:'700'}}>OVERDUE</span>}
+                                                                </div>
+                                                                <div style={{display:'flex', gap:'6px'}}>
+                                                                    {status === 'unpaid' && !payment.auto && <button onClick={() => processPayment(payment, d)} style={{padding:'4px 10px', fontSize:'0.78em'}}>Process</button>}
+                                                                    {status === 'unpaid' && <button className="success" onClick={() => setPaidPayments(prev => ({...prev, [occKey]: 'paid'}))} style={{padding:'4px 10px', fontSize:'0.78em'}}>Mark Paid</button>}
+                                                                    {status === 'unpaid' && <button className="secondary" onClick={() => setPaidPayments(prev => ({...prev, [occKey]: 'skipped'}))} style={{padding:'4px 10px', fontSize:'0.78em'}}>Skip</button>}
+                                                                    {status !== 'unpaid' && <button className="secondary" onClick={() => setPaidPayments(prev => { const n={...prev}; delete n[occKey]; return n; })} style={{padding:'4px 10px', fontSize:'0.78em'}}>{status === 'paid' ? 'Mark Unpaid' : 'Undo Skip'}</button>}
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
                                         </div>
                                     );
                                 })
@@ -2626,7 +2827,19 @@
 
             const handleSubmit = (e) => {
                 e.preventDefault();
-                onUpdate({ ...formData, amount: parseFloat(formData.amount), dueDay: parseInt(formData.dueDay) });
+                const freq = formData.frequency || 'monthly';
+                const anchorDow = freq === 'biweekly' && formData.anchorDate
+                    ? parseLocalDate(formData.anchorDate).getDay()
+                    : formData.dayOfWeek;
+                onUpdate({
+                    ...formData,
+                    amount: parseFloat(formData.amount),
+                    frequency: freq,
+                    dueDay: freq === 'monthly' ? parseInt(formData.dueDay) : 1,
+                    dayOfWeek: freq === 'weekly' ? parseInt(formData.dayOfWeek) : (freq === 'biweekly' ? anchorDow : formData.dayOfWeek),
+                    anchorDate: freq === 'biweekly' ? formData.anchorDate : undefined,
+                    altAmount: freq === 'biweekly' && formData.altAmount ? parseFloat(formData.altAmount) : undefined,
+                });
             };
 
             return (
@@ -2640,7 +2853,19 @@
                             </div>
                             <div className="form-row">
                                 <div className="form-group"><label>Category</label><input type="text" value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})} /></div>
-                                <div className="form-group"><label>Due Day (1-31)</label><input type="number" min="1" max="31" value={formData.dueDay} onChange={(e) => setFormData({...formData, dueDay: e.target.value})} required /></div>
+                                <div className="form-group"><label>Frequency</label><select value={formData.frequency || 'monthly'} onChange={(e) => setFormData({...formData, frequency: e.target.value})}><option value="monthly">Monthly</option><option value="weekly">Weekly</option><option value="biweekly">Bi-weekly</option></select></div>
+                                {(formData.frequency || 'monthly') === 'monthly' && (
+                                    <div className="form-group"><label>Due Day (1-31)</label><input type="number" min="1" max="31" value={formData.dueDay} onChange={(e) => setFormData({...formData, dueDay: e.target.value})} required /></div>
+                                )}
+                                {formData.frequency === 'weekly' && (
+                                    <div className="form-group"><label>Day of Week</label><select value={formData.dayOfWeek || '1'} onChange={(e) => setFormData({...formData, dayOfWeek: e.target.value})}><option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option></select></div>
+                                )}
+                                {formData.frequency === 'biweekly' && (
+                                    <div className="form-group"><label>Start Date <span style={{color:'#a0aec0',fontWeight:'400'}}>(any date it occurs)</span></label><input type="date" value={formData.anchorDate || ''} onChange={(e) => setFormData({...formData, anchorDate: e.target.value})} required /></div>
+                                )}
+                                {formData.frequency === 'biweekly' && (
+                                    <div className="form-group"><label>Alternate Amount <span style={{color:'#a0aec0',fontWeight:'400'}}>(optional — every other occurrence)</span></label><input type="number" step="0.01" min="0" value={formData.altAmount || ''} onChange={(e) => setFormData({...formData, altAmount: e.target.value})} placeholder="Leave blank if same each time" /></div>
+                                )}
                                 <div className="form-group"><label>Link to Debt</label><select value={formData.linkedDebt || ''} onChange={(e) => setFormData({...formData, linkedDebt: e.target.value})}><option value="">None</option>{debts.map(debt => (<option key={debt.id} value={debt.id}>{debt.name}</option>))}</select></div>
                             </div>
                             <div className="form-group">
@@ -2892,10 +3117,11 @@
                     // If user wants to create recurring payment
                     if (formData.createRecurring && formData.minimumPayment && formData.dueDay) {
                         const newRecurringPayment = {
-                            id: Date.now() + 1, // Slightly different ID
+                            id: Date.now() + 1,
                             name: formData.name + ' Payment',
                             amount: parseFloat(formData.minimumPayment),
                             category: 'Debt',
+                            frequency: 'monthly',
                             dueDay: parseInt(formData.dueDay),
                             linkedDebt: newDebt.id.toString(),
                             auto: formData.autoPayRecurring
@@ -3781,9 +4007,10 @@
             );
         }
 
-        function BudgetTab({ transactions, recurringPayments, expectedMonthlyIncome, setExpectedMonthlyIncome, currentMonth, unpaidRecurring, weeklySpendingBudget, setWeeklySpendingBudget }) {
+        function BudgetTab({ transactions, recurringPayments, expectedMonthlyIncome, setExpectedMonthlyIncome, currentMonth, unpaidRecurring, weeklySpendingBudget, setWeeklySpendingBudget, extraDebtPayment, setExtraDebtPayment }) {
             const [tempIncome, setTempIncome] = useState(expectedMonthlyIncome);
             const [tempWeekly, setTempWeekly] = useState(weeklySpendingBudget);
+            const [tempExtra, setTempExtra] = useState(extraDebtPayment);
             const __range = getFinancialMonthRange(currentMonth); const start = __range.start; const end = __range.end;
             
             // Get transactions for current month
@@ -3802,18 +4029,8 @@
                 .filter(t => t.type === 'expense')
                 .reduce((sum, t) => sum + parseFloat(t.amount), 0);
 
-            // Calculate recurring bills total for this month
-            const recurringTotal = recurringPayments
-                .filter(p => {
-                    let paymentDate;
-                    if (p.dueDay >= 28) {
-                        paymentDate = new Date(start.getFullYear(), start.getMonth(), p.dueDay);
-                    } else {
-                        paymentDate = new Date(start.getFullYear(), start.getMonth() + 1, p.dueDay);
-                    }
-                    return paymentDate >= start && paymentDate <= end;
-                })
-                .reduce((sum, p) => sum + parseFloat(p.amount), 0);
+            // Calculate recurring bills total for this month (all frequencies)
+            const recurringTotal = recurringPayments.reduce((sum, p) => sum + getMonthlyEquivalentAmount(p, currentMonth), 0);
 
             const moneyLeft = expectedMonthlyIncome - recurringTotal;
             const moneyLeftActual = actualIncome - recurringTotal;
@@ -3833,6 +4050,13 @@
                 showToast('Expected monthly income updated');
             };
 
+            const handleSaveExtra = () => {
+                setExtraDebtPayment(tempExtra);
+                showToast('Extra debt payment updated');
+            };
+
+            const nonRecurringBudget = expectedMonthlyIncome - recurringTotal - extraDebtPayment;
+
             const monthLabel = `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
 
             return (
@@ -3842,16 +4066,62 @@
                         <div className="income-input-group">
                             <div className="form-group">
                                 <label>Expected Monthly Income</label>
-                                <input 
-                                    type="number" 
-                                    value={tempIncome} 
+                                <input
+                                    type="number"
+                                    value={tempIncome}
                                     onChange={(e) => setTempIncome(Number(e.target.value))}
                                     placeholder="Enter expected monthly income"
                                 />
                             </div>
                             <button onClick={handleSaveIncome}>💾 Save</button>
                         </div>
+                        <div className="income-input-group" style={{marginTop:'12px'}}>
+                            <div className="form-group">
+                                <label>Extra Debt Payment Goal</label>
+                                <input
+                                    type="number"
+                                    value={tempExtra}
+                                    onChange={(e) => setTempExtra(Number(e.target.value))}
+                                    placeholder="Extra amount to pay toward debt this month"
+                                />
+                            </div>
+                            <button onClick={handleSaveExtra}>💾 Save</button>
+                        </div>
                     </div>
+
+                    {extraDebtPayment > 0 && (
+                        <div className="section" style={{border:'2px solid #667eea'}}>
+                            <h2 style={{color:'#667eea', marginBottom:'20px'}}>🎯 Non-Recurring Budget Planner</h2>
+                            <div style={{background:'#0f1420', borderRadius:'10px', padding:'18px', marginBottom:'20px'}}>
+                                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', paddingBottom:'10px', borderBottom:'1px solid #2d3748', marginBottom:'10px'}}>
+                                    <span style={{color:'#a0aec0', fontSize:'1em'}}>Expected Income</span>
+                                    <span style={{color:'#28a745', fontWeight:'700', fontSize:'1.1em'}}>{formatCurrency(expectedMonthlyIncome)}</span>
+                                </div>
+                                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', paddingBottom:'10px', borderBottom:'1px solid #2d3748', marginBottom:'10px'}}>
+                                    <span style={{color:'#a0aec0', fontSize:'1em'}}>Recurring Bills</span>
+                                    <span style={{color:'#dc3545', fontWeight:'700', fontSize:'1.1em'}}>− {formatCurrency(recurringTotal)}</span>
+                                </div>
+                                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', paddingBottom:'10px', borderBottom:'1px solid #2d3748', marginBottom:'10px'}}>
+                                    <span style={{color:'#a0aec0', fontSize:'1em'}}>Extra Debt Payment</span>
+                                    <span style={{color:'#ffc107', fontWeight:'700', fontSize:'1.1em'}}>− {formatCurrency(extraDebtPayment)}</span>
+                                </div>
+                                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', paddingTop:'4px'}}>
+                                    <span style={{color:'#e2e8f0', fontWeight:'bold', fontSize:'1.1em'}}>Non-Recurring Budget</span>
+                                    <span style={{color: nonRecurringBudget >= 0 ? '#667eea' : '#dc3545', fontWeight:'700', fontSize:'1.6em'}}>{formatCurrency(nonRecurringBudget)}</span>
+                                </div>
+                            </div>
+                            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:'12px'}}>
+                                <div>
+                                    <div style={{color:'#a0aec0', fontSize:'0.85em', marginBottom:'4px'}}>Weekly equivalent (÷ 4)</div>
+                                    <div style={{color:'#667eea', fontWeight:'700', fontSize:'1.4em'}}>{formatCurrency(Math.round(nonRecurringBudget / 4))}/wk</div>
+                                </div>
+                                <button
+                                    onClick={() => { const w = Math.round(nonRecurringBudget / 4); setWeeklySpendingBudget(w); setTempWeekly(w); showToast(`Weekly budget set to ${formatCurrency(w)}`); }}
+                                    style={{background:'#667eea', color:'white', border:'none', borderRadius:'8px', padding:'10px 22px', cursor:'pointer', fontWeight:'600', fontSize:'0.95em'}}
+                                >Apply as Weekly Budget</button>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="budget-overview">
                         <h2 style={{color: '#667eea', marginBottom: '25px', fontSize: '1.8em'}}>💰 Money Available This Month</h2>
