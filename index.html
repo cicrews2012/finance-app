@@ -3518,6 +3518,10 @@
                                         style={{width: '100%', padding: '10px 14px', fontSize: '1.05em'}} />
                                 </div>
                                 <div style={{background: '#1a1f2e', padding: '12px 18px', borderRadius: '8px', border: '1px solid #2d3748', flexShrink: 0}}>
+                                    <div style={{color: '#a0aec0', fontSize: '0.78em', marginBottom: '3px'}}>Total debt selected</div>
+                                    <div style={{color: '#e2e8f0', fontWeight: '700', fontSize: '1.15em'}}>{formatCurrency(planDebts.reduce((s, d) => s + (parseFloat(d.currentBalance) || 0), 0))}</div>
+                                </div>
+                                <div style={{background: '#1a1f2e', padding: '12px 18px', borderRadius: '8px', border: '1px solid #2d3748', flexShrink: 0}}>
                                     <div style={{color: '#a0aec0', fontSize: '0.78em', marginBottom: '3px'}}>Total monthly outlay</div>
                                     <div style={{color: '#667eea', fontWeight: '700', fontSize: '1.15em'}}>{formatCurrency(planMin + extra)}</div>
                                 </div>
