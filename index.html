@@ -3372,7 +3372,7 @@ function FinanceTracker() {
         }
 
         function DebtsTab({ debts, setDebts, recurringPayments, setRecurringPayments }) {
-            const [formData, setFormData] = useState({ name: '', originalBalance: '', currentBalance: '', interestRate: '', minimumPayment: '', category: 'Credit Card', dueDay: '', createRecurring: false, autoPayRecurring: false });
+            const [formData, setFormData] = useState({ name: '', originalBalance: '', currentBalance: '', interestRate: '', minimumPayment: '', category: 'Credit Card', dueDay: '', createRecurring: false, autoPayRecurring: false, paymentSource: '' });
             const [expandedDebt, setExpandedDebt] = useState(null);
             const [editingDebt, setEditingDebt] = useState(null);
             const [expandedPaidOffSection, setExpandedPaidOffSection] = useState(false);
@@ -3413,12 +3413,13 @@ function FinanceTracker() {
                             frequency: 'monthly',
                             dueDay: parseInt(formData.dueDay),
                             linkedDebt: newDebt.id.toString(),
-                            auto: formData.autoPayRecurring
+                            auto: formData.autoPayRecurring,
+                            paymentSource: formData.paymentSource || ''
                         };
                         setRecurringPayments([...recurringPayments, newRecurringPayment]);
                     }
                     
-                    setFormData({ name: '', originalBalance: '', currentBalance: '', interestRate: '', minimumPayment: '', category: 'Credit Card', dueDay: '', createRecurring: false, autoPayRecurring: false }); 
+                    setFormData({ name: '', originalBalance: '', currentBalance: '', interestRate: '', minimumPayment: '', category: 'Credit Card', dueDay: '', createRecurring: false, autoPayRecurring: false, paymentSource: '' });
                 } 
             };
             const deleteDebt = (id) => setDebts(debts.filter(d => d.id !== id));
@@ -3567,24 +3568,33 @@ function FinanceTracker() {
                                         <div className="form-row">
                                             <div className="form-group">
                                                 <label>Payment Due Day</label>
-                                                <input 
-                                                    type="number" 
-                                                    min="1" 
-                                                    max="31" 
-                                                    value={formData.dueDay} 
-                                                    onChange={(e) => setFormData({...formData, dueDay: e.target.value})} 
-                                                    placeholder="e.g., 15" 
+                                                <input
+                                                    type="number"
+                                                    min="1"
+                                                    max="31"
+                                                    value={formData.dueDay}
+                                                    onChange={(e) => setFormData({...formData, dueDay: e.target.value})}
+                                                    placeholder="e.g., 15"
                                                     required={formData.createRecurring}
                                                 />
                                                 <p style={{color: '#a0aec0', fontSize: '0.85em', marginTop: '5px'}}>
                                                     Day of month payment is due (1-31)
                                                 </p>
                                             </div>
+                                            <div className="form-group">
+                                                <label>Payment Source</label>
+                                                <select value={formData.paymentSource} onChange={(e) => setFormData({...formData, paymentSource: e.target.value})}>
+                                                    <option value="">— Untagged —</option>
+                                                    <option value="debit">🏦 Checking / Debit (money out now)</option>
+                                                    <option value="credit">💳 Credit Card (offset ~1 month)</option>
+                                                </select>
+                                                <small style={{color: '#a0aec0', fontSize: '0.85em', marginTop: '5px', display: 'block'}}>Used for cashflow tracking</small>
+                                            </div>
                                             <div className="form-group" style={{display: 'flex', alignItems: 'center', paddingTop: '20px'}}>
-                                                <input 
-                                                    type="checkbox" 
-                                                    id="autoPayRecurring" 
-                                                    checked={formData.autoPayRecurring} 
+                                                <input
+                                                    type="checkbox"
+                                                    id="autoPayRecurring"
+                                                    checked={formData.autoPayRecurring}
                                                     onChange={(e) => setFormData({...formData, autoPayRecurring: e.target.checked})}
                                                     style={{marginRight: '10px', width: '20px', height: '20px', cursor: 'pointer'}}
                                                 />
