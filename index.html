@@ -1465,160 +1465,88 @@ function FinanceTracker() {
                         );
                     })()}
 
-                    {(() => {
-                        const today = new Date();
-                        const weekStart = new Date(today);
-                        weekStart.setDate(today.getDate() - today.getDay());
-                        weekStart.setHours(0,0,0,0);
-                        const weekEnd = new Date(weekStart);
-                        weekEnd.setDate(weekStart.getDate() + 6);
-                        weekEnd.setHours(23,59,59,999);
-
-                        const weeklyNonRecurringSpent = transactions
-                            .filter(t => {
-                                const d = parseLocalDate(t.date);
-                                return t.type === 'expense' && !isRecurringTransaction(t) && !t.excludeFromBudget && d >= weekStart && d <= weekEnd;
-                            })
-                            .reduce((sum, t) => sum + parseFloat(t.amount), 0);
-
-                        const monthlyNonRecurringSpent = transactions
-                            .filter(t => {
-                                const d = parseLocalDate(t.date);
-                                return t.type === 'expense' && !isRecurringTransaction(t) && !t.excludeFromBudget && d >= start && d <= end;
-                            })
-                            .reduce((sum, t) => sum + parseFloat(t.amount), 0);
-
-                        const monthlyBudget = weeklySpendingBudget * 4;
-                        const weeklyRemaining = weeklySpendingBudget - weeklyNonRecurringSpent;
-                        const monthlyRemaining = monthlyBudget - monthlyNonRecurringSpent;
-                        const weeklyPct = Math.min((weeklyNonRecurringSpent / weeklySpendingBudget) * 100, 100);
-                        const monthlyPct = Math.min((monthlyNonRecurringSpent / monthlyBudget) * 100, 100);
-                        const weeklyColor = weeklyPct >= 100 ? '#dc3545' : weeklyPct >= 75 ? '#ffc107' : '#28a745';
-                        const monthlyColor = monthlyPct >= 100 ? '#dc3545' : monthlyPct >= 75 ? '#ffc107' : '#28a745';
-                        const weekLabel = `${weekStart.toLocaleDateString('en-US', {month:'short',day:'numeric'})} – ${weekEnd.toLocaleDateString('en-US', {month:'short',day:'numeric'})}`;
-
-                        return (
-                            <div className="section" style={{border: `2px solid ${weeklyColor}`, background: `linear-gradient(135deg, ${weeklyColor}0a 0%, ${weeklyColor}05 100%)`, marginBottom: '20px'}}>
-                                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'18px', flexWrap:'wrap', gap:'10px'}}>
-                                    <h2 style={{margin:0}}>💸 Spending Budget</h2>
-                                    <span style={{color:'#a0aec0', fontSize:'0.85em'}}>Non-recurring only • Set in Budget tab</span>
+                    <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(320px, 1fr))', gap:'20px', alignItems:'start'}}>
+                        {billsDueSoon.length > 0 && (
+                            <div className="section" style={{border: '2px solid #ffc107', background: 'linear-gradient(135deg, #ffc10708 0%, #ff980008 100%)', margin: 0}}>
+                                <h2 style={{color: '#ffc107', marginBottom: '15px'}}>⚠️ Bills Due in the Next 7 Days</h2>
+                                <div style={{display: 'flex', flexDirection: 'column', gap: '10px'}}>
+                                    {billsDueSoon.map(p => {
+                                        const monthKey = getMonthKey(currentMonth);
+                                        const payKey = `${monthKey}-${p.id}`;
+                                        const markPaid = () => {
+                                            if (p.auto) {
+                                                setPaidPayments(prev => ({...prev, [payKey]: true}));
+                                                return;
+                                            }
+                                            const newTransaction = { type: 'expense', amount: p.amount, description: `${p.name} (Recurring)`, category: p.category, date: getLocalDateString(), id: Date.now(), isRecurring: true, paymentSource: p.paymentSource || '' };
+                                            setTransactions(prev => [...prev, newTransaction]);
+                                            setPaidPayments(prev => ({...prev, [payKey]: true}));
+                                            if (p.linkedDebt) {
+                                                setDebts(prev => prev.map(debt => {
+                                                    if (debt.id !== parseInt(p.linkedDebt)) return debt;
+                                                    const monthlyRate = (parseFloat(debt.interestRate) || 0) / 100 / 12;
+                                                    const interest = debt.currentBalance * monthlyRate;
+                                                    const principal = p.amount - interest;
+                                                    const newBalance = Math.max(0, debt.currentBalance - principal);
+                                                    return { ...debt, currentBalance: newBalance, transactionLog: [...(debt.transactionLog || []), { date: getLocalDateString(), paymentAmount: p.amount, interestAccrued: interest, principalPaid: principal, balanceBefore: debt.currentBalance, balanceAfter: newBalance }] };
+                                                }));
+                                            }
+                                            showToast(`Payment processed: ${p.name} — ${formatCurrency(p.amount)}`);
+                                        };
+                                        return (
+                                            <div key={p.id} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#1a1f2e', padding: '12px 14px', borderRadius: '10px', borderLeft: `4px solid ${p.daysUntil === 0 ? '#dc3545' : p.daysUntil <= 2 ? '#ffc107' : '#667eea'}`, flexWrap: 'wrap', gap: '8px'}}>
+                                                <div>
+                                                    <div style={{color: '#e2e8f0', fontWeight: '600', fontSize: '0.95em'}}>{p.name}</div>
+                                                    <div style={{color: '#a0aec0', fontSize: '0.82em', marginTop: '2px'}}>
+                                                        {p.category}
+                                                        {p.daysUntil === 0
+                                                            ? <span style={{color: '#dc3545', fontWeight: '700'}}> • Due TODAY</span>
+                                                            : <span> • Due in <strong style={{color: '#ffc107'}}>{p.daysUntil} day{p.daysUntil > 1 ? 's' : ''}</strong></span>
+                                                        }
+                                                    </div>
+                                                </div>
+                                                <div style={{display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap'}}>
+                                                    <span style={{color: '#ffc107', fontWeight: '700'}}>{formatCurrency(p.amount)}</span>
+                                                    {p.paymentUrl && (
+                                                        <button onClick={() => window.open(p.paymentUrl, '_blank')} style={{padding: '5px 10px', fontSize: '0.8em', background: '#667eea'}}>Pay Now</button>
+                                                    )}
+                                                    <button onClick={markPaid} className="success" style={{padding: '5px 10px', fontSize: '0.8em'}}>✓ Paid</button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
-                                <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'20px'}}>
-                                    <div style={{background:'#1a1f2e', borderRadius:'10px', padding:'18px', border:`2px solid ${weeklyColor}`}}>
-                                        <div style={{color:'#a0aec0', fontSize:'0.8em', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'8px'}}>This Week ({weekLabel})</div>
-                                        <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:'10px'}}>
-                                            <span style={{color: weeklyColor, fontWeight:'700', fontSize:'1.6em'}}>{formatCurrency(weeklyRemaining)}</span>
-                                            <span style={{color:'#a0aec0', fontSize:'0.85em'}}>remaining of {formatCurrency(weeklySpendingBudget)}</span>
-                                        </div>
-                                        <div style={{background:'#2d3748', borderRadius:'4px', height:'10px', overflow:'hidden', marginBottom:'8px'}}>
-                                            <div style={{width:`${weeklyPct}%`, height:'100%', background:weeklyColor, transition:'width 0.3s ease'}}></div>
-                                        </div>
-                                        <div style={{display:'flex', justifyContent:'space-between', fontSize:'0.82em', color:'#a0aec0'}}>
-                                            <span>Spent: <strong style={{color:'#e2e8f0'}}>{formatCurrency(weeklyNonRecurringSpent)}</strong></span>
-                                            <span style={{color: weeklyColor, fontWeight:'700'}}>{weeklyPct.toFixed(0)}%</span>
-                                        </div>
-                                    </div>
-                                    <div style={{background:'#1a1f2e', borderRadius:'10px', padding:'18px', border:`2px solid ${monthlyColor}`}}>
-                                        <div style={{color:'#a0aec0', fontSize:'0.8em', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'8px'}}>This Month (non-recurring)</div>
-                                        <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:'10px'}}>
-                                            <span style={{color: monthlyColor, fontWeight:'700', fontSize:'1.6em'}}>{formatCurrency(monthlyRemaining)}</span>
-                                            <span style={{color:'#a0aec0', fontSize:'0.85em'}}>remaining of {formatCurrency(monthlyBudget)}</span>
-                                        </div>
-                                        <div style={{background:'#2d3748', borderRadius:'4px', height:'10px', overflow:'hidden', marginBottom:'8px'}}>
-                                            <div style={{width:`${monthlyPct}%`, height:'100%', background:monthlyColor, transition:'width 0.3s ease'}}></div>
-                                        </div>
-                                        <div style={{display:'flex', justifyContent:'space-between', fontSize:'0.82em', color:'#a0aec0'}}>
-                                            <span>Spent: <strong style={{color:'#e2e8f0'}}>{formatCurrency(monthlyNonRecurringSpent)}</strong></span>
-                                            <span style={{color: monthlyColor, fontWeight:'700'}}>{monthlyPct.toFixed(0)}%</span>
-                                        </div>
-                                    </div>
+                                <div style={{marginTop: '10px', color: '#a0aec0', fontSize: '0.85em'}}>
+                                    Total due soon: <strong style={{color: '#ffc107'}}>{formatCurrency(billsDueSoon.reduce((s, p) => s + parseFloat(p.amount), 0))}</strong>
                                 </div>
                             </div>
-                        );
-                    })()}
-
-                    {billsDueSoon.length > 0 && (
-                        <div className="section" style={{border: '2px solid #ffc107', background: 'linear-gradient(135deg, #ffc10708 0%, #ff980008 100%)'}}>
-                            <h2 style={{color: '#ffc107', marginBottom: '15px'}}>⚠️ Bills Due in the Next 7 Days</h2>
-                            <div style={{display: 'flex', flexDirection: 'column', gap: '10px'}}>
-                                {billsDueSoon.map(p => {
-                                    const monthKey = getMonthKey(currentMonth);
-                                    const payKey = `${monthKey}-${p.id}`;
-                                    const markPaid = () => {
-                                        // Auto-pay: just mark paid — the useEffect will create the transaction when due
-                                        if (p.auto) {
-                                            setPaidPayments(prev => ({...prev, [payKey]: true}));
-                                            return;
-                                        }
-                                        // Manual: create expense transaction and update linked debt, same as Recurring "Process"
-                                        const newTransaction = { type: 'expense', amount: p.amount, description: `${p.name} (Recurring)`, category: p.category, date: getLocalDateString(), id: Date.now(), isRecurring: true, paymentSource: p.paymentSource || '' };
-                                        setTransactions(prev => [...prev, newTransaction]);
-                                        setPaidPayments(prev => ({...prev, [payKey]: true}));
-                                        if (p.linkedDebt) {
-                                            setDebts(prev => prev.map(debt => {
-                                                if (debt.id !== parseInt(p.linkedDebt)) return debt;
-                                                const monthlyRate = (parseFloat(debt.interestRate) || 0) / 100 / 12;
-                                                const interest = debt.currentBalance * monthlyRate;
-                                                const principal = p.amount - interest;
-                                                const newBalance = Math.max(0, debt.currentBalance - principal);
-                                                return { ...debt, currentBalance: newBalance, transactionLog: [...(debt.transactionLog || []), { date: getLocalDateString(), paymentAmount: p.amount, interestAccrued: interest, principalPaid: principal, balanceBefore: debt.currentBalance, balanceAfter: newBalance }] };
-                                            }));
-                                        }
-                                        showToast(`Payment processed: ${p.name} — ${formatCurrency(p.amount)}`);
-                                    };
-                                    return (
-                                    <div key={p.id} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#1a1f2e', padding: '14px 18px', borderRadius: '10px', borderLeft: `4px solid ${p.daysUntil === 0 ? '#dc3545' : p.daysUntil <= 2 ? '#ffc107' : '#667eea'}`, flexWrap: 'wrap', gap: '10px'}}>
-                                        <div>
-                                            <div style={{color: '#e2e8f0', fontWeight: '600'}}>{p.name}</div>
-                                            <div style={{color: '#a0aec0', fontSize: '0.85em', marginTop: '3px'}}>
-                                                {p.category}
-                                                {p.daysUntil === 0
-                                                    ? <span style={{color: '#dc3545', fontWeight: '700'}}> • Due TODAY</span>
-                                                    : <span> • Due in <strong style={{color: '#ffc107'}}>{p.daysUntil} day{p.daysUntil > 1 ? 's' : ''}</strong></span>
-                                                }
+                        )}
+                        {transactions.length > 0 && (
+                            <div className="section" style={{margin: 0}}>
+                                <h2>Recent Transactions</h2>
+                                <div className="transaction-list">
+                                    {transactions.slice().sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5).map(t => (
+                                        <div key={t.id} className={`transaction-item ${t.type}`}>
+                                            <div className="item-details">
+                                                <h4>
+                                                    {t.description}
+                                                    {t.paymentSource === 'credit' && <span style={{background:'#764ba244', color:'#c084fc', border:'1px solid #764ba266', padding:'2px 7px', borderRadius:'10px', fontSize:'0.72em', fontWeight:'700', marginLeft:'8px', verticalAlign:'middle'}}>CC</span>}
+                                                    {t.paymentSource === 'debit' && <span style={{background:'#17a2b844', color:'#67e8f9', border:'1px solid #17a2b866', padding:'2px 7px', borderRadius:'10px', fontSize:'0.72em', fontWeight:'700', marginLeft:'8px', verticalAlign:'middle'}}>DC</span>}
+                                                </h4>
+                                                <p>
+                                                    {t.category} • {t.date}
+                                                    {t.notes && <span style={{color: '#a0aec0', marginLeft: '8px'}}>• {t.notes}</span>}
+                                                </p>
+                                            </div>
+                                            <div className={`item-amount ${t.type === 'income' ? 'positive' : 'negative'}`}>
+                                                {t.type === 'income' ? '+' : '-'}{formatCurrency(parseFloat(t.amount))}
                                             </div>
                                         </div>
-                                        <div style={{display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap'}}>
-                                            <span style={{color: '#ffc107', fontWeight: '700', fontSize: '1.15em'}}>{formatCurrency(p.amount)}</span>
-                                            {p.paymentUrl && (
-                                                <button onClick={() => window.open(p.paymentUrl, '_blank')} style={{padding: '6px 14px', fontSize: '0.85em', background: '#667eea'}}>Pay Now</button>
-                                            )}
-                                            <button onClick={markPaid} className="success" style={{padding: '6px 14px', fontSize: '0.85em'}}>✓ Mark Paid</button>
-                                        </div>
-                                    </div>
-                                    );
-                                })}
+                                    ))}
+                                </div>
                             </div>
-                            <div style={{marginTop: '12px', color: '#a0aec0', fontSize: '0.88em'}}>
-                                Total due soon: <strong style={{color: '#ffc107'}}>{formatCurrency(billsDueSoon.reduce((s, p) => s + parseFloat(p.amount), 0))}</strong>
-                            </div>
-                        </div>
-                    )}
-                    {transactions.length > 0 && (
-                        <div className="section">
-                            <h2>Recent Transactions</h2>
-                            <div className="transaction-list">
-                                {transactions.slice().sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5).map(t => (
-                                    <div key={t.id} className={`transaction-item ${t.type}`}>
-                                        <div className="item-details">
-                                            <h4>
-                                                {t.description}
-                                                {t.paymentSource === 'credit' && <span style={{background:'#764ba244', color:'#c084fc', border:'1px solid #764ba266', padding:'2px 7px', borderRadius:'10px', fontSize:'0.72em', fontWeight:'700', marginLeft:'8px', verticalAlign:'middle'}}>CC</span>}
-                                                {t.paymentSource === 'debit' && <span style={{background:'#17a2b844', color:'#67e8f9', border:'1px solid #17a2b866', padding:'2px 7px', borderRadius:'10px', fontSize:'0.72em', fontWeight:'700', marginLeft:'8px', verticalAlign:'middle'}}>DC</span>}
-                                            </h4>
-                                            <p>
-                                                {t.category} • {t.date}
-                                                {t.notes && <span style={{color: '#a0aec0', marginLeft: '8px'}}>• {t.notes}</span>}
-                                            </p>
-                                        </div>
-                                        <div className={`item-amount ${t.type === 'income' ? 'positive' : 'negative'}`}>
-                                            {t.type === 'income' ? '+' : '-'}{formatCurrency(parseFloat(t.amount))}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
+                        )}
+                    </div>
                     {/* Week-by-week breakdown for the current financial month */}
                     {weeklySpendingBudget > 0 && transactions.length > 0 && (() => {
                         const today = new Date();
