@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finance Tracker v2.0.0</title>
-    <!-- Build: 2026-06-12 - v2.0: Payment source (credit/debit) tagging for recurring + transactions; cashflow breakdown dashboard (beta); transaction source filter; calendar CC/DC/UT badges; bulk source edit; select all filtered -->
+    <title>Finance Tracker v2.1.0</title>
+    <!-- Build: 2026-06-12 - v2.1: Scheduled/actual flip (scheduled as headline, actual as side note); cashflow cards show actual-so-far as headline with expected below; recurring paid/upcoming/skipped breakdown in cashflow cards; month-total click-through in week-by-week card -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -536,6 +536,19 @@
             return dates.reduce((sum, d) => sum + getOccurrenceAmount(payment, d), 0);
         };
 
+        // Skip-aware version — deducts skipped occurrences from the total
+        const getEffectiveMonthlyAmount = (payment, currentMonth, paidPayments) => {
+            const freq = payment.frequency || 'monthly';
+            if (freq === 'monthly') return getMonthlyEquivalentAmount(payment, currentMonth);
+            const monthKey = getMonthKey(currentMonth);
+            const dates = getPaymentDatesInMonth(payment, currentMonth);
+            return dates.reduce((sum, d) => {
+                const key = `${monthKey}-${payment.id}-${getLocalDateString(d)}`;
+                if ((paidPayments[key] || 'unpaid') === 'skipped') return sum;
+                return sum + getOccurrenceAmount(payment, d);
+            }, 0);
+        };
+
 function FinanceTracker() {
             // Predefined categories
             const expenseCategories = ['Food', 'Groceries', 'Coffee', 'Subscriptions', 'Home', 'Car Payments', 'Personal', 'Pets', 'Utilities', 'Gas (cars)', 'Debt', 'Insurance', 'Kids', 'Savings', 'House cleaning', 'Entertainment', 'Healthcare', 'Transportation', 'Other'];
@@ -552,6 +565,7 @@ function FinanceTracker() {
             const [weeklySpendingBudget, setWeeklySpendingBudget] = useState(580);
             const [extraDebtPayment, setExtraDebtPayment] = useState(0);
             const [ignoredDuplicatePairs, setIgnoredDuplicatePairs] = useState(new Set());
+            const [creditCardDueDay, setCreditCardDueDay] = useState(0);
 
             // No browser storage — data lives only for this session
             useEffect(() => {
@@ -700,7 +714,7 @@ function FinanceTracker() {
 
             const exportData = () => {
                 const data = {
-                    version: "2.0", // Match prod format
+                    version: "2.1", // Match prod format
                     exportDate: new Date().toISOString(),
                     transactions: transactions.map(t => ({
                         ...t,
@@ -735,7 +749,8 @@ function FinanceTracker() {
                     settings: {
                         expectedMonthlyIncome: expectedMonthlyIncome,
                         weeklySpendingBudget: weeklySpendingBudget,
-                        extraDebtPayment: extraDebtPayment
+                        extraDebtPayment: extraDebtPayment,
+                        creditCardDueDay: creditCardDueDay
                     }
                 };
                 const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -1112,6 +1127,7 @@ function FinanceTracker() {
                                 if (data.settings.expectedMonthlyIncome) setExpectedMonthlyIncome(data.settings.expectedMonthlyIncome);
                                 if (data.settings.weeklySpendingBudget) setWeeklySpendingBudget(data.settings.weeklySpendingBudget);
                                 if (data.settings.extraDebtPayment) setExtraDebtPayment(data.settings.extraDebtPayment);
+                                if (data.settings.creditCardDueDay) setCreditCardDueDay(data.settings.creditCardDueDay);
                             }
                             
                             showToast('Data imported successfully!');
@@ -1156,8 +1172,8 @@ function FinanceTracker() {
                         <button className={`tab-button ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>⚙️ Settings</button>
                     </div>
                     <div className="tab-content">
-                        {activeTab === 'dashboard' && <DashboardTab totals={totals} totalDebt={totalDebt} unpaidRecurring={unpaidRecurring} currentMonth={currentMonth} transactions={transactions} setTransactions={setTransactions} recurringPayments={recurringPayments} debts={debts} setDebts={setDebts} expectedMonthlyIncome={expectedMonthlyIncome} importData={importData} paidPayments={paidPayments} setPaidPayments={setPaidPayments} weeklySpendingBudget={weeklySpendingBudget} />}
-                        {activeTab === 'budget' && <BudgetTab transactions={transactions} recurringPayments={recurringPayments} expectedMonthlyIncome={expectedMonthlyIncome} setExpectedMonthlyIncome={setExpectedMonthlyIncome} currentMonth={currentMonth} unpaidRecurring={unpaidRecurring} weeklySpendingBudget={weeklySpendingBudget} setWeeklySpendingBudget={setWeeklySpendingBudget} extraDebtPayment={extraDebtPayment} setExtraDebtPayment={setExtraDebtPayment} />}
+                        {activeTab === 'dashboard' && <DashboardTab totals={totals} totalDebt={totalDebt} unpaidRecurring={unpaidRecurring} currentMonth={currentMonth} transactions={transactions} setTransactions={setTransactions} recurringPayments={recurringPayments} debts={debts} setDebts={setDebts} expectedMonthlyIncome={expectedMonthlyIncome} importData={importData} paidPayments={paidPayments} setPaidPayments={setPaidPayments} weeklySpendingBudget={weeklySpendingBudget} creditCardDueDay={creditCardDueDay} />}
+                        {activeTab === 'budget' && <BudgetTab transactions={transactions} recurringPayments={recurringPayments} expectedMonthlyIncome={expectedMonthlyIncome} setExpectedMonthlyIncome={setExpectedMonthlyIncome} currentMonth={currentMonth} unpaidRecurring={unpaidRecurring} weeklySpendingBudget={weeklySpendingBudget} setWeeklySpendingBudget={setWeeklySpendingBudget} extraDebtPayment={extraDebtPayment} setExtraDebtPayment={setExtraDebtPayment} creditCardDueDay={creditCardDueDay} setCreditCardDueDay={setCreditCardDueDay} paidPayments={paidPayments} />}
                         {activeTab === 'transactions' && <TransactionsTab transactions={transactions} setTransactions={setTransactions} currentMonth={currentMonth} expenseCategories={expenseCategories} incomeCategories={incomeCategories} debts={debts} setDebts={setDebts} />}
                         {activeTab === 'recurring' && <RecurringTab recurringPayments={recurringPayments} setRecurringPayments={setRecurringPayments} debts={debts} setDebts={setDebts} transactions={transactions} setTransactions={setTransactions} paidPayments={paidPayments} setPaidPayments={setPaidPayments} currentMonth={currentMonth} />}
                         {activeTab === 'duplicates' && <DuplicatesTab transactions={transactions} setTransactions={setTransactions} ignoredPairs={ignoredDuplicatePairs} setIgnoredPairs={setIgnoredDuplicatePairs} />}
@@ -1170,7 +1186,7 @@ function FinanceTracker() {
             );
         }
 
-        function DashboardTab({ totals, totalDebt, unpaidRecurring, currentMonth, transactions, setTransactions, recurringPayments, debts, setDebts, expectedMonthlyIncome, importData, paidPayments, setPaidPayments, weeklySpendingBudget }) {
+        function DashboardTab({ totals, totalDebt, unpaidRecurring, currentMonth, transactions, setTransactions, recurringPayments, debts, setDebts, expectedMonthlyIncome, importData, paidPayments, setPaidPayments, weeklySpendingBudget, creditCardDueDay }) {
             const [debtsCollapsed, setDebtsCollapsed] = useState(false);
             const [weekTxModal, setWeekTxModal] = useState(null);
             const fileInputRef = React.useRef(null); // Move ref to top level
@@ -1191,12 +1207,30 @@ function FinanceTracker() {
                     }
                     return (paymentDate >= start && paymentDate <= end) ? sum + parseFloat(p.amount) : sum;
                 }
-                return sum + getMonthlyEquivalentAmount(p, currentMonth);
+                return sum + getEffectiveMonthlyAmount(p, currentMonth, paidPayments);
             }, 0);
             
             // Recurring paid so far = total recurring this month minus what's still outstanding
             const paidRecurringTotal = recurringTotal - unpaidRecurring;
-            
+
+            // Count skipped occurrences this month across all weekly/biweekly payments
+            const monthKeyDash = getMonthKey(currentMonth);
+            const skippedThisMonth = recurringPayments.reduce((count, p) => {
+                const freq = p.frequency || 'monthly';
+                if (freq === 'monthly') return count;
+                const dates = getPaymentDatesInMonth(p, currentMonth);
+                return count + dates.filter(d => (paidPayments[`${monthKeyDash}-${p.id}-${getLocalDateString(d)}`] || 'unpaid') === 'skipped').length;
+            }, 0);
+            const skippedAmountThisMonth = recurringPayments.reduce((sum, p) => {
+                const freq = p.frequency || 'monthly';
+                if (freq === 'monthly') return sum;
+                const dates = getPaymentDatesInMonth(p, currentMonth);
+                return sum + dates.reduce((s, d) => {
+                    const key = `${monthKeyDash}-${p.id}-${getLocalDateString(d)}`;
+                    return (paidPayments[key] || 'unpaid') === 'skipped' ? s + getOccurrenceAmount(p, d) : s;
+                }, 0);
+            }, 0);
+
             const billsDueSoon = (() => {
                 const today = new Date();
                 const todayMs = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
@@ -1303,8 +1337,8 @@ function FinanceTracker() {
                         <div className="summary-card"><h3>Total Income</h3><div className="amount">{formatCurrency(totals.income)}</div></div>
                         <div className="summary-card"><h3>Total Expenses</h3><div className="amount">{formatCurrency(totals.expenses)}</div><div className="subtitle">From transactions only</div></div>
                         <div className="summary-card"><h3>Net Balance</h3><div className="amount">{formatCurrency(totals.net)}</div><div className="subtitle">{totals.income > 0 ? ((totals.net / totals.income) * 100).toFixed(1) : 0}% of income</div></div>
-                        <div className="summary-card"><h3>Unpaid Recurring</h3><div className="amount">{formatCurrency(unpaidRecurring)}</div><div className="subtitle">Still due this month</div></div>
-                        <div className="summary-card" style={{background: 'linear-gradient(135deg, #28a74522 0%, #20c99722 100%)', border: '2px solid #28a745'}}><h3>Recurring Paid</h3><div className="amount" style={{color: '#28a745'}}>{formatCurrency(paidRecurringTotal)}</div><div className="subtitle">{formatCurrency(paidRecurringTotal)} of {formatCurrency(recurringTotal)} paid this month</div></div>
+                        <div className="summary-card"><h3>Unpaid Recurring</h3><div className="amount">{formatCurrency(unpaidRecurring)}</div><div className="subtitle">Still due this month{skippedThisMonth > 0 ? ` • ${skippedThisMonth} skipped` : ''}</div></div>
+                        <div className="summary-card" style={{background: 'linear-gradient(135deg, #28a74522 0%, #20c99722 100%)', border: '2px solid #28a745'}}><h3>Recurring Paid</h3><div className="amount" style={{color: '#28a745'}}>{formatCurrency(paidRecurringTotal)}</div><div className="subtitle">{formatCurrency(paidRecurringTotal)} of {formatCurrency(recurringTotal)} paid{skippedAmountThisMonth > 0 ? ` • ${formatCurrency(skippedAmountThisMonth)} skipped` : ''}</div></div>
                     </div>
 
                     {/* Cash Flow Breakdown (beta feature) */}
@@ -1325,12 +1359,51 @@ function FinanceTracker() {
                         const debitTxThisMonth = monthlyTx.filter(t => t.paymentSource === 'debit').reduce((s, t) => s + parseFloat(t.amount), 0);
                         const creditTxLastMonth = prevMonthTx.filter(t => t.paymentSource === 'credit').reduce((s, t) => s + parseFloat(t.amount), 0);
 
-                        const creditRecurringThisMonth = recurringPayments.filter(p => p.paymentSource === 'credit').reduce((s, p) => s + getMonthlyEquivalentAmount(p, currentMonth), 0);
-                        const debitRecurringThisMonth = recurringPayments.filter(p => p.paymentSource === 'debit').reduce((s, p) => s + getMonthlyEquivalentAmount(p, currentMonth), 0);
-                        const creditRecurringLastMonth = recurringPayments.filter(p => p.paymentSource === 'credit').reduce((s, p) => s + getMonthlyEquivalentAmount(p, prevMonthDate), 0);
+                        // Recurring: scheduled (full month, no skip awareness)
+                        const cfMonthKey = getMonthKey(currentMonth);
+                        const cfToday = new Date(); cfToday.setHours(0,0,0,0);
 
-                        const totalDebitNow = debitTxThisMonth + debitRecurringThisMonth;
-                        const totalCreditChargedThisMonth = creditTxThisMonth + creditRecurringThisMonth;
+                        const creditRecurringScheduled = recurringPayments.filter(p => p.paymentSource === 'credit').reduce((s, p) => s + getMonthlyEquivalentAmount(p, currentMonth), 0);
+                        const debitRecurringScheduled = recurringPayments.filter(p => p.paymentSource === 'debit').reduce((s, p) => s + getMonthlyEquivalentAmount(p, currentMonth), 0);
+                        const creditRecurringScheduledLastMonth = recurringPayments.filter(p => p.paymentSource === 'credit').reduce((s, p) => s + getMonthlyEquivalentAmount(p, prevMonthDate), 0);
+                        const creditRecurringLastMonth = recurringPayments.filter(p => p.paymentSource === 'credit').reduce((s, p) => s + getEffectiveMonthlyAmount(p, prevMonthDate, paidPayments), 0);
+
+                        // Recurring paid so far this month
+                        const getRecurringPaidSoFar = (p) => {
+                            const freq = p.frequency || 'monthly';
+                            if (freq === 'monthly') {
+                                const st = paidPayments[`${cfMonthKey}-${p.id}`];
+                                return (st === true || st === 'paid') ? p.amount : 0;
+                            }
+                            return getPaymentDatesInMonth(p, currentMonth).reduce((sum, d) => {
+                                const key = `${cfMonthKey}-${p.id}-${getLocalDateString(d)}`;
+                                return (paidPayments[key] || 'unpaid') === 'paid' ? sum + getOccurrenceAmount(p, d) : sum;
+                            }, 0);
+                        };
+
+                        // Recurring upcoming: future occurrences not yet paid or skipped
+                        const getRecurringUpcoming = (p) => {
+                            const freq = p.frequency || 'monthly';
+                            if (freq === 'monthly') {
+                                const st = paidPayments[`${cfMonthKey}-${p.id}`];
+                                return (st === true || st === 'paid') ? 0 : p.amount;
+                            }
+                            return getPaymentDatesInMonth(p, currentMonth).reduce((sum, d) => {
+                                if (d < cfToday) return sum;
+                                const key = `${cfMonthKey}-${p.id}-${getLocalDateString(d)}`;
+                                return (paidPayments[key] || 'unpaid') === 'unpaid' ? sum + getOccurrenceAmount(p, d) : sum;
+                            }, 0);
+                        };
+
+                        const creditRecurringPaidSoFar = recurringPayments.filter(p => p.paymentSource === 'credit').reduce((s, p) => s + getRecurringPaidSoFar(p), 0);
+                        const debitRecurringPaidSoFar = recurringPayments.filter(p => p.paymentSource === 'debit').reduce((s, p) => s + getRecurringPaidSoFar(p), 0);
+                        const creditRecurringUpcoming = recurringPayments.filter(p => p.paymentSource === 'credit').reduce((s, p) => s + getRecurringUpcoming(p), 0);
+                        const debitRecurringUpcoming = recurringPayments.filter(p => p.paymentSource === 'debit').reduce((s, p) => s + getRecurringUpcoming(p), 0);
+                        const debitRecurringSkipped = Math.max(0, debitRecurringScheduled - debitRecurringPaidSoFar - debitRecurringUpcoming);
+                        const creditRecurringSkipped = Math.max(0, creditRecurringScheduled - creditRecurringPaidSoFar - creditRecurringUpcoming);
+
+                        const totalDebitNow = debitTxThisMonth + debitRecurringScheduled;
+                        const totalCreditChargedThisMonth = creditTxThisMonth + creditRecurringScheduled;
                         const totalCreditBillDueThisMonth = creditTxLastMonth + creditRecurringLastMonth;
 
                         const hasAnySourceData = transactions.some(t => t.paymentSource) || recurringPayments.some(p => p.paymentSource);
@@ -1350,23 +1423,38 @@ function FinanceTracker() {
                                 <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(220px, 1fr))', gap:'15px'}}>
                                     <div style={{background:'#1a1f2e', borderRadius:'10px', padding:'18px', border:'2px solid #67e8f9'}}>
                                         <div style={{color:'#67e8f9', fontSize:'0.78em', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'6px'}}>🏦 Checking Outflow — This Month</div>
-                                        <div style={{color:'#e2e8f0', fontWeight:'700', fontSize:'1.8em', marginBottom:'6px'}}>{formatCurrency(totalDebitNow)}</div>
-                                        <div style={{color:'#a0aec0', fontSize:'0.82em'}}>Transactions: {formatCurrency(debitTxThisMonth)}</div>
-                                        <div style={{color:'#a0aec0', fontSize:'0.82em'}}>Recurring: {formatCurrency(debitRecurringThisMonth)}</div>
+                                        <div style={{color:'#e2e8f0', fontWeight:'700', fontSize:'1.8em', marginBottom:'2px'}}>{formatCurrency(debitTxThisMonth)}</div>
+                                        <div style={{color:'#718096', fontSize:'0.8em', marginBottom:'8px'}}>expected this month: {formatCurrency(totalDebitNow)}</div>
+                                        <div style={{color:'#a0aec0', fontSize:'0.82em', marginTop:'4px'}}>Recurring: <strong style={{color:'#e2e8f0'}}>{formatCurrency(debitRecurringScheduled)}</strong></div>
+                                        <div style={{paddingLeft:'10px', marginTop:'3px', display:'flex', flexDirection:'column', gap:'2px'}}>
+                                            <div style={{color:'#718096', fontSize:'0.78em'}}>paid so far: <span style={{color:'#28a745'}}>{formatCurrency(debitRecurringPaidSoFar)}</span></div>
+                                            <div style={{color:'#718096', fontSize:'0.78em'}}>upcoming: <span style={{color:'#ffc107'}}>{formatCurrency(debitRecurringUpcoming)}</span></div>
+                                            {debitRecurringSkipped > 0 && <div style={{color:'#718096', fontSize:'0.78em'}}>skipped: <span style={{color:'#4a5568', textDecoration:'line-through'}}>{formatCurrency(debitRecurringSkipped)}</span></div>}
+                                        </div>
                                         <div style={{color:'#67e8f9', fontSize:'0.8em', marginTop:'6px', fontStyle:'italic'}}>Money leaving your account now</div>
                                     </div>
                                     <div style={{background:'#1a1f2e', borderRadius:'10px', padding:'18px', border:'2px solid #c084fc'}}>
                                         <div style={{color:'#c084fc', fontSize:'0.78em', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'6px'}}>💳 Credit Charges — This Month</div>
-                                        <div style={{color:'#e2e8f0', fontWeight:'700', fontSize:'1.8em', marginBottom:'6px'}}>{formatCurrency(totalCreditChargedThisMonth)}</div>
-                                        <div style={{color:'#a0aec0', fontSize:'0.82em'}}>Transactions: {formatCurrency(creditTxThisMonth)}</div>
-                                        <div style={{color:'#a0aec0', fontSize:'0.82em'}}>Recurring: {formatCurrency(creditRecurringThisMonth)}</div>
+                                        <div style={{color:'#e2e8f0', fontWeight:'700', fontSize:'1.8em', marginBottom:'2px'}}>{formatCurrency(creditTxThisMonth)}</div>
+                                        <div style={{color:'#718096', fontSize:'0.8em', marginBottom:'8px'}}>expected this month: {formatCurrency(totalCreditChargedThisMonth)}</div>
+                                        <div style={{color:'#a0aec0', fontSize:'0.82em', marginTop:'4px'}}>Recurring: <strong style={{color:'#e2e8f0'}}>{formatCurrency(creditRecurringScheduled)}</strong></div>
+                                        <div style={{paddingLeft:'10px', marginTop:'3px', display:'flex', flexDirection:'column', gap:'2px'}}>
+                                            <div style={{color:'#718096', fontSize:'0.78em'}}>paid so far: <span style={{color:'#28a745'}}>{formatCurrency(creditRecurringPaidSoFar)}</span></div>
+                                            <div style={{color:'#718096', fontSize:'0.78em'}}>upcoming: <span style={{color:'#ffc107'}}>{formatCurrency(creditRecurringUpcoming)}</span></div>
+                                            {creditRecurringSkipped > 0 && <div style={{color:'#718096', fontSize:'0.78em'}}>skipped: <span style={{color:'#4a5568', textDecoration:'line-through'}}>{formatCurrency(creditRecurringSkipped)}</span></div>}
+                                        </div>
                                         <div style={{color:'#c084fc', fontSize:'0.8em', marginTop:'6px', fontStyle:'italic'}}>Accumulating on card — due next month</div>
                                     </div>
                                     <div style={{background:'#1a1f2e', borderRadius:'10px', padding:'18px', border:'2px solid #ffc107'}}>
-                                        <div style={{color:'#ffc107', fontSize:'0.78em', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'6px'}}>⚠️ Credit Bill Due — This Month</div>
+                                        <div style={{color:'#ffc107', fontSize:'0.78em', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'6px'}}>
+                                            ⚠️ CC Bill Due{creditCardDueDay > 0 ? ` — ${new Date(currentMonth.getFullYear(), currentMonth.getMonth(), creditCardDueDay).toLocaleDateString('en-US', {month:'short', day:'numeric'})}` : ' This Month'}
+                                        </div>
                                         <div style={{color:'#e2e8f0', fontWeight:'700', fontSize:'1.8em', marginBottom:'6px'}}>{formatCurrency(totalCreditBillDueThisMonth)}</div>
-                                        <div style={{color:'#a0aec0', fontSize:'0.82em'}}>Last month's credit transactions: {formatCurrency(creditTxLastMonth)}</div>
-                                        <div style={{color:'#a0aec0', fontSize:'0.82em'}}>Last month's credit recurring: {formatCurrency(creditRecurringLastMonth)}</div>
+                                        <div style={{color:'#a0aec0', fontSize:'0.82em'}}>Last month's transactions: {formatCurrency(creditTxLastMonth)}</div>
+                                        <div style={{color:'#a0aec0', fontSize:'0.82em', marginTop:'4px'}}>Last month's recurring: <strong style={{color:'#e2e8f0'}}>{formatCurrency(creditRecurringLastMonth)}</strong></div>
+                                        {creditRecurringScheduledLastMonth > creditRecurringLastMonth && (
+                                            <div style={{color:'#718096', fontSize:'0.78em', paddingLeft:'10px', marginTop:'2px'}}>expected: <span style={{color:'#a0aec0'}}>{formatCurrency(creditRecurringScheduledLastMonth)}</span> <span style={{color:'#28a745'}}>({formatCurrency(creditRecurringScheduledLastMonth - creditRecurringLastMonth)} skipped)</span></div>
+                                        )}
                                         <div style={{color:'#ffc107', fontSize:'0.8em', marginTop:'6px', fontStyle:'italic'}}>Last month's charges hitting your account</div>
                                     </div>
                                 </div>
@@ -1549,7 +1637,7 @@ function FinanceTracker() {
                                     <h2 style={{margin:0}}>📅 This Month — Week by Week</h2>
                                     <span style={{color:'#a0aec0', fontSize:'0.85em'}}>Non-recurring • {formatCurrency(weeklySpendingBudget)}/wk budget</span>
                                 </div>
-                                <div style={{background:'#1a1f2e', borderRadius:'10px', padding:'14px 20px', marginBottom:'14px', border:`2px solid ${monthColor}`, display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:'12px'}}>
+                                <div onClick={() => setWeekTxModal({ effectiveStart: start, effectiveEnd: end, wLabel: monthName, weekNum: null })} style={{background:'#1a1f2e', borderRadius:'10px', padding:'14px 20px', marginBottom:'14px', border:`2px solid ${monthColor}`, display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:'12px', cursor:'pointer'}}>
                                     <div>
                                         <div style={{color:'#a0aec0', fontSize:'0.78em', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'4px'}}>Month Total</div>
                                         <div style={{display:'flex', alignItems:'baseline', gap:'8px'}}>
@@ -1567,7 +1655,7 @@ function FinanceTracker() {
                                         </div>
                                         <div style={{display:'flex', justifyContent:'space-between', fontSize:'0.78em', color:'#a0aec0'}}>
                                             <span>{monthPct.toFixed(0)}% used</span>
-                                            {monthOver ? <span style={{color:'#dc3545', fontWeight:'700'}}>OVER BUDGET</span> : <span style={{color:monthColor, fontWeight:'600'}}>{formatCurrency(monthRemaining)} left</span>}
+                                            <span style={{color:'#4a5568'}}>👁 view all month transactions</span>
                                         </div>
                                     </div>
                                 </div>
@@ -1617,7 +1705,7 @@ function FinanceTracker() {
                         <div className="modal-overlay" onClick={() => setWeekTxModal(null)}>
                             <div className="modal" onClick={e => e.stopPropagation()} style={{maxWidth:'700px'}}>
                                 <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px'}}>
-                                    <h2 style={{margin:0}}>Week {weekTxModal.weekNum} — {weekTxModal.wLabel}</h2>
+                                    <h2 style={{margin:0}}>{weekTxModal.weekNum != null ? `Week ${weekTxModal.weekNum} — ${weekTxModal.wLabel}` : `Month Total — ${weekTxModal.wLabel}`}</h2>
                                     <button onClick={() => setWeekTxModal(null)} className="secondary" style={{padding:'6px 14px'}}>✕ Close</button>
                                 </div>
                                 <p style={{color:'#a0aec0', fontSize:'0.88em', marginBottom:'16px'}}>Non-recurring, in-budget expenses only</p>
@@ -1626,7 +1714,7 @@ function FinanceTracker() {
                                         const d = parseLocalDate(t.date);
                                         return t.type === 'expense' && !isRecurringTransaction(t) && !t.excludeFromBudget && d >= weekTxModal.effectiveStart && d <= weekTxModal.effectiveEnd;
                                     }).sort((a, b) => new Date(b.date) - new Date(a.date));
-                                    if (txs.length === 0) return <p style={{color:'#a0aec0', textAlign:'center', padding:'20px 0'}}>No transactions this week.</p>;
+                                    if (txs.length === 0) return <p style={{color:'#a0aec0', textAlign:'center', padding:'20px 0'}}>No transactions this period.</p>;
                                     const total = txs.reduce((s, t) => s + parseFloat(t.amount), 0);
                                     return (
                                         <div>
@@ -2455,7 +2543,7 @@ function FinanceTracker() {
             const startYear = start.getFullYear();
             
             // Generate calendar days for the financial month (28th to 27th)
-            const totalAmount = recurringPayments.reduce((sum, p) => sum + getMonthlyEquivalentAmount(p, currentMonth), 0);
+            const totalAmount = recurringPayments.reduce((sum, p) => sum + getEffectiveMonthlyAmount(p, currentMonth, paidPayments), 0);
             const calendarDays = [];
             let runningTotal = 0;
             for (let i = 0; i < 30; i++) {
@@ -2479,7 +2567,14 @@ function FinanceTracker() {
                     const daysDiff = Math.round((date.getTime() - firstOcc.getTime()) / 86400000);
                     return daysDiff >= 0 && daysDiff % 14 === 0;
                 });
-                runningTotal += paymentsOnDay.reduce((sum, p) => sum + parseFloat(p.amount), 0);
+                runningTotal += paymentsOnDay.reduce((sum, p) => {
+                    const freq = p.frequency || 'monthly';
+                    if (freq !== 'monthly') {
+                        const key = `${monthKey}-${p.id}-${getLocalDateString(date)}`;
+                        if ((paidPayments[key] || 'unpaid') === 'skipped') return sum;
+                    }
+                    return sum + parseFloat(p.amount);
+                }, 0);
 
                 calendarDays.push({
                     date: date,
@@ -2843,9 +2938,17 @@ function FinanceTracker() {
                         <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px'}}>
                             <div>
                                 <h2>Recurring Payments ({recurringPayments.length})</h2>
-                                <p style={{color: '#a0aec0', fontSize: '1.1em'}}>
-                                        Total Monthly: <strong style={{color: '#667eea'}}>{formatCurrency(recurringPayments.reduce((sum, p) => sum + getMonthlyEquivalentAmount(p, currentMonth), 0))}</strong>
-                                </p>
+                                {(() => {
+                                    const scheduled = recurringPayments.reduce((sum, p) => sum + getMonthlyEquivalentAmount(p, currentMonth), 0);
+                                    const effective = recurringPayments.reduce((sum, p) => sum + getEffectiveMonthlyAmount(p, currentMonth, paidPayments), 0);
+                                    const saved = scheduled - effective;
+                                    return (
+                                        <p style={{color: '#a0aec0', fontSize: '1.1em'}}>
+                                            Total Monthly: <strong style={{color: '#667eea'}}>{formatCurrency(scheduled)}</strong>
+                                            {saved > 0 && <span style={{color: '#28a745', fontSize: '0.85em', marginLeft: '10px'}}>actual this month: {formatCurrency(effective)} (↓ {formatCurrency(saved)} from skips)</span>}
+                                        </p>
+                                    );
+                                })()}
                             </div>
                             <div style={{display: 'flex', gap: '10px'}}>
                                 <button 
@@ -2913,7 +3016,10 @@ function FinanceTracker() {
                                         const skippedCount = occurrenceDates.filter(d => (paidPayments[`${monthKey}-${payment.id}-${getLocalDateString(d)}`] || 'unpaid') === 'skipped').length;
                                         const activeCount = occurrenceDates.length - skippedCount;
                                         isPaid = activeCount > 0 ? paidCount === activeCount : occurrenceDates.length === skippedCount;
-                                        summaryLabel = `${paidCount}/${activeCount} paid this month${skippedCount > 0 ? ` • ${skippedCount} skipped` : ''} = ${formatCurrency(getMonthlyEquivalentAmount(payment, currentMonth))}`;
+                                        const effectiveAmt = getEffectiveMonthlyAmount(payment, currentMonth, paidPayments);
+                                        const scheduledAmt = getMonthlyEquivalentAmount(payment, currentMonth);
+                                        const savedAmt = scheduledAmt - effectiveAmt;
+                                        summaryLabel = (<span>{paidCount}/{activeCount} paid this month{skippedCount > 0 ? ` • ${skippedCount} skipped` : ''} = <strong style={{color:'#667eea'}}>{formatCurrency(scheduledAmt)}</strong>{savedAmt > 0 && <span style={{color:'#28a745', fontSize:'0.85em', marginLeft:'6px'}}>(actual: {formatCurrency(effectiveAmt)})</span>}</span>);
                                     }
 
                                     const today0 = new Date(); today0.setHours(0,0,0,0);
@@ -2931,11 +3037,21 @@ function FinanceTracker() {
                                                         {payment.paymentSource === 'credit' && <span style={{background:'#764ba222',color:'#c084fc',padding:'2px 7px',borderRadius:'5px',fontSize:'0.75em',fontWeight:'700',marginLeft:'5px'}}>💳 CREDIT</span>}
                                                         {payment.paymentSource === 'debit' && <span style={{background:'#17a2b822',color:'#67e8f9',padding:'2px 7px',borderRadius:'5px',fontSize:'0.75em',fontWeight:'700',marginLeft:'5px'}}>🏦 DEBIT</span>}
                                                     </h4>
-                                                    <p>{payment.category} • {scheduleLabel}{summaryLabel && ` • ${summaryLabel}`}{linkedDebt && ` • Linked to: ${linkedDebt.name}`}</p>
+                                                    <p>{payment.category} • {scheduleLabel}{summaryLabel && <span> • {summaryLabel}</span>}{linkedDebt && ` • Linked to: ${linkedDebt.name}`}</p>
                                                 </div>
                                                 <div style={{display:'flex', alignItems:'center', gap:'10px', flexShrink:0}}>
                                                     {freq === 'monthly' && <div className="item-amount negative">{formatCurrency(payment.amount)}</div>}
-                                                    {freq !== 'monthly' && <div className="item-amount negative" style={{textAlign:'right'}}><div>{payment.altAmount ? `${formatCurrency(payment.amount)}/${formatCurrency(payment.altAmount)}` : `${formatCurrency(payment.amount)}/ea`}</div><div style={{fontSize:'0.8em',color:'#a0aec0'}}>{formatCurrency(getMonthlyEquivalentAmount(payment, currentMonth))}/mo</div></div>}
+                                                    {freq !== 'monthly' && (() => {
+                                                        const effAmt = getEffectiveMonthlyAmount(payment, currentMonth, paidPayments);
+                                                        const schAmt = getMonthlyEquivalentAmount(payment, currentMonth);
+                                                        return (
+                                                            <div className="item-amount negative" style={{textAlign:'right'}}>
+                                                                <div>{payment.altAmount ? `${formatCurrency(payment.amount)}/${formatCurrency(payment.altAmount)}` : `${formatCurrency(payment.amount)}/ea`}</div>
+                                                                <div style={{fontSize:'0.8em',color:'#a0aec0'}}>{formatCurrency(schAmt)}/mo</div>
+                                                                {effAmt < schAmt && <div style={{fontSize:'0.75em',color:'#28a745'}}>actual: {formatCurrency(effAmt)}</div>}
+                                                            </div>
+                                                        );
+                                                    })()}
                                                     {payment.paymentUrl && <button onClick={() => window.open(payment.paymentUrl, '_blank')} style={{padding:'8px 16px',fontSize:'0.9em',background:'#667eea',color:'white',border:'2px solid #667eea'}}>🔗 Payment Link</button>}
                                                     {freq === 'monthly' && !isPaid && !payment.auto && <button onClick={() => processPayment(payment)} style={{padding:'8px 16px',fontSize:'0.9em'}}>Process</button>}
                                                     {freq === 'monthly' && !payment.auto && <button className={isPaid ? 'secondary' : 'success'} onClick={() => togglePaidStatus(payment.id)} style={{padding:'8px 16px',fontSize:'0.9em'}}>{isPaid ? 'Mark Unpaid' : 'Mark Paid'}</button>}
@@ -4180,10 +4296,11 @@ function FinanceTracker() {
             );
         }
 
-        function BudgetTab({ transactions, recurringPayments, expectedMonthlyIncome, setExpectedMonthlyIncome, currentMonth, unpaidRecurring, weeklySpendingBudget, setWeeklySpendingBudget, extraDebtPayment, setExtraDebtPayment }) {
+        function BudgetTab({ transactions, recurringPayments, expectedMonthlyIncome, setExpectedMonthlyIncome, currentMonth, unpaidRecurring, weeklySpendingBudget, setWeeklySpendingBudget, extraDebtPayment, setExtraDebtPayment, creditCardDueDay, setCreditCardDueDay, paidPayments }) {
             const [tempIncome, setTempIncome] = useState(expectedMonthlyIncome);
             const [tempWeekly, setTempWeekly] = useState(weeklySpendingBudget);
             const [tempExtra, setTempExtra] = useState(extraDebtPayment);
+            const [tempCCDueDay, setTempCCDueDay] = useState(creditCardDueDay);
             const __range = getFinancialMonthRange(currentMonth); const start = __range.start; const end = __range.end;
             
             // Get transactions for current month
@@ -4202,10 +4319,12 @@ function FinanceTracker() {
                 .filter(t => t.type === 'expense')
                 .reduce((sum, t) => sum + parseFloat(t.amount), 0);
 
-            // Calculate recurring bills total for this month (all frequencies)
-            const recurringTotal = recurringPayments.reduce((sum, p) => sum + getMonthlyEquivalentAmount(p, currentMonth), 0);
+            // Calculate recurring bills total for this month (skip-aware for weekly/biweekly)
+            const recurringTotal = recurringPayments.reduce((sum, p) => sum + getEffectiveMonthlyAmount(p, currentMonth, paidPayments || {}), 0);
+            const recurringScheduled = recurringPayments.reduce((sum, p) => sum + getMonthlyEquivalentAmount(p, currentMonth), 0);
+            const recurringSkipSavings = recurringScheduled - recurringTotal;
 
-            const moneyLeft = expectedMonthlyIncome - recurringTotal;
+            const moneyLeft = expectedMonthlyIncome - recurringScheduled;
             const moneyLeftActual = actualIncome - recurringTotal;
 
             // Paid recurring = total due minus what's still outstanding
@@ -4228,7 +4347,46 @@ function FinanceTracker() {
                 showToast('Extra debt payment updated');
             };
 
-            const nonRecurringBudget = expectedMonthlyIncome - recurringTotal - extraDebtPayment;
+            const handleSaveCCDueDay = () => {
+                const day = parseInt(tempCCDueDay) || 0;
+                setCreditCardDueDay(day);
+                showToast(day > 0 ? `Credit card due date set to the ${day}th of each month` : 'Credit card due date cleared');
+            };
+
+            const nonRecurringBudget = expectedMonthlyIncome - recurringScheduled - extraDebtPayment;
+
+            // Cashflow reality calculations
+            const prevMonthDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1);
+            const { start: prevStart, end: prevEnd } = getFinancialMonthRange(prevMonthDate);
+
+            const monthExpenseTx = monthTransactions.filter(t => t.type === 'expense');
+            const prevMonthExpenseTx = transactions.filter(t => {
+                const d = parseLocalDate(t.date);
+                return t.type === 'expense' && d >= prevStart && d <= prevEnd;
+            });
+
+            const debitTxNow   = monthExpenseTx.filter(t => t.paymentSource === 'debit').reduce((s, t) => s + parseFloat(t.amount), 0);
+            const creditTxNow  = monthExpenseTx.filter(t => t.paymentSource === 'credit').reduce((s, t) => s + parseFloat(t.amount), 0);
+            const creditTxPrev = prevMonthExpenseTx.filter(t => t.paymentSource === 'credit').reduce((s, t) => s + parseFloat(t.amount), 0);
+
+            const debitRecNow   = recurringPayments.filter(p => p.paymentSource === 'debit').reduce((s, p) => s + getEffectiveMonthlyAmount(p, currentMonth, paidPayments || {}), 0);
+            const creditRecNow  = recurringPayments.filter(p => p.paymentSource === 'credit').reduce((s, p) => s + getEffectiveMonthlyAmount(p, currentMonth, paidPayments || {}), 0);
+            const creditRecPrev = recurringPayments.filter(p => p.paymentSource === 'credit').reduce((s, p) => s + getEffectiveMonthlyAmount(p, prevMonthDate, paidPayments || {}), 0);
+
+            const totalCheckingNow    = debitTxNow + debitRecNow;
+            const totalCreditNow      = creditTxNow + creditRecNow;
+            const totalCCBillThisMonth = creditTxPrev + creditRecPrev;
+
+            const trueCheckingPressure = totalCheckingNow + totalCCBillThisMonth;
+            const netAfterFixed = expectedMonthlyIncome - trueCheckingPressure;
+
+            const hasSourceData = transactions.some(t => t.paymentSource) || recurringPayments.some(p => p.paymentSource);
+
+            // CC due date label
+            const ccDueDate = creditCardDueDay > 0
+                ? new Date(currentMonth.getFullYear(), currentMonth.getMonth(), creditCardDueDay)
+                    .toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
+                : null;
 
             const monthLabel = `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
 
@@ -4260,6 +4418,20 @@ function FinanceTracker() {
                             </div>
                             <button onClick={handleSaveExtra}>💾 Save</button>
                         </div>
+                        <div className="income-input-group" style={{marginTop:'12px'}}>
+                            <div className="form-group">
+                                <label>💳 Credit Card Bill Due Day <span style={{color:'#a0aec0', fontWeight:'400', fontSize:'0.9em'}}>(day of month, e.g. 24)</span></label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    max="31"
+                                    value={tempCCDueDay || ''}
+                                    onChange={(e) => setTempCCDueDay(e.target.value)}
+                                    placeholder="e.g. 24  (0 or blank to disable)"
+                                />
+                            </div>
+                            <button onClick={handleSaveCCDueDay}>💾 Save</button>
+                        </div>
                     </div>
 
                     {extraDebtPayment > 0 && (
@@ -4272,7 +4444,7 @@ function FinanceTracker() {
                                 </div>
                                 <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', paddingBottom:'10px', borderBottom:'1px solid #2d3748', marginBottom:'10px'}}>
                                     <span style={{color:'#a0aec0', fontSize:'1em'}}>Recurring Bills</span>
-                                    <span style={{color:'#dc3545', fontWeight:'700', fontSize:'1.1em'}}>− {formatCurrency(recurringTotal)}</span>
+                                    <span style={{color:'#dc3545', fontWeight:'700', fontSize:'1.1em'}}>− {formatCurrency(recurringScheduled)}{recurringSkipSavings > 0 && <span style={{color:'#28a745', fontSize:'0.8em', fontWeight:'400', marginLeft:'8px'}}>(actual: {formatCurrency(recurringTotal)})</span>}</span>
                                 </div>
                                 <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', paddingBottom:'10px', borderBottom:'1px solid #2d3748', marginBottom:'10px'}}>
                                     <span style={{color:'#a0aec0', fontSize:'1em'}}>Extra Debt Payment</span>
@@ -4296,6 +4468,74 @@ function FinanceTracker() {
                         </div>
                     )}
 
+                    {/* Cashflow Reality section */}
+                    <div className="section" style={{border: '2px solid #667eea', background: 'linear-gradient(135deg, #667eea08 0%, #764ba208 100%)', marginBottom: '20px'}}>
+                        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'18px', flexWrap:'wrap', gap:'8px'}}>
+                            <h2 style={{margin:0}}>💳 Cashflow Reality <span style={{fontSize:'0.65em', color:'#a0aec0', fontWeight:'400', marginLeft:'8px'}}>BETA</span></h2>
+                            <span style={{color:'#a0aec0', fontSize:'0.82em'}}>{monthLabel} • based on tagged transactions</span>
+                        </div>
+
+                        {!hasSourceData ? (
+                            <p style={{color:'#a0aec0', fontSize:'0.95em'}}>Tag recurring payments and transactions as <strong style={{color:'#c084fc'}}>Credit</strong> or <strong style={{color:'#67e8f9'}}>Debit</strong> to see the cashflow breakdown here.</p>
+                        ) : (
+                            <div>
+                                {/* CC Bill alert */}
+                                {totalCCBillThisMonth > 0 && (
+                                    <div style={{background: totalCCBillThisMonth > 0 ? '#3a2e0022' : '#1a1f2e', border:`2px solid #ffc107`, borderRadius:'10px', padding:'14px 18px', marginBottom:'18px', display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:'10px'}}>
+                                        <div>
+                                            <div style={{color:'#ffc107', fontWeight:'700', fontSize:'1em'}}>⚠️ Credit Card Bill Due{ccDueDate ? ` — ${ccDueDate}` : ' This Month'}</div>
+                                            <div style={{color:'#a0aec0', fontSize:'0.85em', marginTop:'3px'}}>Last month's charges: {formatCurrency(creditTxPrev)} transactions + {formatCurrency(creditRecPrev)} recurring</div>
+                                        </div>
+                                        <div style={{color:'#ffc107', fontWeight:'700', fontSize:'1.8em'}}>{formatCurrency(totalCCBillThisMonth)}</div>
+                                    </div>
+                                )}
+
+                                {/* 3-column breakdown */}
+                                <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))', gap:'14px', marginBottom:'18px'}}>
+                                    <div style={{background:'#1a1f2e', borderRadius:'10px', padding:'16px', border:'2px solid #67e8f9'}}>
+                                        <div style={{color:'#67e8f9', fontSize:'0.78em', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'8px'}}>🏦 Checking Outflow Now</div>
+                                        <div style={{color:'#e2e8f0', fontWeight:'700', fontSize:'1.6em', marginBottom:'6px'}}>{formatCurrency(totalCheckingNow)}</div>
+                                        <div style={{color:'#a0aec0', fontSize:'0.82em'}}>Transactions: {formatCurrency(debitTxNow)}</div>
+                                        <div style={{color:'#a0aec0', fontSize:'0.82em'}}>Recurring: {formatCurrency(debitRecNow)}</div>
+                                    </div>
+                                    <div style={{background:'#1a1f2e', borderRadius:'10px', padding:'16px', border:'2px solid #ffc107'}}>
+                                        <div style={{color:'#ffc107', fontSize:'0.78em', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'8px'}}>⚠️ CC Bill{ccDueDate ? ` (due ${ccDueDate})` : ' Due This Month'}</div>
+                                        <div style={{color:'#e2e8f0', fontWeight:'700', fontSize:'1.6em', marginBottom:'6px'}}>{formatCurrency(totalCCBillThisMonth)}</div>
+                                        <div style={{color:'#a0aec0', fontSize:'0.82em'}}>Last mo. transactions: {formatCurrency(creditTxPrev)}</div>
+                                        <div style={{color:'#a0aec0', fontSize:'0.82em'}}>Last mo. recurring: {formatCurrency(creditRecPrev)}</div>
+                                    </div>
+                                    <div style={{background:'#1a1f2e', borderRadius:'10px', padding:'16px', border:'2px solid #c084fc'}}>
+                                        <div style={{color:'#c084fc', fontSize:'0.78em', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'8px'}}>💳 Charging on Credit Now</div>
+                                        <div style={{color:'#e2e8f0', fontWeight:'700', fontSize:'1.6em', marginBottom:'6px'}}>{formatCurrency(totalCreditNow)}</div>
+                                        <div style={{color:'#a0aec0', fontSize:'0.82em'}}>Transactions: {formatCurrency(creditTxNow)}</div>
+                                        <div style={{color:'#a0aec0', fontSize:'0.82em'}}>Recurring: {formatCurrency(creditRecNow)}</div>
+                                        <div style={{color:'#c084fc', fontSize:'0.8em', marginTop:'6px', fontStyle:'italic'}}>Due{ccDueDate ? ` ~next month` : ' next month'}</div>
+                                    </div>
+                                </div>
+
+                                {/* Summary row */}
+                                <div style={{background:'#0f1419', borderRadius:'8px', padding:'14px 18px'}}>
+                                    <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', paddingBottom:'10px', borderBottom:'1px solid #2d3748', marginBottom:'10px', flexWrap:'wrap', gap:'8px'}}>
+                                        <span style={{color:'#a0aec0'}}>Expected Income</span>
+                                        <span style={{color:'#28a745', fontWeight:'700'}}>{formatCurrency(expectedMonthlyIncome)}</span>
+                                    </div>
+                                    <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', paddingBottom:'10px', borderBottom:'1px solid #2d3748', marginBottom:'10px', flexWrap:'wrap', gap:'8px'}}>
+                                        <span style={{color:'#a0aec0'}}>− Checking outflow (debit)</span>
+                                        <span style={{color:'#dc3545', fontWeight:'700'}}>−{formatCurrency(totalCheckingNow)}</span>
+                                    </div>
+                                    <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', paddingBottom:'10px', borderBottom:'1px solid #2d3748', marginBottom:'10px', flexWrap:'wrap', gap:'8px'}}>
+                                        <span style={{color:'#a0aec0'}}>− CC bill{ccDueDate ? ` (due ${ccDueDate})` : ''}</span>
+                                        <span style={{color:'#dc3545', fontWeight:'700'}}>−{formatCurrency(totalCCBillThisMonth)}</span>
+                                    </div>
+                                    <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:'8px'}}>
+                                        <span style={{color:'#e2e8f0', fontWeight:'700', fontSize:'1.05em'}}>= Net checking after fixed costs</span>
+                                        <span style={{color: netAfterFixed >= 0 ? '#28a745' : '#dc3545', fontWeight:'700', fontSize:'1.4em'}}>{formatCurrency(netAfterFixed)} {netAfterFixed < 0 ? '⚠️' : '✓'}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
                     <div className="budget-overview">
                         <h2 style={{color: '#667eea', marginBottom: '25px', fontSize: '1.8em'}}>💰 Money Available This Month</h2>
                         <p style={{color: '#a0aec0', marginBottom: '20px', fontSize: '0.95em'}}>Current Month: {monthLabel}</p>
@@ -4309,7 +4549,7 @@ function FinanceTracker() {
                                 </div>
                                 <div className="budget-row" style={{borderBottom: '1px solid #2d3748', paddingBottom: '10px'}}>
                                     <span className="budget-label">Recurring Bills:</span>
-                                    <span className="budget-value negative" style={{fontSize: '1.1em'}}>-{formatCurrency(recurringTotal)}</span>
+                                    <span className="budget-value negative" style={{fontSize: '1.1em'}}>-{formatCurrency(recurringScheduled)}{recurringSkipSavings > 0 && <span style={{color:'#28a745', fontSize:'0.75em', fontWeight:'400', marginLeft:'6px'}}>(actual: {formatCurrency(recurringTotal)})</span>}</span>
                                 </div>
                                 <div className="budget-row" style={{paddingTop: '10px'}}>
                                     <span className="budget-label" style={{color: '#e2e8f0', fontWeight: 'bold'}}>Money Left:</span>
@@ -4327,7 +4567,7 @@ function FinanceTracker() {
                                 </div>
                                 <div className="budget-row" style={{borderBottom: '1px solid #2d3748', paddingBottom: '10px'}}>
                                     <span className="budget-label">Recurring Bills:</span>
-                                    <span className="budget-value negative" style={{fontSize: '1.1em'}}>-{formatCurrency(recurringTotal)}</span>
+                                    <span className="budget-value negative" style={{fontSize: '1.1em'}}>-{formatCurrency(recurringScheduled)}{recurringSkipSavings > 0 && <span style={{color:'#28a745', fontSize:'0.75em', fontWeight:'400', marginLeft:'6px'}}>(actual: {formatCurrency(recurringTotal)})</span>}</span>
                                 </div>
                                 <div className="budget-row" style={{paddingTop: '10px'}}>
                                     <span className="budget-label" style={{color: '#e2e8f0', fontWeight: 'bold'}}>Money Left (actual):</span>
