@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finance Tracker v1.30.0</title>
-    <!-- Build: 2026-06-11-04 - Extra debt payment UI: input, planner card, weekly calc, apply-as-budget button -->
+    <title>Finance Tracker v2.0.0</title>
+    <!-- Build: 2026-06-12 - v2.0: Payment source (credit/debit) tagging for recurring + transactions; cashflow breakdown dashboard (beta); transaction source filter; calendar CC/DC/UT badges; bulk source edit; select all filtered -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -605,7 +605,8 @@ function FinanceTracker() {
                                     category: payment.category,
                                     date: getLocalDateString(paymentDate),
                                     id: Date.now() + Math.random(),
-                                    isRecurring: true
+                                    isRecurring: true,
+                                    paymentSource: payment.paymentSource || ''
                                 };
                                 newTransactions.push(newTransaction);
                                 hasTransactionChanges = true;
@@ -1305,6 +1306,77 @@ function FinanceTracker() {
                         <div className="summary-card"><h3>Unpaid Recurring</h3><div className="amount">{formatCurrency(unpaidRecurring)}</div><div className="subtitle">Still due this month</div></div>
                         <div className="summary-card" style={{background: 'linear-gradient(135deg, #28a74522 0%, #20c99722 100%)', border: '2px solid #28a745'}}><h3>Recurring Paid</h3><div className="amount" style={{color: '#28a745'}}>{formatCurrency(paidRecurringTotal)}</div><div className="subtitle">{formatCurrency(paidRecurringTotal)} of {formatCurrency(recurringTotal)} paid this month</div></div>
                     </div>
+
+                    {/* Cash Flow Breakdown (beta feature) */}
+                    {(() => {
+                        const prevMonthDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1);
+                        const { start: prevStart, end: prevEnd } = getFinancialMonthRange(prevMonthDate);
+
+                        const monthlyTx = transactions.filter(t => {
+                            const d = parseLocalDate(t.date);
+                            return t.type === 'expense' && d >= start && d <= end;
+                        });
+                        const prevMonthTx = transactions.filter(t => {
+                            const d = parseLocalDate(t.date);
+                            return t.type === 'expense' && d >= prevStart && d <= prevEnd;
+                        });
+
+                        const creditTxThisMonth = monthlyTx.filter(t => t.paymentSource === 'credit').reduce((s, t) => s + parseFloat(t.amount), 0);
+                        const debitTxThisMonth = monthlyTx.filter(t => t.paymentSource === 'debit').reduce((s, t) => s + parseFloat(t.amount), 0);
+                        const creditTxLastMonth = prevMonthTx.filter(t => t.paymentSource === 'credit').reduce((s, t) => s + parseFloat(t.amount), 0);
+
+                        const creditRecurringThisMonth = recurringPayments.filter(p => p.paymentSource === 'credit').reduce((s, p) => s + getMonthlyEquivalentAmount(p, currentMonth), 0);
+                        const debitRecurringThisMonth = recurringPayments.filter(p => p.paymentSource === 'debit').reduce((s, p) => s + getMonthlyEquivalentAmount(p, currentMonth), 0);
+                        const creditRecurringLastMonth = recurringPayments.filter(p => p.paymentSource === 'credit').reduce((s, p) => s + getMonthlyEquivalentAmount(p, prevMonthDate), 0);
+
+                        const totalDebitNow = debitTxThisMonth + debitRecurringThisMonth;
+                        const totalCreditChargedThisMonth = creditTxThisMonth + creditRecurringThisMonth;
+                        const totalCreditBillDueThisMonth = creditTxLastMonth + creditRecurringLastMonth;
+
+                        const hasAnySourceData = transactions.some(t => t.paymentSource) || recurringPayments.some(p => p.paymentSource);
+                        if (!hasAnySourceData) return (
+                            <div className="section" style={{border: '2px solid #2d3748', background: '#1a1f2e', marginBottom: '20px'}}>
+                                <h2 style={{color: '#667eea', marginBottom: '8px'}}>💳 Cash Flow Breakdown <span style={{fontSize:'0.7em',color:'#a0aec0',fontWeight:'400',marginLeft:'8px'}}>BETA</span></h2>
+                                <p style={{color: '#a0aec0', fontSize: '0.95em'}}>Tag your recurring payments and transactions as <strong style={{color:'#c084fc'}}>Credit Card</strong> or <strong style={{color:'#67e8f9'}}>Checking/Debit</strong> to see the cash flow breakdown here.</p>
+                            </div>
+                        );
+
+                        return (
+                            <div className="section" style={{border: '2px solid #667eea', background: 'linear-gradient(135deg, #667eea08 0%, #764ba208 100%)', marginBottom: '20px'}}>
+                                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'16px', flexWrap:'wrap', gap:'8px'}}>
+                                    <h2 style={{margin:0}}>💳 Cash Flow Breakdown <span style={{fontSize:'0.7em',color:'#a0aec0',fontWeight:'400',marginLeft:'8px'}}>BETA</span></h2>
+                                    <span style={{color:'#a0aec0', fontSize:'0.82em'}}>Transactions + recurring with a source tag • 1-month credit offset</span>
+                                </div>
+                                <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(220px, 1fr))', gap:'15px'}}>
+                                    <div style={{background:'#1a1f2e', borderRadius:'10px', padding:'18px', border:'2px solid #67e8f9'}}>
+                                        <div style={{color:'#67e8f9', fontSize:'0.78em', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'6px'}}>🏦 Checking Outflow — This Month</div>
+                                        <div style={{color:'#e2e8f0', fontWeight:'700', fontSize:'1.8em', marginBottom:'6px'}}>{formatCurrency(totalDebitNow)}</div>
+                                        <div style={{color:'#a0aec0', fontSize:'0.82em'}}>Transactions: {formatCurrency(debitTxThisMonth)}</div>
+                                        <div style={{color:'#a0aec0', fontSize:'0.82em'}}>Recurring: {formatCurrency(debitRecurringThisMonth)}</div>
+                                        <div style={{color:'#67e8f9', fontSize:'0.8em', marginTop:'6px', fontStyle:'italic'}}>Money leaving your account now</div>
+                                    </div>
+                                    <div style={{background:'#1a1f2e', borderRadius:'10px', padding:'18px', border:'2px solid #c084fc'}}>
+                                        <div style={{color:'#c084fc', fontSize:'0.78em', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'6px'}}>💳 Credit Charges — This Month</div>
+                                        <div style={{color:'#e2e8f0', fontWeight:'700', fontSize:'1.8em', marginBottom:'6px'}}>{formatCurrency(totalCreditChargedThisMonth)}</div>
+                                        <div style={{color:'#a0aec0', fontSize:'0.82em'}}>Transactions: {formatCurrency(creditTxThisMonth)}</div>
+                                        <div style={{color:'#a0aec0', fontSize:'0.82em'}}>Recurring: {formatCurrency(creditRecurringThisMonth)}</div>
+                                        <div style={{color:'#c084fc', fontSize:'0.8em', marginTop:'6px', fontStyle:'italic'}}>Accumulating on card — due next month</div>
+                                    </div>
+                                    <div style={{background:'#1a1f2e', borderRadius:'10px', padding:'18px', border:'2px solid #ffc107'}}>
+                                        <div style={{color:'#ffc107', fontSize:'0.78em', textTransform:'uppercase', letterSpacing:'1px', marginBottom:'6px'}}>⚠️ Credit Bill Due — This Month</div>
+                                        <div style={{color:'#e2e8f0', fontWeight:'700', fontSize:'1.8em', marginBottom:'6px'}}>{formatCurrency(totalCreditBillDueThisMonth)}</div>
+                                        <div style={{color:'#a0aec0', fontSize:'0.82em'}}>Last month's credit transactions: {formatCurrency(creditTxLastMonth)}</div>
+                                        <div style={{color:'#a0aec0', fontSize:'0.82em'}}>Last month's credit recurring: {formatCurrency(creditRecurringLastMonth)}</div>
+                                        <div style={{color:'#ffc107', fontSize:'0.8em', marginTop:'6px', fontStyle:'italic'}}>Last month's charges hitting your account</div>
+                                    </div>
+                                </div>
+                                <div style={{marginTop:'14px', padding:'12px', background:'#0f1419', borderRadius:'8px', fontSize:'0.85em', color:'#a0aec0'}}>
+                                    <strong style={{color:'#e2e8f0'}}>True monthly outflow:</strong> {formatCurrency(totalDebitNow + totalCreditBillDueThisMonth)} &nbsp;=&nbsp; {formatCurrency(totalDebitNow)} debit now + {formatCurrency(totalCreditBillDueThisMonth)} CC bill (last month's charges)
+                                </div>
+                            </div>
+                        );
+                    })()}
+
                     {(() => {
                         const today = new Date();
                         const weekStart = new Date(today);
@@ -1391,7 +1463,7 @@ function FinanceTracker() {
                                             return;
                                         }
                                         // Manual: create expense transaction and update linked debt, same as Recurring "Process"
-                                        const newTransaction = { type: 'expense', amount: p.amount, description: `${p.name} (Recurring)`, category: p.category, date: getLocalDateString(), id: Date.now(), isRecurring: true };
+                                        const newTransaction = { type: 'expense', amount: p.amount, description: `${p.name} (Recurring)`, category: p.category, date: getLocalDateString(), id: Date.now(), isRecurring: true, paymentSource: p.paymentSource || '' };
                                         setTransactions(prev => [...prev, newTransaction]);
                                         setPaidPayments(prev => ({...prev, [payKey]: true}));
                                         if (p.linkedDebt) {
@@ -1441,7 +1513,11 @@ function FinanceTracker() {
                                 {transactions.slice().sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5).map(t => (
                                     <div key={t.id} className={`transaction-item ${t.type}`}>
                                         <div className="item-details">
-                                            <h4>{t.description}</h4>
+                                            <h4>
+                                                {t.description}
+                                                {t.paymentSource === 'credit' && <span style={{background:'#764ba244', color:'#c084fc', border:'1px solid #764ba266', padding:'2px 7px', borderRadius:'10px', fontSize:'0.72em', fontWeight:'700', marginLeft:'8px', verticalAlign:'middle'}}>CC</span>}
+                                                {t.paymentSource === 'debit' && <span style={{background:'#17a2b844', color:'#67e8f9', border:'1px solid #17a2b866', padding:'2px 7px', borderRadius:'10px', fontSize:'0.72em', fontWeight:'700', marginLeft:'8px', verticalAlign:'middle'}}>DC</span>}
+                                            </h4>
                                             <p>
                                                 {t.category} • {t.date}
                                                 {t.notes && <span style={{color: '#a0aec0', marginLeft: '8px'}}>• {t.notes}</span>}
@@ -1592,10 +1668,12 @@ function FinanceTracker() {
             const [bulkSelectMode, setBulkSelectMode] = useState(false);
             const [selectedIds, setSelectedIds] = useState(new Set());
             const [bulkCategory, setBulkCategory] = useState('');
+            const [bulkPaymentSource, setBulkPaymentSource] = useState('');
 
             // Advanced filter states
             const [filterType, setFilterType] = useState('all'); // 'all', 'income', 'expense'
             const [filterRecurring, setFilterRecurring] = useState('all'); // 'all', 'recurring', 'non-recurring'
+            const [filterPaymentSource, setFilterPaymentSource] = useState('all'); // 'all', 'credit', 'debit', 'untagged'
             const [dateFrom, setDateFrom] = useState('');
             const [dateTo, setDateTo] = useState('');
             const [amountMin, setAmountMin] = useState('');
@@ -1665,7 +1743,12 @@ function FinanceTracker() {
                     // Amount range filter
                     if (amountMin && parseFloat(t.amount) < parseFloat(amountMin)) return false;
                     if (amountMax && parseFloat(t.amount) > parseFloat(amountMax)) return false;
-                    
+
+                    // Payment source filter
+                    if (filterPaymentSource === 'credit' && t.paymentSource !== 'credit') return false;
+                    if (filterPaymentSource === 'debit' && t.paymentSource !== 'debit') return false;
+                    if (filterPaymentSource === 'untagged' && t.paymentSource) return false;
+
                     return true;
                 });
             };
@@ -1673,6 +1756,7 @@ function FinanceTracker() {
             const clearFilters = () => {
                 setFilterType('all');
                 setFilterRecurring('all');
+                setFilterPaymentSource('all');
                 setSelectedCategory('All');
                 setSearchPlace('');
                 setDateFrom('');
@@ -1692,7 +1776,8 @@ function FinanceTracker() {
                     type: last.type,
                     notes: '',
                     excludeFromBudget: false,
-                    linkedDebt: ''
+                    linkedDebt: '',
+                    paymentSource: last.paymentSource || ''
                 }]);
             };
 
@@ -1708,7 +1793,7 @@ function FinanceTracker() {
                     const lastRow = prev[prev.length - 1];
                     if (lastRow.id === id && field === 'description' && !lastRow.description && value) {
                         const fromRow = updated[updated.length - 1];
-                        updated.push({ id: Date.now(), date: fromRow.date, description: '', amount: '', category: fromRow.category, type: fromRow.type, notes: '', excludeFromBudget: false, linkedDebt: '' });
+                        updated.push({ id: Date.now(), date: fromRow.date, description: '', amount: '', category: fromRow.category, type: fromRow.type, notes: '', excludeFromBudget: false, linkedDebt: '', paymentSource: fromRow.paymentSource || '' });
                     }
                     return updated;
                 });
@@ -1732,6 +1817,7 @@ function FinanceTracker() {
                     notes: row.notes || '',
                     excludeFromBudget: row.excludeFromBudget || false,
                     linkedDebt: row.linkedDebt || '',
+                    paymentSource: row.paymentSource || '',
                     id: Date.now() + Math.random()
                 }));
 
@@ -1789,11 +1875,19 @@ function FinanceTracker() {
             });
             const selectAll = (ids) => setSelectedIds(prev => new Set([...prev, ...ids]));
             const deselectAll = (ids) => setSelectedIds(prev => { const next = new Set(prev); ids.forEach(id => next.delete(id)); return next; });
-            const clearSelection = () => { setSelectedIds(new Set()); setBulkSelectMode(false); setBulkCategory(''); };
+            const clearSelection = () => { setSelectedIds(new Set()); setBulkSelectMode(false); setBulkCategory(''); setBulkPaymentSource(''); };
             const applyBulkCategory = () => {
                 if (!bulkCategory || selectedIds.size === 0) return;
                 setTransactions(transactions.map(t => selectedIds.has(t.id) ? { ...t, category: bulkCategory } : t));
                 showToast(`Updated category to "${bulkCategory}" for ${selectedIds.size} transaction${selectedIds.size !== 1 ? 's' : ''}`);
+                clearSelection();
+            };
+            const applyBulkPaymentSource = () => {
+                if (!bulkPaymentSource || selectedIds.size === 0) return;
+                const newSource = bulkPaymentSource === 'clear' ? '' : bulkPaymentSource;
+                setTransactions(transactions.map(t => selectedIds.has(t.id) ? { ...t, paymentSource: newSource } : t));
+                const label = bulkPaymentSource === 'credit' ? 'Credit Card' : bulkPaymentSource === 'debit' ? 'Checking/Debit' : 'Untagged (cleared)';
+                showToast(`Set source to "${label}" for ${selectedIds.size} transaction${selectedIds.size !== 1 ? 's' : ''}`);
                 clearSelection();
             };
 
@@ -1837,6 +1931,7 @@ function FinanceTracker() {
                                                 <th style={{padding: '8px 10px', textAlign: 'left', color: '#667eea', border: '1px solid #2d3748'}}>Amount</th>
                                                 <th style={{padding: '8px 10px', textAlign: 'left', color: '#667eea', border: '1px solid #2d3748'}}>Category</th>
                                                 <th style={{padding: '8px 10px', textAlign: 'left', color: '#667eea', border: '1px solid #2d3748'}}>Notes</th>
+                                                <th style={{padding: '8px 10px', textAlign: 'left', color: '#667eea', border: '1px solid #2d3748', whiteSpace: 'nowrap'}} title="Credit card or checking/debit?">Source</th>
                                                 {debts.filter(d => !d.paidOff).length > 0 && <th style={{padding: '8px 10px', textAlign: 'left', color: '#667eea', border: '1px solid #2d3748', whiteSpace: 'nowrap'}}>💳 Linked Debt</th>}
                                                 <th style={{padding: '8px 10px', textAlign: 'center', color: '#667eea', border: '1px solid #2d3748', whiteSpace: 'nowrap'}} title="Check to exclude this transaction from weekly/monthly budget totals">Skip Budget</th>
                                                 <th style={{padding: '8px 10px', textAlign: 'center', color: '#667eea', border: '1px solid #2d3748', width: '50px'}}></th>
@@ -1905,6 +2000,18 @@ function FinanceTracker() {
                                                             placeholder="Optional"
                                                             style={{width: '100%', padding: '5px'}}
                                                         />
+                                                    </td>
+                                                    <td style={{padding: '5px 6px', border: '1px solid #2d3748'}}>
+                                                        <select
+                                                            value={row.paymentSource || ''}
+                                                            onChange={(e) => updateBulkRow(row.id, 'paymentSource', e.target.value)}
+                                                            style={{width: '100%', padding: '5px', minWidth: '90px'}}
+                                                            title="Credit card or checking/debit?"
+                                                        >
+                                                            <option value="">—</option>
+                                                            <option value="credit">💳 Credit</option>
+                                                            <option value="debit">🏦 Debit</option>
+                                                        </select>
                                                     </td>
                                                     {debts.filter(d => !d.paidOff).length > 0 && (
                                                         <td style={{padding: '5px 6px', border: '1px solid #2d3748'}}>
@@ -1975,11 +2082,19 @@ function FinanceTracker() {
                             <h2>Transaction History</h2>
                             <div style={{display: 'flex', gap: '10px', flexWrap: 'wrap'}}>
                                 <button
-                                    onClick={() => { setBulkSelectMode(m => !m); setSelectedIds(new Set()); setBulkCategory(''); }}
+                                    onClick={() => { setBulkSelectMode(m => !m); setSelectedIds(new Set()); setBulkCategory(''); setBulkPaymentSource(''); }}
                                     style={{background: bulkSelectMode ? '#ffc107' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: bulkSelectMode ? '#1a1f2e' : 'white', fontWeight: '700'}}
                                 >
                                     {bulkSelectMode ? '✕ Cancel Select' : '☑ Select'}
                                 </button>
+                                {bulkSelectMode && (
+                                    <button
+                                        onClick={() => selectAll(getFilteredTransactions().map(t => t.id))}
+                                        style={{background: '#4a5568', color: 'white', fontWeight: '700'}}
+                                    >
+                                        ☑ Select All Filtered ({getFilteredTransactions().length})
+                                    </button>
+                                )}
                                 <button onClick={() => exportToCSV(getFilteredTransactions())} style={{background: '#28a745'}}>
                                     📊 Export Filtered to CSV
                                 </button>
@@ -1993,18 +2108,31 @@ function FinanceTracker() {
                             <div style={{display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 18px', background: '#1a2040', border: '2px solid #667eea', borderRadius: '10px', marginBottom: '15px', flexWrap: 'wrap'}}>
                                 <span style={{color: '#667eea', fontWeight: '700'}}>{selectedIds.size} selected</span>
                                 <span style={{color: '#2d3748'}}>|</span>
-                                <span style={{color: '#a0aec0', fontSize: '0.9em'}}>Set category:</span>
+                                <span style={{color: '#a0aec0', fontSize: '0.9em'}}>Category:</span>
                                 <select
                                     value={bulkCategory}
                                     onChange={e => setBulkCategory(e.target.value)}
-                                    style={{padding: '7px 12px', fontSize: '0.95em', flex: '1', minWidth: '160px', maxWidth: '260px'}}
+                                    style={{padding: '7px 12px', fontSize: '0.95em', minWidth: '160px', maxWidth: '220px'}}
                                 >
-                                    <option value="">— pick a category —</option>
+                                    <option value="">— pick —</option>
                                     {[...new Set([...expenseCategories, ...incomeCategories, ...transactions.map(t => t.category).filter(Boolean)])].sort().map(cat =>
                                         <option key={cat} value={cat}>{cat}</option>
                                     )}
                                 </select>
-                                <button onClick={applyBulkCategory} disabled={!bulkCategory} style={{padding: '8px 18px'}}>Apply</button>
+                                <button onClick={applyBulkCategory} disabled={!bulkCategory} style={{padding: '8px 14px'}}>Apply</button>
+                                <span style={{color: '#2d3748'}}>|</span>
+                                <span style={{color: '#a0aec0', fontSize: '0.9em'}}>Source:</span>
+                                <select
+                                    value={bulkPaymentSource}
+                                    onChange={e => setBulkPaymentSource(e.target.value)}
+                                    style={{padding: '7px 12px', fontSize: '0.95em', minWidth: '160px', maxWidth: '220px'}}
+                                >
+                                    <option value="">— pick —</option>
+                                    <option value="credit">💳 Credit Card</option>
+                                    <option value="debit">🏦 Checking / Debit</option>
+                                    <option value="clear">⬜ Clear tag</option>
+                                </select>
+                                <button onClick={applyBulkPaymentSource} disabled={!bulkPaymentSource} style={{padding: '8px 14px'}}>Apply</button>
                                 <button onClick={clearSelection} className="secondary" style={{padding: '8px 14px'}}>Clear</button>
                             </div>
                         )}
@@ -2051,7 +2179,17 @@ function FinanceTracker() {
                                         ))}
                                     </select>
                                 </div>
-                                
+
+                                <div>
+                                    <label style={{display: 'block', marginBottom: '5px'}}>Payment Source</label>
+                                    <select value={filterPaymentSource} onChange={(e) => setFilterPaymentSource(e.target.value)}>
+                                        <option value="all">All Sources</option>
+                                        <option value="credit">💳 Credit Only</option>
+                                        <option value="debit">🏦 Debit Only</option>
+                                        <option value="untagged">— Untagged Only</option>
+                                    </select>
+                                </div>
+
                                 <div style={{gridColumn: showAdvancedFilters ? 'auto' : 'span 2'}}>
                                     <label style={{display: 'block', marginBottom: '5px'}}>Search Vendor</label>
                                     <input 
@@ -2205,7 +2343,12 @@ function FinanceTracker() {
                                                             />
                                                         )}
                                                         <div className="item-details">
-                                                            <h4>{transaction.description}{transaction.excludeFromBudget && <span style={{background:'#ffc10722', color:'#ffc107', border:'1px solid #ffc10755', padding:'2px 8px', borderRadius:'10px', fontSize:'0.72em', fontWeight:'700', marginLeft:'8px', verticalAlign:'middle'}}>Excl. Budget</span>}</h4>
+                                                            <h4>
+                                                                {transaction.description}
+                                                                {transaction.excludeFromBudget && <span style={{background:'#ffc10722', color:'#ffc107', border:'1px solid #ffc10755', padding:'2px 8px', borderRadius:'10px', fontSize:'0.72em', fontWeight:'700', marginLeft:'8px', verticalAlign:'middle'}}>Excl. Budget</span>}
+                                                                {transaction.paymentSource === 'credit' && <span style={{background:'#764ba244', color:'#c084fc', border:'1px solid #764ba266', padding:'2px 7px', borderRadius:'10px', fontSize:'0.72em', fontWeight:'700', marginLeft:'8px', verticalAlign:'middle'}}>CC</span>}
+                                                                {transaction.paymentSource === 'debit' && <span style={{background:'#17a2b844', color:'#67e8f9', border:'1px solid #17a2b866', padding:'2px 7px', borderRadius:'10px', fontSize:'0.72em', fontWeight:'700', marginLeft:'8px', verticalAlign:'middle'}}>DC</span>}
+                                                            </h4>
                                                             <p>
                                                                 {transaction.category} • {transaction.date}
                                                                 {transaction.notes && <span style={{color: '#a0aec0', marginLeft: '8px'}}>• {transaction.notes}</span>}
@@ -2285,6 +2428,14 @@ function FinanceTracker() {
                                 <label htmlFor="editExcludeFromBudget" style={{cursor: 'pointer', color: '#a0aec0', marginBottom: 0, fontWeight: '600', fontSize: '0.9em'}}>
                                     Exclude from budget — debt payment or extra payment that shouldn't count against spending limits
                                 </label>
+                            </div>
+                            <div className="form-group">
+                                <label>Payment Source</label>
+                                <select value={formData.paymentSource || ''} onChange={(e) => setFormData({...formData, paymentSource: e.target.value})}>
+                                    <option value="">Unspecified</option>
+                                    <option value="credit">💳 Credit Card (charges now, paid next month)</option>
+                                    <option value="debit">🏦 Checking / Debit (money out now)</option>
+                                </select>
                             </div>
                             <div style={{display: 'flex', gap: '10px', marginTop: '20px'}}>
                                 <button type="submit">Save Changes</button>
@@ -2437,11 +2588,14 @@ function FinanceTracker() {
                                                         onClick={() => !isSkipped && togglePaidStatus(payment.id, freq !== 'monthly' ? calDay.date : undefined)}
                                                         title={isSkipped ? 'Skipped' : `Click to mark as ${isPaid ? 'unpaid' : 'paid'}`}
                                                     >
-                                                        <div style={{display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '3px'}}>
+                                                        <div style={{display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '3px', flexWrap: 'wrap'}}>
                                                             <span>{isSkipped ? '⏭' : isPaid ? '✅' : '⭕'}</span>
                                                             <span style={{color: '#e2e8f0', fontWeight: '600', fontSize: '0.95em', textDecoration: isSkipped ? 'line-through' : 'none'}}>
                                                                 {payment.name.length > 15 ? payment.name.substring(0, 15) + '...' : payment.name}
                                                             </span>
+                                                            {payment.paymentSource === 'credit' && <span style={{background:'#764ba244',color:'#c084fc',padding:'1px 4px',borderRadius:'3px',fontSize:'0.75em',fontWeight:'700',flexShrink:0}}>CC</span>}
+                                                            {payment.paymentSource === 'debit' && <span style={{background:'#17a2b844',color:'#67e8f9',padding:'1px 4px',borderRadius:'3px',fontSize:'0.75em',fontWeight:'700',flexShrink:0}}>DC</span>}
+                                                            {!payment.paymentSource && <span style={{background:'#4a556844',color:'#718096',padding:'1px 4px',borderRadius:'3px',fontSize:'0.75em',fontWeight:'700',flexShrink:0}}>UT</span>}
                                                         </div>
                                                         <div style={{color: isSkipped ? '#4a5568' : isPaid ? '#28a745' : '#dc3545', fontWeight: '700'}}>
                                                             {formatCurrency(getOccurrenceAmount(payment, calDay.date))}
@@ -2517,7 +2671,7 @@ function FinanceTracker() {
         }
 
         function RecurringTab({ recurringPayments, setRecurringPayments, debts, setDebts, transactions, setTransactions, paidPayments, setPaidPayments, currentMonth }) {
-            const [formData, setFormData] = useState({ name: '', amount: '', category: '', frequency: 'monthly', dueDay: '1', dayOfWeek: '1', anchorDate: getLocalDateString(), altAmount: '', linkedDebt: '', auto: false, paymentUrl: '' });
+            const [formData, setFormData] = useState({ name: '', amount: '', category: '', frequency: 'monthly', dueDay: '1', dayOfWeek: '1', anchorDate: getLocalDateString(), altAmount: '', linkedDebt: '', auto: false, paymentUrl: '', paymentSource: '' });
             const [editingPayment, setEditingPayment] = useState(null);
             const [viewMode, setViewMode] = useState('list'); // 'list' or 'calendar'
             const monthKey = getMonthKey(currentMonth);
@@ -2570,7 +2724,7 @@ function FinanceTracker() {
                         setPaidPayments({...paidPayments, [paymentKey]: true});
                     }
 
-                    setFormData({ name: '', amount: '', category: '', frequency: 'monthly', dueDay: '1', dayOfWeek: '1', anchorDate: getLocalDateString(), altAmount: '', linkedDebt: '', auto: false, paymentUrl: '' });
+                    setFormData({ name: '', amount: '', category: '', frequency: 'monthly', dueDay: '1', dayOfWeek: '1', anchorDate: getLocalDateString(), altAmount: '', linkedDebt: '', auto: false, paymentUrl: '', paymentSource: '' });
                 }
             };
 
@@ -2592,7 +2746,7 @@ function FinanceTracker() {
                     ? `${monthKey}-${payment.id}-${getLocalDateString(occurrenceDate)}`
                     : `${monthKey}-${payment.id}`;
                 const txAmount = occurrenceDate ? getOccurrenceAmount(payment, occurrenceDate) : parseFloat(payment.amount);
-                const newTransaction = { type: 'expense', amount: txAmount, description: `${payment.name} (Recurring)`, category: payment.category, date: txDate, id: Date.now(), isRecurring: true };
+                const newTransaction = { type: 'expense', amount: txAmount, description: `${payment.name} (Recurring)`, category: payment.category, date: txDate, id: Date.now(), isRecurring: true, paymentSource: payment.paymentSource || '' };
                 setTransactions([...transactions, newTransaction]);
                 setPaidPayments(prev => ({...prev, [paymentKey]: freq !== 'monthly' && occurrenceDate ? 'paid' : true}));
 
@@ -2672,6 +2826,15 @@ function FinanceTracker() {
                                     <input type="checkbox" checked={formData.auto} onChange={(e) => setFormData({...formData, auto: e.target.checked})} style={{width: 'auto', marginRight: '10px'}} />
                                     Auto-pay (mark as paid when due date passes)
                                 </label>
+                            </div>
+                            <div className="form-group" style={{marginTop: '15px'}}>
+                                <label>Payment Source</label>
+                                <select value={formData.paymentSource || ''} onChange={(e) => setFormData({...formData, paymentSource: e.target.value})}>
+                                    <option value="">Unspecified</option>
+                                    <option value="credit">💳 Credit Card (charges now, paid next month)</option>
+                                    <option value="debit">🏦 Checking / Debit (money out now)</option>
+                                </select>
+                                <small style={{color: '#a0aec0', fontSize: '0.85em', marginTop: '5px', display: 'block'}}>Used for cashflow tracking — credit charges are offset by ~1 month</small>
                             </div>
                             <button type="submit" style={{marginTop: '20px'}}>Add Recurring Payment</button>
                         </form>
@@ -2765,6 +2928,8 @@ function FinanceTracker() {
                                                         {payment.auto ? <span className="auto-badge">AUTO</span> : <span className="manual-badge">MANUAL</span>}
                                                         {freq === 'weekly' && <span style={{background:'#667eea22',color:'#667eea',padding:'2px 7px',borderRadius:'5px',fontSize:'0.75em',fontWeight:'700',marginLeft:'5px'}}>WEEKLY</span>}
                                                         {freq === 'biweekly' && <span style={{background:'#667eea22',color:'#667eea',padding:'2px 7px',borderRadius:'5px',fontSize:'0.75em',fontWeight:'700',marginLeft:'5px'}}>BI-WEEKLY</span>}
+                                                        {payment.paymentSource === 'credit' && <span style={{background:'#764ba222',color:'#c084fc',padding:'2px 7px',borderRadius:'5px',fontSize:'0.75em',fontWeight:'700',marginLeft:'5px'}}>💳 CREDIT</span>}
+                                                        {payment.paymentSource === 'debit' && <span style={{background:'#17a2b822',color:'#67e8f9',padding:'2px 7px',borderRadius:'5px',fontSize:'0.75em',fontWeight:'700',marginLeft:'5px'}}>🏦 DEBIT</span>}
                                                     </h4>
                                                     <p>{payment.category} • {scheduleLabel}{summaryLabel && ` • ${summaryLabel}`}{linkedDebt && ` • Linked to: ${linkedDebt.name}`}</p>
                                                 </div>
@@ -2883,6 +3048,14 @@ function FinanceTracker() {
                                     <input type="checkbox" checked={formData.auto || false} onChange={(e) => setFormData({...formData, auto: e.target.checked})} style={{width: 'auto', marginRight: '10px'}} />
                                     Auto-pay
                                 </label>
+                            </div>
+                            <div className="form-group" style={{marginTop: '15px'}}>
+                                <label>Payment Source</label>
+                                <select value={formData.paymentSource || ''} onChange={(e) => setFormData({...formData, paymentSource: e.target.value})}>
+                                    <option value="">Unspecified</option>
+                                    <option value="credit">💳 Credit Card (charges now, paid next month)</option>
+                                    <option value="debit">🏦 Checking / Debit (money out now)</option>
+                                </select>
                             </div>
                             <div style={{display: 'flex', gap: '10px', marginTop: '20px'}}>
                                 <button type="submit">Save Changes</button>
