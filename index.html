@@ -505,9 +505,10 @@
                 const anchor = parseLocalDate(payment.anchorDate);
                 const msPerDay = 86400000;
                 const diffToStart = Math.round((start.getTime() - anchor.getTime()) / msPerDay);
-                const mod = ((diffToStart % 14) + 14) % 14; // days past last occurrence before start
+                const mod = ((diffToStart % 14) + 14) % 14; // days since last occurrence before start
+                const daysToNext = (14 - mod) % 14; // days forward from start to reach next occurrence
                 const dates = [];
-                let d = new Date(start.getTime() + mod * msPerDay);
+                let d = new Date(start.getTime() + daysToNext * msPerDay);
                 while (d <= end) { dates.push(new Date(d)); d = new Date(d.getTime() + 14 * msPerDay); }
                 return dates;
             }
@@ -2533,7 +2534,15 @@ function FinanceTracker() {
             return (
                 <div style={{background: '#1a1f2e', padding: '20px', borderRadius: '10px', border: '2px solid #667eea'}}>
                     <h3 style={{color: '#667eea', marginBottom: '20px'}}>📅 Payment Calendar - {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h3>
-                    <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '10px'}}>
+                    <div style={{display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '6px'}}>
+                        {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
+                            <div key={d} style={{textAlign:'center', color:'#667eea', fontWeight:'700', fontSize:'0.8em', padding:'6px 0', borderBottom:'1px solid #2d3748'}}>
+                                {d}
+                            </div>
+                        ))}
+                        {Array.from({length: start.getDay()}).map((_, i) => (
+                            <div key={`empty-${i}`} style={{minHeight: '80px'}} />
+                        ))}
                         {calendarDays.map((calDay, idx) => {
                             const hasPayments = calDay.payments.length > 0;
                             const getCalOccStatus = (p) => {
@@ -2553,8 +2562,8 @@ function FinanceTracker() {
                                         background: calDay.isToday ? '#667eea22' : '#0f1419',
                                         border: `2px solid ${calDay.isToday ? '#667eea' : (hasPayments ? (allDone ? '#28a745' : (somePaid ? '#ffc107' : '#dc3545')) : '#2d3748')}`,
                                         borderRadius: '8px',
-                                        padding: '10px',
-                                        minHeight: '100px',
+                                        padding: '8px',
+                                        minHeight: '80px',
                                         position: 'relative'
                                     }}
                                 >
