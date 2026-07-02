@@ -3748,6 +3748,9 @@ function FinanceTracker() {
             const [extraBudget, setExtraBudget] = React.useState('');
             const [expandedDebt, setExpandedDebt] = React.useState(null);
             const [excludedIds, setExcludedIds] = React.useState(new Set());
+            const [dtiIncome, setDtiIncome] = React.useState('');
+            const [dtiExcludedIds, setDtiExcludedIds] = React.useState(new Set());
+            const [dtiSort, setDtiSort] = React.useState('ratio');
 
             const toggleDebt = (id) => setExcludedIds(prev => {
                 const n = new Set(prev);
@@ -3776,6 +3779,11 @@ function FinanceTracker() {
                 }));
                 if (strat === 'avalanche') return [...list].sort((a, b) => b.rate - a.rate);
                 if (strat === 'snowball') return [...list].sort((a, b) => a.balance - b.balance);
+                if (strat === 'ratio') return [...list].sort((a, b) => {
+                    const ra = a.min > 0 ? a.balance / a.min : Infinity;
+                    const rb = b.min > 0 ? b.balance / b.min : Infinity;
+                    return ra - rb;
+                });
                 return list;
             };
 
@@ -3822,6 +3830,7 @@ function FinanceTracker() {
             const simMinOnly = simulate(sortDebts('avalanche'), 0);
             const simAval = simulate(sortDebts('avalanche'), extra);
             const simSnow = simulate(sortDebts('snowball'), extra);
+            const simRatio = simulate(sortDebts('ratio'), extra);
 
             const interestSaved = simMinOnly && simCurr ? Math.max(0, simMinOnly.totalInterest - simCurr.totalInterest) : 0;
             const monthsSaved = simMinOnly && simCurr ? Math.max(0, simMinOnly.totalMonths - simCurr.totalMonths) : 0;
@@ -3939,12 +3948,12 @@ function FinanceTracker() {
                             {/* Strategy buttons */}
                             <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '10px', marginBottom: '20px'}}>
                                 {[
-                                    { id: 'avalanche', icon: '🏔', title: 'Avalanche', sub: 'Highest interest rate first', badge: 'Saves most money' },
-                                    { id: 'snowball', icon: '⛄', title: 'Snowball', sub: 'Lowest balance first', badge: 'Best for motivation' },
+                                    { id: 'avalanche', icon: '🏔', title: 'Avalanche', sub: 'Highest interest rate first', badge: 'Saves most money', result: simAval },
+                                    { id: 'snowball', icon: '⛄', title: 'Snowball', sub: 'Lowest balance first', badge: 'Best for motivation', result: simSnow },
+                                    { id: 'ratio', icon: '📊', title: 'DTI Ratio', sub: 'Lowest balance÷payment first', badge: 'Fastest DTI relief', result: simRatio },
                                 ].map(s => {
                                     const isActive = strategy === s.id;
-                                    const sResult = s.id === 'avalanche' ? simAval : simSnow;
-                                    const oResult = s.id === 'avalanche' ? simSnow : simAval;
+                                    const sResult = s.result;
                                     return (
                                         <button key={s.id} type="button" onClick={() => setStrategy(s.id)}
                                             style={{padding: '16px 18px', textAlign: 'left', cursor: 'pointer', borderRadius: '10px',
@@ -3956,15 +3965,19 @@ function FinanceTracker() {
                                                 <div style={{background: '#28a74522', color: '#28a745', padding: '2px 8px', borderRadius: '6px', fontSize: '0.74em', fontWeight: '600'}}>{s.badge}</div>
                                             </div>
                                             <div style={{color: '#a0aec0', fontSize: '0.85em', marginBottom: '8px'}}>{s.sub}</div>
-                                            {sResult && oResult && (
+                                            {sResult && simAval && (
                                                 <div style={{fontSize: '0.82em', color: '#4a5568', borderTop: '1px solid #2d3748', paddingTop: '8px'}}>
                                                     {sResult.totalMonths < 600 ? `${sResult.totalMonths} mo` : '♾'} · {formatCurrency(sResult.totalInterest)} interest
-                                                    {s.id === 'avalanche' && sResult.totalInterest < oResult.totalInterest &&
-                                                        <span style={{color: '#28a745', marginLeft: '6px'}}>· saves {formatCurrency(oResult.totalInterest - sResult.totalInterest)}</span>}
-                                                    {s.id === 'snowball' && oResult.totalInterest < sResult.totalInterest &&
-                                                        <span style={{color: '#ffc107', marginLeft: '6px'}}>· costs {formatCurrency(sResult.totalInterest - oResult.totalInterest)} more</span>}
-                                                    {s.id === 'snowball' && sResult.totalMonths < oResult.totalMonths &&
-                                                        <span style={{color: '#28a745', marginLeft: '6px'}}>· {oResult.totalMonths - sResult.totalMonths} mo faster</span>}
+                                                    {s.id === 'avalanche' && simSnow && sResult.totalInterest < simSnow.totalInterest &&
+                                                        <span style={{color: '#28a745', marginLeft: '6px'}}>· saves {formatCurrency(simSnow.totalInterest - sResult.totalInterest)}</span>}
+                                                    {s.id === 'snowball' && sResult.totalInterest > simAval.totalInterest &&
+                                                        <span style={{color: '#ffc107', marginLeft: '6px'}}>· costs {formatCurrency(sResult.totalInterest - simAval.totalInterest)} more</span>}
+                                                    {s.id === 'snowball' && sResult.totalMonths < simAval.totalMonths &&
+                                                        <span style={{color: '#28a745', marginLeft: '6px'}}>· {simAval.totalMonths - sResult.totalMonths} mo faster</span>}
+                                                    {s.id === 'ratio' && sResult.totalInterest > simAval.totalInterest &&
+                                                        <span style={{color: '#ffc107', marginLeft: '6px'}}>· costs {formatCurrency(sResult.totalInterest - simAval.totalInterest)} more vs avalanche</span>}
+                                                    {s.id === 'ratio' && sResult.totalInterest <= simAval.totalInterest &&
+                                                        <span style={{color: '#28a745', marginLeft: '6px'}}>· saves {formatCurrency(simAval.totalInterest - sResult.totalInterest)}</span>}
                                                 </div>
                                             )}
                                         </button>
@@ -4217,28 +4230,250 @@ function FinanceTracker() {
                         </div>
                     )}
 
-                    {/* VICTORY WALL */}
-                    {paidOffDebts.length > 0 && (
-                        <div className="section" style={{background: 'linear-gradient(135deg, #28a74522 0%, #20c99722 100%)', border: '2px solid #28a745'}}>
-                            <h2 style={{color: '#28a745', marginBottom: '20px'}}>🏆 Victory Wall</h2>
-                            <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '15px'}}>
-                                {paidOffDebts.map(debt => (
-                                    <div key={debt.id} style={{background: '#0f1419', padding: '20px', borderRadius: '12px', border: '2px solid #28a745', textAlign: 'center'}}>
-                                        <div style={{fontSize: '2em', marginBottom: '8px'}}>🎉</div>
-                                        <h3 style={{color: '#28a745', marginBottom: '4px', fontSize: '1em'}}>{debt.name}</h3>
-                                        <div style={{color: '#a0aec0', fontSize: '0.82em', marginBottom: '7px'}}>{debt.category}</div>
-                                        <div style={{color: '#e2e8f0', fontSize: '1.3em', fontWeight: '700', marginBottom: '5px'}}>{formatCurrency(parseFloat(debt.originalBalance) || 0)}</div>
-                                        {debt.paidOffDate && (
-                                            <div style={{background: '#28a74522', padding: '5px 10px', borderRadius: '5px', color: '#28a745', fontSize: '0.85em', fontWeight: '600', marginBottom: '5px'}}>
-                                                {new Date(debt.paidOffDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                    {/* DEBT-TO-INCOME CALCULATOR */}
+                    {(() => {
+                        const grossIncome = parseFloat(dtiIncome) || 0;
+                        const dtiColor = (r) => r <= 28 ? '#28a745' : r <= 36 ? '#20c997' : r <= 43 ? '#ffc107' : '#dc3545';
+                        const dtiLabel = (r) => r <= 28 ? 'Excellent' : r <= 36 ? 'Good' : r <= 43 ? 'Fair' : 'High';
+
+                        const toggleDtiDebt = (id) => setDtiExcludedIds(prev => {
+                            const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n;
+                        });
+
+                        // Debts included in the DTI plan
+                        const dtiDebts = activeDebts.filter(d => !dtiExcludedIds.has(d.id));
+                        const dtiTotalMin = dtiDebts.reduce((s, d) => s + (parseFloat(d.minimumPayment) || 0), 0);
+                        const dtiHousing = dtiDebts.filter(d => d.category === 'Mortgage').reduce((s, d) => s + (parseFloat(d.minimumPayment) || 0), 0);
+                        const frontEndDTI = grossIncome > 0 ? (dtiHousing / grossIncome * 100) : 0;
+                        const backEndDTI  = grossIncome > 0 ? (dtiTotalMin / grossIncome * 100) : 0;
+
+                        // Efficiency ratio = balance / min payment (lower = quicker payoff per $)
+                        const withRatio = activeDebts.map(d => {
+                            const bal = parseFloat(d.currentBalance) || 0;
+                            const min = parseFloat(d.minimumPayment) || 0;
+                            const rate = parseFloat(d.interestRate) || 0;
+                            const ratio = min > 0 ? bal / min : Infinity;
+                            const dtiPct = grossIncome > 0 ? (min / grossIncome * 100) : 0;
+                            return { ...d, bal, min, rate, ratio, dtiPct };
+                        });
+                        const sortedByRatio = [...withRatio].sort((a, b) => {
+                            if (dtiSort === 'ratio') return a.ratio - b.ratio;
+                            if (dtiSort === 'balance') return a.bal - b.bal;
+                            if (dtiSort === 'rate') return b.rate - a.rate;
+                            if (dtiSort === 'payment') return b.min - a.min;
+                            return 0;
+                        });
+
+                        const categoryTotals = ['Credit Card','Auto Loan','Mortgage','Personal Loan','Student Loan','Other'].map(cat => ({
+                            cat,
+                            total: dtiDebts.filter(d => d.category === cat).reduce((s, d) => s + (parseFloat(d.minimumPayment) || 0), 0)
+                        })).filter(x => x.total > 0);
+
+                        const ratioColor = (r) => r <= 20 ? '#28a745' : r <= 50 ? '#20c997' : r <= 100 ? '#ffc107' : '#dc3545';
+                        const ratioLabel = (r) => r === Infinity ? 'N/A' : r <= 20 ? 'High Efficiency' : r <= 50 ? 'Good' : r <= 100 ? 'Moderate' : 'Low Efficiency';
+
+                        return (
+                            <div className="section" style={{background: '#1a1f2e', border: '1px solid #2d3748'}}>
+                                <h2 style={{color: '#667eea', marginBottom: '6px'}}>Debt-to-Income Calculator</h2>
+                                <p style={{color: '#a0aec0', fontSize: '0.88em', marginBottom: '20px'}}>Select debts to include, enter your gross monthly income, and see your DTI alongside each debt's payoff efficiency.</p>
+
+                                {/* Income input */}
+                                <div style={{marginBottom: '24px', maxWidth: '320px'}}>
+                                    <label style={{color: '#e2e8f0', fontSize: '0.9em', display: 'block', marginBottom: '6px', fontWeight: '600'}}>Gross Monthly Income</label>
+                                    <input
+                                        type="number"
+                                        value={dtiIncome}
+                                        onChange={(e) => setDtiIncome(e.target.value)}
+                                        placeholder="e.g. 5000"
+                                        style={{width: '100%', padding: '10px 14px', background: '#0f1419', border: '1px solid #4a5568', borderRadius: '8px', color: '#e2e8f0', fontSize: '1em', boxSizing: 'border-box'}}
+                                    />
+                                </div>
+
+                                {/* Debt selector */}
+                                {activeDebts.length > 0 && (
+                                    <div style={{marginBottom: '24px'}}>
+                                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px'}}>
+                                            <div style={{color: '#a0aec0', fontSize: '0.78em', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: '600'}}>Debts to Include</div>
+                                            <div style={{display: 'flex', gap: '8px'}}>
+                                                <button type="button" onClick={() => setDtiExcludedIds(new Set())}
+                                                    style={{background: 'none', border: '1px solid #2d3748', color: '#a0aec0', padding: '3px 10px', borderRadius: '5px', fontSize: '0.78em', cursor: 'pointer'}}>All</button>
+                                                <button type="button" onClick={() => setDtiExcludedIds(new Set(activeDebts.map(d => d.id)))}
+                                                    style={{background: 'none', border: '1px solid #2d3748', color: '#a0aec0', padding: '3px 10px', borderRadius: '5px', fontSize: '0.78em', cursor: 'pointer'}}>None</button>
+                                            </div>
+                                        </div>
+                                        <div style={{display: 'flex', flexWrap: 'wrap', gap: '8px'}}>
+                                            {activeDebts.map(d => {
+                                                const included = !dtiExcludedIds.has(d.id);
+                                                const r = withRatio.find(x => x.id === d.id);
+                                                return (
+                                                    <button key={d.id} type="button" onClick={() => toggleDtiDebt(d.id)}
+                                                        style={{display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer',
+                                                            background: included ? 'rgba(102,126,234,0.12)' : '#0f1419',
+                                                            border: `1.5px solid ${included ? '#667eea' : '#2d3748'}`, transition: 'all 0.15s'}}>
+                                                        <div style={{width: '16px', height: '16px', borderRadius: '4px', flexShrink: 0,
+                                                            background: included ? '#667eea' : 'transparent',
+                                                            border: `2px solid ${included ? '#667eea' : '#4a5568'}`,
+                                                            display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                                                            {included && <span style={{color: '#fff', fontSize: '10px', lineHeight: 1}}>✓</span>}
+                                                        </div>
+                                                        <div style={{textAlign: 'left'}}>
+                                                            <div style={{color: included ? '#e2e8f0' : '#4a5568', fontSize: '0.88em', fontWeight: '600'}}>{d.name}</div>
+                                                            <div style={{color: included ? '#a0aec0' : '#2d3748', fontSize: '0.75em', marginTop: '1px'}}>
+                                                                {formatCurrency(parseFloat(d.currentBalance) || 0)} · {r && r.ratio !== Infinity ? `${r.ratio.toFixed(0)}x ratio` : 'no min set'}
+                                                            </div>
+                                                        </div>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                        {dtiExcludedIds.size > 0 && (
+                                            <div style={{marginTop: '10px', fontSize: '0.82em', color: '#a0aec0', padding: '8px 12px', background: '#0f1419', borderRadius: '6px', border: '1px solid #2d3748'}}>
+                                                {dtiExcludedIds.size} debt{dtiExcludedIds.size > 1 ? 's' : ''} excluded · {formatCurrency(activeDebts.filter(d => dtiExcludedIds.has(d.id)).reduce((s,d) => s + (parseFloat(d.minimumPayment)||0), 0))}/mo not counted
                                             </div>
                                         )}
-                                        <div style={{color: '#ffc107', fontSize: '0.82em'}}>💸 {formatCurrency(parseFloat(debt.minimumPayment) || 0)}/mo freed</div>
                                     </div>
-                                ))}
+                                )}
+
+                                {/* DTI metric cards */}
+                                <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '14px', marginBottom: '24px'}}>
+                                    <div style={{background: '#0f1419', borderRadius: '12px', padding: '18px', border: '1px solid #2d3748'}}>
+                                        <div style={{color: '#a0aec0', fontSize: '0.78em', fontWeight: '600', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em'}}>Monthly Debt Payments</div>
+                                        <div style={{color: '#e2e8f0', fontSize: '1.75em', fontWeight: '700'}}>{formatCurrency(dtiTotalMin)}</div>
+                                        <div style={{color: '#a0aec0', fontSize: '0.8em', marginTop: '4px'}}>{dtiDebts.length} of {activeDebts.length} debts included</div>
+                                    </div>
+                                    {dtiHousing > 0 && (
+                                        <div style={{background: '#0f1419', borderRadius: '12px', padding: '18px', border: grossIncome > 0 ? `2px solid ${dtiColor(frontEndDTI)}` : '1px solid #2d3748'}}>
+                                            <div style={{color: '#a0aec0', fontSize: '0.78em', fontWeight: '600', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em'}}>Front-End DTI (Housing)</div>
+                                            <div style={{color: grossIncome > 0 ? dtiColor(frontEndDTI) : '#e2e8f0', fontSize: '1.75em', fontWeight: '700'}}>
+                                                {grossIncome > 0 ? `${frontEndDTI.toFixed(1)}%` : '—'}
+                                            </div>
+                                            <div style={{color: grossIncome > 0 ? dtiColor(frontEndDTI) : '#a0aec0', fontSize: '0.8em', marginTop: '4px', fontWeight: grossIncome > 0 ? '600' : '400'}}>
+                                                {grossIncome > 0 ? dtiLabel(frontEndDTI) : 'Enter income above'}
+                                            </div>
+                                        </div>
+                                    )}
+                                    <div style={{background: '#0f1419', borderRadius: '12px', padding: '18px', border: grossIncome > 0 ? `2px solid ${dtiColor(backEndDTI)}` : '1px solid #2d3748'}}>
+                                        <div style={{color: '#a0aec0', fontSize: '0.78em', fontWeight: '600', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em'}}>Back-End DTI (All Selected)</div>
+                                        <div style={{color: grossIncome > 0 ? dtiColor(backEndDTI) : '#e2e8f0', fontSize: '1.75em', fontWeight: '700'}}>
+                                            {grossIncome > 0 ? `${backEndDTI.toFixed(1)}%` : '—'}
+                                        </div>
+                                        <div style={{color: grossIncome > 0 ? dtiColor(backEndDTI) : '#a0aec0', fontSize: '0.8em', marginTop: '4px', fontWeight: grossIncome > 0 ? '600' : '400'}}>
+                                            {grossIncome > 0 ? dtiLabel(backEndDTI) : 'Enter income above'}
+                                        </div>
+                                    </div>
+                                    {grossIncome > 0 && (
+                                        <div style={{background: '#0f1419', borderRadius: '12px', padding: '18px', border: '1px solid #28a74544'}}>
+                                            <div style={{color: '#a0aec0', fontSize: '0.78em', fontWeight: '600', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em'}}>Remaining After Debts</div>
+                                            <div style={{color: '#28a745', fontSize: '1.75em', fontWeight: '700'}}>{formatCurrency(grossIncome - dtiTotalMin)}</div>
+                                            <div style={{color: '#a0aec0', fontSize: '0.8em', marginTop: '4px'}}>{((1 - dtiTotalMin / grossIncome) * 100).toFixed(1)}% of income free</div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Efficiency table */}
+                                {activeDebts.length > 0 && (
+                                    <div style={{background: '#0f1419', borderRadius: '12px', padding: '20px', marginBottom: '20px'}}>
+                                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '8px'}}>
+                                            <div style={{color: '#e2e8f0', fontWeight: '600', fontSize: '0.95em'}}>Payoff Efficiency Breakdown</div>
+                                            <div style={{display: 'flex', gap: '6px', flexWrap: 'wrap'}}>
+                                                {[['ratio','Cash:Payment'], ['balance','Balance'], ['rate','Rate'], ['payment','Min Pmt']].map(([val, lbl]) => (
+                                                    <button key={val} type="button" onClick={() => setDtiSort(val)}
+                                                        style={{padding: '3px 10px', borderRadius: '5px', fontSize: '0.75em', cursor: 'pointer',
+                                                            background: dtiSort === val ? '#667eea' : 'transparent',
+                                                            border: `1px solid ${dtiSort === val ? '#667eea' : '#2d3748'}`,
+                                                            color: dtiSort === val ? '#fff' : '#a0aec0'}}>
+                                                        {lbl}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        {/* Column headers */}
+                                        <div style={{display: 'grid', gridTemplateColumns: '1fr 90px 80px 70px 90px', gap: '8px', padding: '0 4px 8px', borderBottom: '1px solid #2d3748', marginBottom: '8px'}}>
+                                            {['Debt','Balance','Min/Mo','APR','Ratio'].map(h => (
+                                                <div key={h} style={{color: '#4a5568', fontSize: '0.72em', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: h === 'Debt' ? 'left' : 'right'}}>{h}</div>
+                                            ))}
+                                        </div>
+                                        {sortedByRatio.map((d, i) => {
+                                            const included = !dtiExcludedIds.has(d.id);
+                                            const rCol = included ? ratioColor(d.ratio) : '#2d3748';
+                                            return (
+                                                <div key={d.id} onClick={() => toggleDtiDebt(d.id)}
+                                                    style={{display: 'grid', gridTemplateColumns: '1fr 90px 80px 70px 90px', gap: '8px',
+                                                        padding: '10px 4px', borderBottom: '1px solid #1a1f2e', cursor: 'pointer',
+                                                        background: included ? 'transparent' : '#0a0d12',
+                                                        opacity: included ? 1 : 0.45, transition: 'opacity 0.15s'}}>
+                                                    <div style={{display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0}}>
+                                                        <div style={{width: '6px', height: '6px', borderRadius: '50%', flexShrink: 0, background: included ? rCol : '#2d3748'}} />
+                                                        <div style={{minWidth: 0}}>
+                                                            <div style={{color: included ? '#e2e8f0' : '#4a5568', fontSize: '0.88em', fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{d.name}</div>
+                                                            <div style={{color: '#4a5568', fontSize: '0.74em'}}>{d.category}</div>
+                                                        </div>
+                                                    </div>
+                                                    <div style={{textAlign: 'right', color: included ? '#e2e8f0' : '#2d3748', fontSize: '0.85em', fontWeight: '600', alignSelf: 'center'}}>{formatCurrency(d.bal)}</div>
+                                                    <div style={{textAlign: 'right', color: included ? '#a0aec0' : '#2d3748', fontSize: '0.85em', alignSelf: 'center'}}>
+                                                        {d.min > 0 ? formatCurrency(d.min) : <span style={{color:'#4a5568'}}>—</span>}
+                                                        {grossIncome > 0 && d.min > 0 && included && (
+                                                            <div style={{color: dtiColor(d.dtiPct), fontSize: '0.78em', marginTop: '1px'}}>{d.dtiPct.toFixed(1)}% DTI</div>
+                                                        )}
+                                                    </div>
+                                                    <div style={{textAlign: 'right', color: included ? '#a0aec0' : '#2d3748', fontSize: '0.85em', alignSelf: 'center'}}>{d.rate > 0 ? `${d.rate}%` : '—'}</div>
+                                                    <div style={{textAlign: 'right', alignSelf: 'center'}}>
+                                                        {d.ratio !== Infinity && d.min > 0 ? (
+                                                            <>
+                                                                <div style={{color: included ? rCol : '#2d3748', fontSize: '0.88em', fontWeight: '700'}}>{d.ratio.toFixed(1)}x</div>
+                                                                <div style={{color: included ? rCol : '#2d3748', fontSize: '0.72em'}}>{ratioLabel(d.ratio)}</div>
+                                                            </>
+                                                        ) : (
+                                                            <span style={{color: '#4a5568', fontSize: '0.82em'}}>No min</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                        <div style={{marginTop: '12px', padding: '10px 4px 2px', fontSize: '0.8em', color: '#4a5568'}}>
+                                            Ratio = balance ÷ min payment. Lower ratio = faster payoff per dollar — best targets to eliminate first.
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Category breakdown */}
+                                {grossIncome > 0 && categoryTotals.length > 0 && (
+                                    <div style={{background: '#0f1419', borderRadius: '12px', padding: '20px', marginBottom: '16px'}}>
+                                        <div style={{color: '#e2e8f0', fontWeight: '600', marginBottom: '14px', fontSize: '0.95em'}}>Payment Breakdown by Category</div>
+                                        {categoryTotals.map(({cat, total}) => {
+                                            const pct = (total / grossIncome * 100);
+                                            return (
+                                                <div key={cat} style={{marginBottom: '12px'}}>
+                                                    <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '4px'}}>
+                                                        <span style={{color: '#a0aec0', fontSize: '0.88em'}}>{cat}</span>
+                                                        <span style={{color: '#e2e8f0', fontSize: '0.88em', fontWeight: '600'}}>{formatCurrency(total)}/mo <span style={{color: dtiColor(pct)}}>{pct.toFixed(1)}%</span></span>
+                                                    </div>
+                                                    <div style={{background: '#2d3748', borderRadius: '4px', height: '6px', overflow: 'hidden'}}>
+                                                        <div style={{height: '100%', width: `${Math.min(pct * 2, 100)}%`, background: dtiColor(pct), borderRadius: '4px', transition: 'width 0.4s ease'}} />
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+
+                                {/* DTI legend */}
+                                <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '10px'}}>
+                                    {[
+                                        {label: 'Excellent', range: '≤ 28%', color: '#28a745', desc: 'Strong financial health'},
+                                        {label: 'Good', range: '29–36%', color: '#20c997', desc: 'Manageable debt load'},
+                                        {label: 'Fair', range: '37–43%', color: '#ffc107', desc: 'Lender caution zone'},
+                                        {label: 'High', range: '> 43%', color: '#dc3545', desc: 'May limit loan approval'},
+                                    ].map(({label, range, color, desc}) => (
+                                        <div key={label} style={{background: '#0f1419', borderRadius: '8px', padding: '12px 14px', border: `1px solid ${color}33`}}>
+                                            <div style={{color, fontWeight: '700', fontSize: '0.88em'}}>{label} &mdash; {range}</div>
+                                            <div style={{color: '#a0aec0', fontSize: '0.8em', marginTop: '3px'}}>{desc}</div>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
-                        </div>
-                    )}
+                        );
+                    })()}
                 </div>
             );
         }
