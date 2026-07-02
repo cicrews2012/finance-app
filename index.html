@@ -567,6 +567,10 @@ function FinanceTracker() {
             const [extraDebtPayment, setExtraDebtPayment] = useState(0);
             const [ignoredDuplicatePairs, setIgnoredDuplicatePairs] = useState(new Set());
             const [creditCardDueDay, setCreditCardDueDay] = useState(0);
+            const [lastExportTime, setLastExportTime] = useState(null);
+            const [hasChangesSinceExport, setHasChangesSinceExport] = useState(false);
+            const dataInitializedRef = React.useRef(false);
+            const importingUntilRef = React.useRef(0);
 
             // No browser storage — data lives only for this session
             useEffect(() => {
@@ -662,6 +666,12 @@ function FinanceTracker() {
 
                 return () => clearTimeout(timer);
             }, [currentMonth, recurringPayments.length, debts.length]);
+
+            useEffect(() => {
+                if (!dataInitializedRef.current) { dataInitializedRef.current = true; return; }
+                if (Date.now() < importingUntilRef.current) return;
+                setHasChangesSinceExport(true);
+            }, [transactions, recurringPayments, debts, paidPayments, expectedMonthlyIncome, weeklySpendingBudget, extraDebtPayment, creditCardDueDay]);
 
             const getMonthlyTotals = () => {
                 const __range = getFinancialMonthRange(currentMonth); const start = __range.start; const end = __range.end;
@@ -760,6 +770,8 @@ function FinanceTracker() {
                 a.href = url;
                 a.download = `finance-tracker-${getLocalDateString()}.json`;
                 a.click();
+                setLastExportTime(new Date());
+                setHasChangesSinceExport(false);
             };
 
             const exportToCSV = () => {
@@ -832,6 +844,8 @@ function FinanceTracker() {
                 a.download = `finance-tracker-transactions-${getLocalDateString()}.csv`;
                 a.click();
                 URL.revokeObjectURL(url);
+                setLastExportTime(new Date());
+                setHasChangesSinceExport(false);
             };
 
             const exportAllDataToCSV = () => {
@@ -1026,6 +1040,8 @@ function FinanceTracker() {
                 a.download = `finance-tracker-full-export-${getLocalDateString()}.csv`;
                 a.click();
                 URL.revokeObjectURL(url);
+                setLastExportTime(new Date());
+                setHasChangesSinceExport(false);
             };
 
             const importData = (event) => {
@@ -1035,7 +1051,10 @@ function FinanceTracker() {
                     reader.onload = (e) => {
                         try {
                             const data = JSON.parse(e.target.result);
-                            
+                            importingUntilRef.current = Date.now() + 1000;
+                            setLastExportTime(null);
+                            setHasChangesSinceExport(false);
+
                             // Import transactions - preserve all fields
                             if (data.transactions) { 
                                 const validTransactions = data.transactions.map(t => ({ 
@@ -1141,11 +1160,14 @@ function FinanceTracker() {
 
             const clearAllData = () => {
                 if (confirm('Are you sure you want to clear all data? This cannot be undone!')) {
+                    importingUntilRef.current = Date.now() + 1000;
                     setTransactions([]);
                     setRecurringPayments([]);
                     setDebts([]);
                     setPaidPayments({});
                     setExpectedMonthlyIncome(5000);
+                    setLastExportTime(null);
+                    setHasChangesSinceExport(false);
                     showToast('All data cleared', 'warning');
                 }
             };
@@ -1159,7 +1181,24 @@ function FinanceTracker() {
                     <ToastContainer />
                     <div className="header">
                         <h1>💰 Finance Tracker</h1>
-                        <div className="version">Export JSON to save • Import JSON to restore</div>
+                        <div className="version" style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', flexWrap: 'wrap'}}>
+                            <span>Export JSON to save • Import JSON to restore</span>
+                            <button onClick={() => setActiveTab('settings')} style={{
+                                background: 'rgba(0,0,0,0.25)',
+                                border: `1px solid ${lastExportTime ? (hasChangesSinceExport ? '#ffc107' : '#28a745') : 'rgba(255,255,255,0.4)'}`,
+                                borderRadius: '20px',
+                                color: lastExportTime ? (hasChangesSinceExport ? '#ffc107' : '#28a745') : 'rgba(255,255,255,0.85)',
+                                padding: '3px 12px',
+                                fontSize: '0.78em',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                transform: 'none',
+                                boxShadow: 'none',
+                                whiteSpace: 'nowrap'
+                            }}>
+                                {lastExportTime ? (hasChangesSinceExport ? '⚠️ Unsaved changes' : '✅ Exported') : '🔴 Not exported'}
+                            </button>
+                        </div>
                     </div>
                     <div className="tab-navigation">
                         <button className={`tab-button ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>📊 Dashboard</button>
@@ -1181,7 +1220,7 @@ function FinanceTracker() {
                         {activeTab === 'debts' && <DebtsTab debts={debts} setDebts={setDebts} recurringPayments={recurringPayments} setRecurringPayments={setRecurringPayments} />}
                         {activeTab === 'tracker' && <DebtPayoffTrackerTab debts={debts} />}
                         {activeTab === 'history' && <HistoryTab transactions={transactions} recurringPayments={recurringPayments} debts={debts} weeklySpendingBudget={weeklySpendingBudget} />}
-                        {activeTab === 'settings' && <SettingsTab exportData={exportData} importData={importData} clearAllData={clearAllData} exportToCSV={exportToCSV} exportAllDataToCSV={exportAllDataToCSV} />}
+                        {activeTab === 'settings' && <SettingsTab exportData={exportData} importData={importData} clearAllData={clearAllData} exportToCSV={exportToCSV} exportAllDataToCSV={exportAllDataToCSV} lastExportTime={lastExportTime} hasChangesSinceExport={hasChangesSinceExport} />}
                     </div>
                 </div>
             );
@@ -5591,9 +5630,41 @@ function FinanceTracker() {
             );
         }
 
-        function SettingsTab({ exportData, importData, clearAllData, exportToCSV, exportAllDataToCSV }) {
+        function SettingsTab({ exportData, importData, clearAllData, exportToCSV, exportAllDataToCSV, lastExportTime, hasChangesSinceExport }) {
+            const [, setTick] = React.useState(0);
+            React.useEffect(() => {
+                const interval = setInterval(() => setTick(t => t + 1), 30000);
+                return () => clearInterval(interval);
+            }, []);
+            const formatTimeSince = (time) => {
+                const diffMins = Math.floor((Date.now() - time.getTime()) / 60000);
+                if (diffMins < 1) return 'just now';
+                if (diffMins === 1) return '1 minute ago';
+                if (diffMins < 60) return `${diffMins} minutes ago`;
+                const h = Math.floor(diffMins / 60);
+                return h === 1 ? '1 hour ago' : `${h} hours ago`;
+            };
+            const exportBorderColor = lastExportTime ? (hasChangesSinceExport ? '#ffc107' : '#28a745') : '#dc3545';
+            const exportBg = lastExportTime ? (hasChangesSinceExport ? 'rgba(255,193,7,0.08)' : 'rgba(40,167,69,0.08)') : 'rgba(220,53,69,0.08)';
             return (
                 <div>
+                    <div style={{background: exportBg, border: `2px solid ${exportBorderColor}`, borderRadius: '12px', padding: '16px 20px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '14px'}}>
+                        <span style={{fontSize: '1.9em', lineHeight: 1, flexShrink: 0}}>
+                            {lastExportTime ? (hasChangesSinceExport ? '⚠️' : '✅') : '🔴'}
+                        </span>
+                        <div>
+                            <div style={{color: '#e2e8f0', fontWeight: 700, fontSize: '1em', marginBottom: '3px'}}>
+                                {lastExportTime ? `Last exported ${formatTimeSince(lastExportTime)}` : 'No export this session'}
+                            </div>
+                            <div style={{color: '#a0aec0', fontSize: '0.88em'}}>
+                                {lastExportTime && hasChangesSinceExport
+                                    ? 'Changes made since last export — export again to save your latest data'
+                                    : lastExportTime
+                                        ? 'Data matches last export — nothing unsaved'
+                                        : 'Export JSON before closing this page to save your work'}
+                            </div>
+                        </div>
+                    </div>
                     <div className="section" style={{background: 'linear-gradient(135deg, #667eea22 0%, #764ba222 100%)', border: '2px solid #667eea', padding: '25px'}}>
                         <h2 style={{color: '#667eea', marginBottom: '15px'}}>💾 Session-Only Data</h2>
                         <p style={{color: '#e2e8f0', fontSize: '1.05em', lineHeight: '1.8', marginBottom: '15px'}}>
